@@ -75,14 +75,14 @@ docs = [
 [tool.uv.sources]
 to-dos-app = { workspace = true }
 users = { workspace = true }
- = { workspace = true }
+#  = { workspace = true }
 
 
 [tool.uv.workspace]
 members = [
   "packages/users",
   "packages/to-dos-app",
-  "packages/",
+  # "packages/",
 ]
 
 [tool.ruff]
