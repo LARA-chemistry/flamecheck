@@ -14,7 +14,7 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 | Role | Capabilities |
 |---|---|
 | **Student** | Login via personal barcode, view assigned analyses within the valid time window, submit ion selections, view results and points |
-| **Assistant (Assistent)** | Manage analysis sheets/barcodes, view submitted results per group, support students during announcement time |
+| **Assistant** | Manage analysis sheets/barcodes, view submitted results per group, support students during announcement time |
 | **Admin** | Manage users/barcodes, define analyses with their ion sets, set points per correct analysis (default 10), configure the number of analyses per course, set announcement time windows, view statistics |
 
 ## 3. Functional Requirements
@@ -43,6 +43,7 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 
 ### 3.3 Admin Configuration
 - **Ion catalog:** Master list of all cations (e.g. Group I–IV/V: Na⁺, K⁺, NH₄⁺, Mg²⁺, Ca²⁺, Ba²⁺, Cu²⁺, Fe²⁺/Fe³⁺, Al³⁺, Zn²⁺, Mn²⁺, etc.) and anions (Cl⁻, Br⁻, I⁻, SO₄²⁻, SO₃²⁻, CO₃²⁻, PO₄³⁻, NO₃⁻, NO₂⁻, S²⁻, etc.).
+                  - importable from CSV or JSON for easy updates.
 - **Substance catalog:** Optional mapping of ions to common salts (e.g., NaCl, KBr, CuSO₄) for reference.
                       - substance catalog should be importable from CSV or JSON for easy updates.
                       - ions should be deducible from substances, but the system should allow for ions to be defined independently of substances.
@@ -58,8 +59,8 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 ### 3.3 Grading Logic
 - **Per-ion mode (default, as described):** 
     - 10 (default) points per correctly identified ion - admin configurable.;
-    - 8 points (default) per corrected 2nd submission (if allowed) - admin configurable.
-    - 6 points (default) per corrected 3rd submission (if allowed) - admin configurable.
+    - 10 - 2 points (default) per corrected 2nd submission (if allowed) - penalty admin configurable.
+    - 10 - 4 points (default) per corrected 3rd submission (if allowed) - penalty admin configurable.
     - number of submissions per analysis can be limited (e.g., 1–3) by admin.
     - optionally configurable to deduct points for false positives.
 - **Per-analysis mode (alternative, admin-selectable):** 10 points only if the full ion set is exactly correct.
@@ -69,11 +70,13 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 
 ### 4.1 Backend — Django
 - **Django 6.x + django Ninja** REST API.
+     - use models.Manager, where appropriate, to encapsulate business logic (e.g., submission validation, scoring).
 - **SQLite** or **PostgreSQL** database. (.env config for DB connection)
-- **Authentication:** Token-based (JWT) for API; session cookie for web frontend. Django allauth for login (students, assistants, admins), shibboleth for institutional authentication.
-- **Models (core):**
+- **Authentication:** Token-based (JWT) for API; session cookie for web frontend. Django allauth (with shibboleth support) for login (students, assistants, admins).
+- **Models (core):
   - `User` (extends Django user; role: student/assistant/admin), `StudentBarcode` (unique barcode value, FK student)
   - `Ion` (name, symbol, charge, type: cation/anion, group)
+  - `Substance` (name, synonyms, formula, ions M2M, pubchem ids, wikipedia link)
   - `AnalysisType` (name, list of possible ions)
   - `AnalysisInstance` (FK AnalysisType, FK assigned student, correct ion set, time window start/end, status, score)
   - `Submission` (FK AnalysisInstance, selected ions M2M, timestamp, score, auto-graded)
@@ -97,14 +100,17 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 - **Barcode verification** is server-side (barcode → DB lookup), never trust client.
 - **Security:** - HTTPS, hashed credentials, rate-limiting on submission endpoint, one-time barcode per analysis window. 
                 - save docker environment - safety hardend (e.g., no root, non-default ports, firewall rules).
-                - Intrusion possiblities minimized by using Django's built-in security features (CSRF, XSS protection, etc.).
+                - Intrusion possibilities minimized by using Django's built-in security features (CSRF, XSS protection, etc.).
                 - extra hardening: Docker container isolation, minimal base images, regular security updates.
                 - prevent brute-force attacks: rate limiting, account lockout after multiple failed attempts, CAPTCHA for repeated failed logins.
                 - prevent student hacking: barcodes are unique per student and analysis, submissions are timestamped and immutable, and the system logs all actions for audit purposes.
 
 ### 4.2 Frontend — Vue 3 + Vite
-- **Vue 3** (Composition API, `<script setup>`), **Vite**, **Pinia** for state, **Vue Router**. Use latest viete technologies for fast development and hot module replacement.
+- **Vue 3** (Composition API, `<script setup>`), **Vite**, **Pinia** for state, **Vue Router**. Use latest vite technologies for fast development and hot module replacement.
 - **UI library:** Naive UI or PrimeVue (modern, form/checkbox components).
+- **UI design:** Responsive layout for desktop/laptop, tablet and mobile (students may use lab computers or laptops or their smartphones).
+                 - modern, appealing design with clear feedback on submission status, time windows, and results.
+                 
 - **Barcode scanning:** `@zxing/library` or `html5-qrcode` — supports both webcam scanning and USB keyboard-wedge barcode scanners (which act as fast keystroke input ending in Enter).
 - **Key views:**
   1. `LoginView` – barcode scan (webcam viewfinder + fallback USB/keyboard input)
@@ -125,6 +131,7 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 - Nginx serving built Vue assets + proxying API to Django (Gunicorn).
 - PostgreSQL database.
 - Docker Compose setup (web, api, db) for easy lab-room deployment.
+- Deployment for development: local Docker Compose; staging: cloud VM with Docker Compose; production: cloud VM with Docker Compose + HTTPS (Let's Encrypt).
 
 ## 5. Non-Functional Requirements
 - **Availability during announcement windows:** System must be up and fast (< 2 s response) during peak submission time.
@@ -138,7 +145,7 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 ```
 Student (id, name, matriculation_no, barcode, role)
 Ion (id, symbol, name, charge, kind: cation|anion, group)
-Substance (id, name, formula, ions M2M[Ion])
+Substance (id, name, formula, ions M2M[Ion], pubchem_id, wikipedia_link)
 AnalysisType (id, name, possible_ions M2M[Ion])
 AnalysisInstance (id, type FK, student FK, correct_ions M2M[Ion],
                   window_start, window_end, status, created_at)
