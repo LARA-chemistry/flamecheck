@@ -1,0 +1,56 @@
+# s. https://github.com/pallets/flask
+name:  Python Package Push
+
+on:
+  push:
+    # Publish `master` as Docker `latest` image.
+    branches:
+      - main
+      - develop
+      #- seed
+
+    # Publish `v1.2.3` tags as releases.
+    tags:
+      - v*
+
+  # Run tests for any PRs.
+  pull_request:
+
+env:
+  PACKAGE_VERSION: 0.0.0
+  PACKAGE_NAME: -$PACKAGE_VERSION
+
+jobs:
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+    - uses: actions/checkout@v3
+    - name: Build package
+      run: |
+        echo "Building python package ...."
+        ls -Al
+        python -m build
+    # Generate hashes used for provenance.
+    - name: generate hash
+      id: hash
+      run: |
+        echo "Generating hash ...."
+        ls -Al
+        echo "dist: "
+        ls -Al dist
+        cd dist && echo "hash=$(sha256sum * | base64 -w0)" >> $GITHUB_OUTPUT
+    - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      with:
+        path: .
+        name: ${{ env.PACKAGE_NAME  }}

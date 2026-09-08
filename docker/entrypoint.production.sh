@@ -1,0 +1,1 @@
+# add all the commands that need to be run in the production container entrypoint

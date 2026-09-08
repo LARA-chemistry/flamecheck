@@ -1,0 +1,27 @@
+{
+  "access_right": "open",
+  "communities": [
+    {"identifier": ""}
+  ],
+  "creators": [
+    {
+      "name": "mark doerr",
+      "orcid": "0000-0003-3270-6895",
+      "affiliation": "University Greifswald, Germany"
+    },
+   
+  "description": "A qualitative analysis submission system for students in chemistry",
+  "keywords": [
+    "python"
+  ],
+  "license": "GNU General Public License v3",
+  "related_identifiers": [
+    {
+        "identifier": "",
+        "relation": "requires",
+        "resource_type": "software",
+        "scheme": "doi"
+    }
+  ],
+  "upload_type": "software"
+}

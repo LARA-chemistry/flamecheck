@@ -1,19 +1,272 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/user/application_security/sast/#available-cicd-variables
-# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure/
-# Dependency Scanning customization: https://docs.gitlab.com/user/application_security/dependency_scanning/dependency_scanning_sbom/#customizing-analyzer-behavior
-# Container Scanning customization: https://docs.gitlab.com/user/application_security/container_scanning/#customizing-analyzer-behavior
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
-stages:
-- test
-- secret-detection
-sast:
-  stage: test
-include:
-- template: Security/SAST.gitlab-ci.yml
-- template: Security/Secret-Detection.gitlab-ci.yml
+# Config file for GitLab CI pipeline
+# s. also https://www.hifis.net/workshop-materials/gitlab-ci/episodes/05-remove-redundancies/
+
+# Change pip's cache directory to be inside the project directory since we can
+# only cache local items.
 variables:
-  SECRET_DETECTION_ENABLED: 'true'
-secret_detection:
-  stage: secret-detection
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+  SOURCE_DIR: "$CI_PROJECT_DIR/src/flamecheck"
+  DOCS_DIR: "docs"
+  DOCS_SOURCE_DIR: "docs/source"
+  DOCS_BUILD_DIR: "docs/_build"
+  PYTHON_VERSION: "3.13"
+  UV_VERSION: "0.10.0"
+  BASE_LAYER: "trixie"
+  LARA_VERSION: "0.2.108"
+  UV_PUBLISH_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
+  UV_PUBLISH_PYPI_URL: "https://upload.pypi.org/legacy/"
+  UV_PUBLISH_USERNAME: "gitlab-ci-token"
+  UV_PUBLISH_PASSWORD: "${CI_JOB_TOKEN}"
+
+# image: ghcr.io/astral-sh/uv:$UV_VERSION-python${PYTHON_VERSION}-$BASE_LAYER    
+image: ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-$BASE_LAYER
+
+stages:
+  - compliance
+  - test
+  - build
+  - publish_pypi
+  - build_and_publish_docs
+
+# =============== Cache configuration =========================================
+
+# Cache both uv cache (downloaded packages) and the virtual environment
+# This dramatically speeds up jobs by avoiding re-downloads and re-installations
+cache:
+  - key:
+      files:
+        - uv.lock
+      prefix: uv-cache-$PYTHON_VERSION
+    paths:
+      - $UV_CACHE_DIR
+    policy: pull-push
+  - key:
+      files:
+        - uv.lock
+      prefix: uv-venv-$PYTHON_VERSION
+    paths:
+      - .venv/
+    policy: pull-push
+  - key: docker-buildkit
+    paths:
+    - .buildkit-cache/
+
+before_script:
+  - python -V # Print out python version for debugging
+  # Only sync if .venv doesn't exist or is incomplete
+  - |
+    if [ ! -d ".venv" ] || ! uv run python -c "import sys; sys.exit(0)" 2>/dev/null; then
+      echo "Installing dependencies..."
+      uv sync --group dev --frozen
+    else
+      echo "Using cached virtual environment"
+    fi
+
+.parallel_python_jobs:
+    parallel:
+        matrix:
+          # - PYTHON_VERSION: ["3.11", "3.12", "3.13"]
+          - PYTHON_VERSION: ["3.13"]
+
+.parallel_build_package_jobs:
+  parallel:
+    matrix:
+      - PACKAGE_DIR: ["."]
+
+.run_on_all_branches:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+.*/
+
+.run_on_main:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+
+.run_on_develop:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+
+.run_on_develop_or_main:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+
+.run_on_release_tag:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+.*/
+
+.run_on_manual:
+  rules:
+    - when: manual
+
+# Jobs: ======================================== Compliance ==================================
+
+linting_formatting:
+  stage: compliance
+  script:
+    - echo "Check linting"
+    # - uvx ruff check src
+    - echo "Check formatting"
+    # - uvx ruff format --check src
+  extends:
+    - .run_on_all_branches
+    # - .run_on_manual
+
+# Jobs: ======================================== Test =========================================
+
+# add support for parallel jobs with different python versions
+test:
+  stage: test
+  script:
+    - python --version
+    # - pytest -vv -s --cov=src --cov-report=term --cov-report=xml
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+  extends:
+    - .run_on_all_branches
+    # - .run_on_manual
+    - .parallel_python_jobs
+
+# Jobs: ======================================== Build ========================================
+
+build-packages:
+  stage: build
+  script:
+    - echo "Build package $PACKAGE_DIR"
+    - cd $PACKAGE_DIR
+    - uv build --out-dir dist
+    - ls -l dist/
+  artifacts:
+    paths:
+      - "$PACKAGE_DIR/dist/"
+    expire_in: 1 week
+  extends:
+    - .run_on_all_branches
+    - .parallel_build_package_jobs
+
+# --- docker ----
+    
+docker-build-dev:
+  # Official docker image.
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  variables:
+    # Enable BuildKit for faster builds and cache mounts
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_INLINE_CACHE: 1
+    BUILDKIT_PROGRESS: "plain"
+    # Use TLS https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#tls-enabled
+    #DOCKER_HOST: tcp://docker:2376
+    #DOCKER_TLS_CERTDIR: "/certs"
+    #CONTAINER_TEST_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+    DOCKER_BUILD: $CI_REGISTRY_IMAGE/lara-django-build-dev:latest
+    CONTAINER_RELEASE_IMAGE: $CI_REGISTRY_IMAGE/lara-django:${CI_COMMIT_SHORT_SHA}
+    CONTAINER_RELEASE_IMAGE_DEV: $CI_REGISTRY_IMAGE/lara-django-dev:${CI_COMMIT_SHORT_SHA}
+    CONTAINER_RELEASE_IMAGE_DEV_LATEST: $CI_REGISTRY_IMAGE/lara-django-dev:latest
+
+  before_script:
+    - echo "$CI_JOB_TOKEN" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    # Create and use buildx builder for cache export support
+    - docker buildx create --use --driver docker-container --name ci-builder || true
+    - docker buildx inspect --bootstrap
+  script:
+    - CONTAINER_RELEASE_IMAGE_DEV_VER="$CI_REGISTRY_IMAGE/lara-django-dev:${LARA_VERSION}"
+    # development image
+    - docker buildx build --push -f docker/Dockerfile.dev --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:cache --cache-to type=registry,ref=$CI_REGISTRY_IMAGE:cache,mode=max -t "$CONTAINER_RELEASE_IMAGE_DEV" -t "$CONTAINER_RELEASE_IMAGE_DEV_VER" -t "$CONTAINER_RELEASE_IMAGE_DEV_LATEST" --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    # buildx --push already pushes all tags, so no separate push commands needed
+    # production image
+    #- docker build --pull -f docker/Dockerfile -t "$CONTAINER_RELEASE_IMAGE" .
+    #- docker push "$CONTAINER_RELEASE_IMAGE"
+  extends:
+    - .run_on_develop_or_main
+
+# Jobs: =================================== Publish to PyPI ================================
+
+# GitLab Package Registry
+release-gitlab:
+  stage: publish_pypi
+  dependencies:
+    - build-packages
+  script:
+    - echo "Publishing $PACKAGE_DIR to GitLab Package Registry"
+    - cd $PACKAGE_DIR
+    - uv publish dist/*
+  extends:
+    # - .run_on_release_tag
+    - .run_on_develop_or_main
+    - .parallel_build_package_jobs
+
+# TestPyPI 
+release-testpypi:
+  stage: publish_pypi
+  dependencies:
+    - build-packages
+  id_tokens:
+    TESTPYPI_ID_TOKEN:
+      # Use "testpypi" if uploading to TestPyPI, else use "pypi"
+      aud: testpypi
+  script:
+    - echo "Publishing packages to TestPyPI"
+    - cd $PACKAGE_DIR
+    # - uv publish --publish-url "https://test.pypi.org/legacy/" --token "$TEST_PYPI_TOKEN" dist/*
+    - uvx twine upload --verbose --repository testpypi ./dist/*
+  extends:
+    - .run_on_release_tag
+    - .parallel_build_package_jobs
+
+# PyPI Production
+release-pypi:
+  stage: publish_pypi
+  dependencies:
+    - build-packages
+  id_tokens:
+    PYPI_ID_TOKEN:
+      aud: pypi
+  script:
+    - echo "Publishing $PACKAGE_DIR to PyPI"
+    - cd $PACKAGE_DIR
+    # - uv publish --token "$PYPI_TOKEN" dist/*
+    - uvx twine upload ./dist/*
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+  extends:
+    - .parallel_build_package_jobs
+
+# Jobs: =================================== Build and Publish Docs ==========================
+
+pages:
+  stage: build_and_publish_docs
+  dependencies:
+    - build-packages
+  script:
+    - uv sync --group docs --frozen
+    - uv pip install ./dist/*.whl
+    - uv run sphinx-apidoc -e -P -o $DOCS_SOURCE_DIR $SOURCE_DIR
+    - uv run sphinx-build -b html $DOCS_DIR $DOCS_BUILD_DIR
+    - mv $DOCS_BUILD_DIR public
+    - uv cache prune --ci
+  artifacts:
+    paths:
+      - public
+    expire_in: 1 week
+  extends:
+    - .run_on_main

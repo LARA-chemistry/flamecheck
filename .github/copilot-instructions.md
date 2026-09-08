@@ -1,0 +1,1 @@
+this project uses `uv` as python package manager, use `uv run` to run a python module.

@@ -1,0 +1,45 @@
+# Description: Docker compose file for  - for production 
+# with all services
+# A qualitative analysis submission system for students in chemistry
+# docker compose exec service_name bash
+# docker compose exec -1 bash
+
+
+#networks:
+#   lan_access:
+#     driver: bridge
+
+#volumes:
+  # add volumnes here ...
+  
+services:
+  # mdns_reflector:
+  #   image: flungo/avahi
+  #   container_name: mDNS_Reflector
+  #   ports:
+  #     - "5354:5353/udp"  # Expose mDNS port
+  #   volumes:
+  #     - /var/run/avahi:/var/run/avahi
+
+
+  :
+    image: "path_to_registry/-dev:${DOCKER_IMAGE_TAG}"
+    # ports:
+    #   - 50065:50065
+    # command:  >
+    #     bash -c "source ./venv/bin/activate &&
+    #     python -m "
+    # links:
+    #   -  # network link to other service
+    # volumes:
+    #   - .//certificates:/srv//certificates
+    # depends_on:
+    #   - # add dependent services here - it then waits until they are available ...
+    #   - mdns_reflector
+    env_file:
+      - .env  # adjust .env file (copy and rename the .env-template)
+    # network_mode:
+    #   "host"
+    #networks:
+    #  - lan_access
+    #  - default
