@@ -1,0 +1,13 @@
+# ignore api files
+api/grpc/gen/**/*.js
+api/grpc/gen/**/*.ts
+# api/grpc/grpc-web/*.js
+# api/grpc/grpc-web/*.ts
+# ingore django templates
+**/templates/*.html
+**/*.proto
+**/schemata/*.yaml
+#**/cotton/*.html
+#lara_django_projects/templates/lara_django_projects/*.html
+jupyter/*.ipynb
+#lara_django_vue/lara_django_base/templates/*.html

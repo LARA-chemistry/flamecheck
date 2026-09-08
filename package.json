@@ -1,0 +1,54 @@
+{
+    "name": "flamecheck",
+    "version": "0.0.1",
+    "description": "FlameCheck is a web-based application for the submission of qualitative chemical analysis for students of inorganic chemistry.",
+    "directories": {
+        "doc": "docs",
+        "test": "tests"
+    },
+    "scripts": {
+        "dev": "vite --port 5174",
+        "build": "vite build",
+        "build-dev": "vite build --mode development",
+        "build-dev-watch": "vite build --watch --mode development",
+        "preview": "vite preview",
+        "update-sprite": "svg-sprite -s --symbol-dest src/lara_django_base/static/lara_django_base/icons/ --symbol-sprite symbols.svg src/assets/icons/*.svg",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://gitlab.com/opensourcelab/cheminformatics/flamecheck.git"
+    },
+    "keywords": [
+        "open",
+        "science",
+        "research",
+        "data",
+        "management",
+        "ELN",
+        "LIMS",
+        "SiLA"
+    ],
+    "author": "mark doerr <mark.doerr@uni-greifswald.de>",
+    "license": "GPL-3.0-or-later",
+    "bugs": {
+        "url": "https://gitlab.com/opensourcelab/cheminformatics/flamecheck/issues"
+    },
+    "homepage": "https://gitlab.com/opensourcelab/cheminformatics/flamecheck#readme",
+    "devDependencies": {
+        "@fullcalendar/core": "^6.1.18",
+        "@fullcalendar/daygrid": "^6.1.18",
+        "@fullcalendar/interaction": "^6.1.18",
+        "daisyui": "^5.5.19",
+        "marked": "^16.1.2",
+        "svg-sprite": "^2.0.4",
+        "typescript": "^5.9.2",
+        "vite": "^7.3.1"
+    },
+    "dependencies": {
+        "@tailwindcss/vite": "^4.2.1",
+        "alpinejs": "^3.15.8",
+        "htmx.org": "^2.0.8",
+        "tailwindcss": "^4.2.1"
+    }
+}

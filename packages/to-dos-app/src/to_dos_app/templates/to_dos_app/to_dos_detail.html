@@ -1,0 +1,20 @@
+{% extends '{{ project_name }}_base/base.html' %}
+{% block toolbar %}
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2 pt-3">
+        <h1 class="text-2xl font-semibold">{{ section_title }}</h1>
+        <div class="flex items-center gap-2">
+            <div class="mr-2 flex items-center gap-2">
+                <a href="{% url update_link  object.pk %}"
+                   class="inline-flex items-center rounded-md bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600"
+                   role="button">Edit Item</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block content %}
+    <h1>{{ object.name_full }} ({{ object.category }})</h1>
+    <ul>
+        <li>{{ object.name_full }}</li>
+        <li>{{ object.name }}</li>
+    </ul>
+{% endblock %}

@@ -1,6 +1,6 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v0.0.5
-_src_path: gl:opensourcelab/software-dev/copier-python
+_commit: v0.0.2
+_src_path: gl:opensourcelab/software-dev/copier-django
 affiliation: University Greifswald, Germany
 copyright_year: '2026'
 documentation: true
@@ -8,18 +8,24 @@ email: mark.doerr@uni-greifswald.de
 full_name: mark doerr
 git_repo_type: GitLab
 git_repo_url: https://gitlab.com/opensourcelab/cheminformatics/flamecheck
-gitlab_group: opensourcelab
+gitlab_group: opensourcelab/cheminformatics
 gitlab_username: markdoerr
 initial_commit: false
+is_django_project: true
 meta_project_name: FlameCheck
 meta_project_slug: flamecheck
 open_source_license: GNU General Public License v3
 orcid: 0000-0003-3270-6895
 package_name: flamecheck
 project_short_description: A qualitative analysis submission system for students in
-    chemistry
+    chemistry.
 project_version: 0.0.0
 run_uv_sync: false
 setup_pre_commit: false
-uv_workspace_layout: false
+sub_package_name: src/flamecheck
+use_celery: true
+use_django_ninja: true
+use_drf: false
+use_whitenoise: true
+uv_workspace_layout: true
 

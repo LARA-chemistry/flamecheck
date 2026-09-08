@@ -18,7 +18,7 @@ FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm  AS build_image
 LABEL maintainer="mark doerr <mark.doerr@uni-greifswald.de>"
 # or $VERSION
 LABEL version="0.0.0"   
-LABEL description=" - A qualitative analysis submission system for students in chemistry (build image)"
+LABEL description=" - A qualitative analysis submission system for students in chemistry. (build image)"
 
 
 ENV LANG=C.UTF-8\

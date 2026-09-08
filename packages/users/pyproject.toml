@@ -1,0 +1,23 @@
+[project]
+name = "users"
+version = "0.0.0"
+description = "Custom user model for the todo project"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "mark doerr", email = "mark.doerr@uni-greifswald.de" },
+]
+
+maintainers = [
+   {name = "mark doerr", email ="mark.doerr@uni-greifswald.de"},
+]
+
+requires-python = "==3.13.*"
+dependencies = []
+
+[dependency-groups]
+dev = []
+
+[build-system]
+requires = ["uv_build>=0.7.13,<0.8.0"]
+build-backend = "uv_build"

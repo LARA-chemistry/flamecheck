@@ -1,6 +1,6 @@
 # Description: Docker compose file for  build environment 
 # with all services
-# A qualitative analysis submission system for students in chemistry
+# A qualitative analysis submission system for students in chemistry.
 # docker compose exec service_name bash
 # docker compose -f docker-compose.dev-full.yaml exec -1 bash
 

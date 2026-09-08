@@ -1,5 +1,5 @@
 #  development Dockerfile
-# A qualitative analysis submission system for students in chemistry
+# A qualitative analysis submission system for students in chemistry.
 # to build the docker image, call :
 # docker build -f Dockerfile.dev -t my_project/-dev:0.0.1 .
 # docker run -p 8000:8000 --name -dev my_project/-dev:0.0.1 
@@ -61,7 +61,7 @@ ARG PYTHON_VERSION=3.13
 
 LABEL maintainer="mark doerr <mark.doerr@uni-greifswald.de>"
 LABEL version="0.0.0"
-LABEL description=" - A qualitative analysis submission system for students in chemistry (development)"
+LABEL description=" - A qualitative analysis submission system for students in chemistry. (development)"
 
 ENV LANG=C.UTF-8\
     PYTHONUNBUFFERED=1 \

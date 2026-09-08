@@ -1,0 +1,13 @@
+# s. https://stackoverflow.com/questions/42826287/model-description-in-django-admin
+
+from django import template
+from django.utils.html import mark_safe
+
+register = template.Library()
+
+
+@register.simple_tag()
+def model_desc(obj):
+    if obj.__doc__:
+        return mark_safe('<p>{}</p>'.format(obj.__doc__))
+    return ''

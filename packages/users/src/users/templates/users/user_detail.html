@@ -1,0 +1,26 @@
+{% extends "account/base_entrance.html" %}
+
+{% load static %}
+
+{% load allauth account %}
+{% block head_title %}
+    User Detail
+{% endblock head_title %}
+{% block content %}
+
+    {% element h1 %}
+        User Detail
+    {% endelement %}
+
+    <div>
+        <p><strong>Name:</strong> {{ user.name }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Joined:</strong> {{ user.date_joined }}</p>
+    </div>
+
+    <div>
+        <a href="{% url 'users:update' user.pk %}">Edit Profile</a>
+    </div>
+
+{% endblock content %}
+
