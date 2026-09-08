@@ -2,10 +2,12 @@
 
 ## 1. Overview
 
-**Purpose:** A web-based system for first-semester chemistry students to submit inorganic qualitative analysis results. Students authenticate with a personal barcode, view the cations/anions possible for their assigned analysis, and tick the ions they believe are present. The system automatically scores submissions (10 points per correctly identified analysis).
+**Purpose:** A web-based system for first-semester chemistry students to submit inorganic qualitative analysis results. Students authenticate with a university login (e.g., Shibboleth, ldap) or personal barcode, 
+view the cations/anions possible for their assigned analysis, and tick the ions they believe are present. The system automatically scores submissions (e.g, 10 points per correctly identified analysis).
+Additionally, some user defined analysis types should be possible, e.g. for specific lab courses with specialisation for biology, pharmacy, or materials science. The system supports multiple analyses per student, each with its own time window for submission.
 
 **Inspiration from the attached document:** The provided "Ansagemodus" document describes an analogue process: a student scans a barcode from their analysis sheet at an announcement computer at the assistant's desk, the system shows which ions can occur, the student checks off ("Ankreuzen") the ions found and finishes the announcement, then a control query ("Kontrollabfrage") reveals the result. Several announcements (e.g., 3rd and 4th analysis) are possible, each subject to a **date/time window** ("Datum des Ansagezeitraumes beachten" – too early/too late submissions are rejected), ending in a final result and point allocation [1]. The web system replaces the desk computer and barcode scanner with browser-based barcode scanning while preserving this workflow.
-S
+
 
 ## 2. User Roles
 
@@ -22,23 +24,44 @@ S
               - alternatively, a student logs in via a username/password or institutional SSO (e.g., Shibboleth) if barcode scanning is unavailable.
 2. **Time-window check:** The system validates the current date/time against the announcement window for the analysis. Submissions are rejected if too early or too late (as in "zu früh!"/"zu spät!" [1]).
 3. **Analysis display:** Depending on the assigned analysis, the form shows **all possible cations and anions** for that analysis (not the correct ones) [1].
-4. **Submission:** Student ticks the ions they believe are present and confirms ("Submit") [1]. A second confirmation dialog ensures they are ready to submit, as submissions are final and cannot be edited.
+4. **Submission:** Student ticks the ions they believe are present and confirms ("Submit") [1]. A second confirmation dialog, containing a summary of the selected ions, ensures they are ready to submit, as submissions are final and cannot be edited.
+                   - important: submissions are timestamped and immutable; the system logs all actions for audit purposes.
 5. **Control query & result:** Immediately after submission, the system reveals which ions were correct and awards **10 points per correctly identified analysis** [1].
                             - optionally, the system can deduct points for false positives if configured by the admin.
 6. **Multiple announcements:** A student may perform several analyses (e.g., 3rd, 4th analysis) within the allowed window; each is scored independently and accumulated into the final result and point allocation [1].
 7. **Final result:** After all assigned analyses, the student sees the total points and the ideal result ("Das Idealergebnis") [1].
+8 . **Summary view:** The student can view a summary of all analyses, their scores, and the total points earned.
 
-### 3.2 Admin Configuration
+### 3.2 Assistant Workflow
+1. **Login:** Assistant logs in via institutional SSO or username/password.
+2. **View submissions:** Assistant can view all student submissions for their assigned group, including timestamps and scores.
+3. **Support students:** Assistants can help students with barcode scanning issues, time-window questions, and general guidance during the announcement period.
+4. **Statistics:** Assistants can view statistics on submissions, such as the number of students who have submitted, average scores, and common mistakes
+5. **Per Student view:** Assistants can view individual student submissions, including the selected ions and the correct answers for each analysis.
+6. **Course view:** Assistants can see the list of all students in their course, their assigned analyses, and their submission status (submitted/not submitted, points earned).
+7. **Course management:** Assistants can manage the assignment of analyses to students, ensuring that each student has the correct analysis sheet and barcode for their assigned analysis.
+
+### 3.3 Admin Configuration
 - **Ion catalog:** Master list of all cations (e.g. Group I–IV/V: Na⁺, K⁺, NH₄⁺, Mg²⁺, Ca²⁺, Ba²⁺, Cu²⁺, Fe²⁺/Fe³⁺, Al³⁺, Zn²⁺, Mn²⁺, etc.) and anions (Cl⁻, Br⁻, I⁻, SO₄²⁻, SO₃²⁻, CO₃²⁻, PO₄³⁻, NO₃⁻, NO₂⁻, S²⁻, etc.).
 - **Substance catalog:** Optional mapping of ions to common salts (e.g., NaCl, KBr, CuSO₄) for reference.
+                      - substance catalog should be importable from CSV or JSON for easy updates.
+                      - ions should be deducible from substances, but the system should allow for ions to be defined independently of substances.
 - **Analysis definition:** Each analysis type defines (a) the **set of possible ions** shown to students, and (b) the **correct answer set** per concrete analysis instance (e.g., "Analysis 12: contains NH₄⁺, SO₄²⁻, Cu²⁺").
 - **Points per correct analysis:** Admin-adjustable, default **10** [1].
 - **Number of analyses per course/semester:** Admin-adjustable (e.g., 2, 3, 4 announcements per student) [1].
-- **Time windows:** Per-analysis start/end date and time for submissions.
+- **Time windows:** Per-analysis start/end date and time for each submission controlled by the admin (e.g., "3rd analysis: 2026-11-01-2026-11-30 10:00–12:00h") [1].
+                    - UI should display the current status: "open", "too early", "too late", or "submitted".
 - **Barcodes:** Generate and assign unique barcodes (Code128 or QR) to students/analysis sheets.
 
+
+
 ### 3.3 Grading Logic
-- **Per-ion mode (default, as described):** 10 points per correctly identified ion; optionally configurable to deduct points for false positives.
+- **Per-ion mode (default, as described):** 
+    - 10 (default) points per correctly identified ion - admin configurable.;
+    - 8 points (default) per corrected 2nd submission (if allowed) - admin configurable.
+    - 6 points (default) per corrected 3rd submission (if allowed) - admin configurable.
+    - number of submissions per analysis can be limited (e.g., 1–3) by admin.
+    - optionally configurable to deduct points for false positives.
 - **Per-analysis mode (alternative, admin-selectable):** 10 points only if the full ion set is exactly correct.
 - Results are final upon submission (no editing), consistent with the "Kontrollabfrage → Ergebnis" flow [1].
 
@@ -56,14 +79,21 @@ S
   - `Submission` (FK AnalysisInstance, selected ions M2M, timestamp, score, auto-graded)
   - `Config` (points per correct analysis, analyses per course, active course)
 - **API endpoints:**
-  - `POST /api/auth/scan/` → validates barcode, returns session + student's analyses
-  - `GET /api/analyses/` → list analyses for logged-in student with time-window status
-  - `POST /api/analyses/{id}/submit/` → submits ion selection, grades, returns result
-  - `GET /api/analyses/{id}/result/` → detailed correct/incorrect ions
-  - `GET /api/me/summary/` → final result and total points
-  - `GET /api/analyses/{id}/substances/` → list of substances related to the analysis
-  - `GET /api/analyses/{id}/substances/{substance_id}/` → details of a specific substance
-  - Admin: CRUD under `/api/admin/…` (ions, analyses, students, barcodes, config, time windows)
+  - `POST /api/v1/auth/barcode/scan/` → validates a barcode server-side, applies rate limits, and returns a short-lived access/refresh token pair plus the authenticated user's role and assigned analyses. It must not disclose whether an unrecognized barcode belongs to another user.
+  - `POST /api/v1/auth/login/` → username/password login for users without barcode access; institutional SSO uses the configured OIDC/Shibboleth callback and issues the same token format.
+  - `POST /api/v1/auth/token/refresh/` and `POST /api/v1/auth/logout/` → rotate/revoke tokens.
+  - `GET /api/v1/me/` → current user, role, course/lab, and minimal profile data.
+  - `GET /api/v1/analyses/` → assigned analysis instances with type, number, window status (`open`, `too_early`, `too_late`, `submitted`), submission count/limit, and score; students may access only their own instances.
+  - `GET /api/v1/analyses/{analysis_id}/` → analysis details and the complete possible-ion set, without exposing the correct-ion set before submission.
+  - `GET /api/v1/analyses/{analysis_id}/substances/` and `GET /api/v1/analyses/{analysis_id}/substances/{substance_id}/` → related reference substances and details, subject to the analysis configuration.
+  - `POST /api/v1/analyses/{analysis_id}/submissions/` → accepts a selected-ion ID list and an explicit confirmation flag; atomically checks ownership, window, submission limit, and allowed ions, creates an immutable timestamped submission, grades it according to the configured per-ion or per-analysis mode, and returns the result. Replays and duplicate requests must not create another submission (idempotency key required).
+  - `GET /api/v1/analyses/{analysis_id}/submissions/` → the student's own submission history and scores, if multiple attempts are enabled.
+  - `GET /api/v1/analyses/{analysis_id}/result/` → result for the student's completed submission(s), including correct, incorrect, and missing ions, score, penalties, and ideal score; unavailable until submission is accepted.
+  - `GET /api/v1/me/summary/` → all assigned analyses, per-analysis scores/statuses, total and ideal points, and final result.
+  - Assistant endpoints under `/api/v1/assistant/` → assigned-course roster, analysis assignments, submission details, status/statistics, and CSV export; read access to correct answers is restricted to assistants for their courses.
+  - Admin CRUD under `/api/v1/admin/` → users, courses, assignments, barcodes, ions, substances, analysis types/instances, correct-ion sets, time windows, grading configuration, and audit-log/result exports. Mutating operations require admin authorization and are audited.
+
+  All protected endpoints require authentication and enforce role, course, and object-level permissions. Mutating requests use CSRF protection where applicable, validate IDs server-side, and return consistent JSON errors (`code`, `message`, `field_errors`). The API must use UTC timestamps, pagination on collection endpoints, optimistic concurrency where configuration can change, and never expose correct answers or another student's data through list/detail responses.
 - **Barcode verification** is server-side (barcode → DB lookup), never trust client.
 - **Security:** - HTTPS, hashed credentials, rate-limiting on submission endpoint, one-time barcode per analysis window. 
                 - save docker environment - safety hardend (e.g., no root, non-default ports, firewall rules).
@@ -108,6 +138,7 @@ S
 ```
 Student (id, name, matriculation_no, barcode, role)
 Ion (id, symbol, name, charge, kind: cation|anion, group)
+Substance (id, name, formula, ions M2M[Ion])
 AnalysisType (id, name, possible_ions M2M[Ion])
 AnalysisInstance (id, type FK, student FK, correct_ions M2M[Ion],
                   window_start, window_end, status, created_at)
@@ -118,6 +149,6 @@ Config (points_per_analysis=10, analyses_per_course=3, course_active)
 
 ## 7. Scoring Example
 
-Analysis 3's correct set: {NH₄⁺, SO₄²⁻, Cu²⁺}. Student ticks {NH₄⁺, SO₄²⁻, Cu²⁺, Zn²⁺} → 3 correct × 10 = **30 points** (false positive Zn²⁺ ignored or penalized per admin config). After 4 analyses, SummaryView shows total points vs. ideal result [1].
+Analysis 3's correct set: {NH₄⁺, SO₄²⁻, Cu²⁺}. Student ticks {NH₄⁺, SO₄²⁻, Cu²⁺} → all 3 correct == **10 points**. If student ticks {NH₄⁺, SO₄²⁻, Cu²⁺, Cl⁻} → 3 correct, 1 false positive → new submission possible if allowed, but may incur a penalty (e.g., -2 points) depending on admin configuration. If student ticks {NH₄⁺, SO₄²⁻} → 2 correct, 1 missing → 3rd submission possible if allowed, but may incur a penalty (e.g., -4 points) depending on admin configuration. After max. submissions, the final score is calculated based on the best submission or the last submission, depending on admin configuration.
 
 
