@@ -23,7 +23,7 @@
 ## What is FlameCheck?
 
 FlameCheck is a **web-based submission system for inorganic qualitative
-analysis**. First-semester chemistry students authenticate with their
+analysis**.  Chemistry students authenticate with their
 **university login** (e.g. Shibboleth / LDAP) or a **personal barcode**, see the
 cations and anions that are possible for their assigned analysis, and tick the
 ions they believe are present. The system **automatically scores** the
@@ -32,21 +32,14 @@ supports **user-defined analysis types** (e.g. for lab courses specialising in
 biology, pharmacy or materials science), and allows **multiple analyses per
 student, each with its own submission time window**.
 
-The design is inspired by a classic lab "announcement" workflow: a student scans
-a barcode from their analysis sheet, the system shows which ions can occur, the
-student checks off ("ankreuzen") the ions found and finishes, and a **control
-query** ("Kontrollabfrage") reveals the result. The web system replaces the
-desk computer and the hardware barcode scanner with a **browser-based barcode
-scanner**, while preserving the workflow:
-
 > ⏱️ Each analysis is subject to a **date/time window** — submissions that are
-> too early or too late ("zu früh!" / "zu spät!") are rejected, and the final
+> too early or too late are rejected, and the final
 > result and point allocation are awarded at the end.
 
 ### Key capabilities
 
-- **Barcode login** (webcam / USB keyboard-wedge scanner via ZXing) with a
-  username/password and institutional SSO fallback.
+- **Allauth and Barcode login** ( institutional SSO with a username/password 
+   or webcam / USB keyboard-wedge scanner via ZXing) .
 - **Time-window gating** per analysis with live status: `open`, `too early`,
   `too late`, `submitted`.
 - **Immutable, timestamped submissions** with a client-generated
