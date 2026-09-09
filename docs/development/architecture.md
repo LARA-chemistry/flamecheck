@@ -626,11 +626,23 @@ Key settings: `AUTH_USER_MODEL = "users.User"`, `API_PREFIX = "/api/v1"`,
 
 ## 12. Testing
 
-The pytest suite (`tests/`, run with `uv run pytest`) is marked `django_db` and uses
-fixtures in `tests/conftest.py` (student/assistant/admin users, a course, a 10-ion
-catalog, an open-window instance with correct set `{NH4⁺, SO₄²⁻, Cu²⁺}`, and a
-fresh-minted-token `auth_headers` fixture). Coverage is reported to `coverage.xml`.
-Suites cover: auth (login, barcode, refresh rotation, logout revocation, `/me`),
-submission window logic (open/early/late/disallowed/ion-allowlist), idempotent replay,
-submission limits, retry penalties, per-ion and per-analysis scoring, the result and
-summary endpoints, assistant course visibility/roster/CSV, and admin CRUD + role guards.
+The pytest suite (`tests/`, run with `uv run pytest`) is marked `django_db`. Test data
+is generated with **factory-boy + Faker**: each Django app owns a `factory.py`
+(`users`, `substances`, `config`, `analyses`) exposing `DjangoModelFactory` subclasses
+that use `Faker` (realistic values), `Sequence` (uniqueness), `SubFactory` (object
+graphs), `LazyFunction`/`LazyAttribute` (build-time values), `post_generation`
+(optional M2M/FK relations), `django_get_or_create` (idempotent natural-key creation),
+`create_batch`, and named helpers (`IonFactory.make('copper')`,
+`AnalysisInstanceFactory.make(window='too_early')`). `UserFactory` uses a custom
+`_create` that routes through `create_user`/`create_superuser` so passwords are hashed,
+with `AdminUserFactory`/`AssistantUserFactory` role sub-factories.
+
+The shared fixtures in `tests/conftest.py` are thin wrappers over these factories
+(student/assistant/admin users, a course, a 10-ion catalog, an open-window instance
+with correct set `{NH4⁺, SO₄²⁻, Cu²⁺}`, and a fresh-minted-token `auth_headers`
+fixture), and `tests/test_factories.py` exercises the factories themselves. Coverage is
+reported to `coverage.xml`. Suites cover: auth (login, barcode, refresh rotation, logout
+revocation, `/me`), submission window logic (open/early/late/disallowed/ion-allowlist),
+idempotent replay, submission limits, retry penalties, per-ion and per-analysis scoring,
+the result and summary endpoints, assistant course visibility/roster/CSV, and admin
+CRUD + role guards.

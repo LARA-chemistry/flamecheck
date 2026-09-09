@@ -6,6 +6,7 @@ from datetime import timedelta
 import pytest
 from config.models import GradingConfig
 from django.utils import timezone
+from substances.factory import IonFactory
 from substances.models import Ion
 
 pytestmark = pytest.mark.django_db
@@ -102,8 +103,8 @@ class TestSubmission:
         assert resp.status_code in (400, 422)
 
     def test_disallowed_ion_rejected(self, client, student, assigned_instance, auth_headers):
-        # Create an ion not in the type's possible set
-        other_ion = Ion.objects.create(symbol="I-", name="Iodide", charge=-1, kind="anion", group="Halogens")
+        # Create an ion not in the type's possible set (from the factory catalog).
+        other_ion = IonFactory.make("iodide")
         resp = client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": [other_ion.id], "confirmed": True, "idempotency_key": uuid.uuid4().hex},

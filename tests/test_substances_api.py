@@ -1,7 +1,8 @@
 """Tests for the substances (ions/substances) API."""
 
 import pytest
-from substances.models import Ion, Substance
+from substances.factory import IonFactory, SubstanceFactory
+from substances.models import Ion
 
 pytestmark = pytest.mark.django_db
 
@@ -9,10 +10,11 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def populated(db, course):
     """Ensure a minimal ion/substance catalog exists (catalog may be empty in tests)."""
-    cation, _ = Ion.objects.get_or_create(symbol="Pt+", name="Platinum", charge=1, kind="cation", group="Group VIII")
-    anion, _ = Ion.objects.get_or_create(symbol="I-", name="Iodide", charge=-1, kind="anion", group="Halides")
-    substance, _ = Substance.objects.get_or_create(name="Platinum iodide", formula="PtI")
-    substance.ions.set([cation, anion])
+    # Unique symbols (not in the factory catalog) so this fixture is isolated
+    # from the shared `ions` fixture and the admin-create test (which uses Ag+).
+    cation = IonFactory(symbol="Pt+", name="Platinum", charge=1, kind="cation", group="Group VIII")
+    anion = IonFactory(symbol="I-", name="Iodide", charge=-1, kind="anion", group="Halides")
+    substance = SubstanceFactory(name="Platinum iodide", formula="PtI", ions=[cation, anion])
     return cation, anion, substance
 
 
@@ -21,7 +23,7 @@ class TestReadEndpoints:
         assert client.get("/api/v1/ions").status_code == 401
 
     def test_list_ions_filtered(self, client, student, populated, auth_headers):
-        cation, anion, _ = populated
+        cation, _anion, _substance = populated
         resp = client.get("/api/v1/ions", **auth_headers(student))
         assert resp.status_code == 200
         symbols = {i["symbol"] for i in resp.json()}

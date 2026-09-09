@@ -7,14 +7,15 @@ are safe to import in production because importing them has no side-effects.
 
 The module exercises the full factory-boy / Faker toolbox:
 
-- ``Faker``        – realistic random values (names, emails, matriculation numbers).
-- ``Sequence``     – guaranteed-unique values per factory invocation.
-- ``SubFactory``   – build related objects inline.
-- ``Trait``        – one-liner role variants (``is_admin``, ``is_assistant``).
-- ``LazyFunction`` – values computed from the object being built.
-- ``LazyAttribute``– values derived from other fields on the same object.
-- ``RelatedFactory`` – link to an existing related object.
-- ``post_generation`` – declare-to-handle M2M / optional relations cleanly.
+- ``Faker``          - realistic random values (names, emails, matriculation numbers).
+- ``Sequence``       - guaranteed-unique values per factory invocation.
+- ``SubFactory``     - build related objects inline (barcodes, assignments).
+- ``LazyFunction``   - values computed from the object being built.
+- ``django_get_or_create`` - idempotent creation keyed on ``username``.
+- ``post_generation`` - optional FK (``course``) handled cleanly.
+- Custom ``_create`` - routes through ``create_user``/``create_superuser`` so
+  passwords are hashed, plus ``AdminUserFactory`` / ``AssistantUserFactory``
+  sub-factories for the common role cases.
 
 ``User`` is a custom :class:`~django.contrib.auth.models.AbstractUser` with
 ``first_name``/``last_name`` removed and a single ``name`` field, so the factory
@@ -38,6 +39,8 @@ class UserFactory(DjangoModelFactory):
     """Factory for :class:`users.models.User`."""
 
     class Meta:
+        """Meta options for :class:`UserFactory`."""
+
         model = User
         django_get_or_create = ("username",)
 
@@ -85,12 +88,15 @@ class UserFactory(DjangoModelFactory):
         if isinstance(extracted, list):
             extracted = extracted[0]
         obj.course = extracted
+        obj.save()
 
 
 class StudentBarcodeFactory(DjangoModelFactory):
     """Factory for :class:`users.models.StudentBarcode`."""
 
     class Meta:
+        """Meta options for :class:`StudentBarcodeFactory`."""
+
         model = StudentBarcode
         django_get_or_create = ("value",)
 
@@ -105,6 +111,8 @@ class LoginAttemptFactory(DjangoModelFactory):
     """Factory for :class:`users.models.LoginAttempt`."""
 
     class Meta:
+        """Meta options for :class:`LoginAttemptFactory`."""
+
         model = LoginAttempt
 
     username = Faker("user_name")
@@ -117,6 +125,8 @@ class StudentAssignmentFactory(DjangoModelFactory):
     """Factory for :class:`users.models.StudentAssignment`."""
 
     class Meta:
+        """Meta options for :class:`StudentAssignmentFactory`."""
+
         model = StudentAssignment
         django_get_or_create = ("student", "instance")
 

@@ -128,6 +128,44 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 - **Frontend:** Vitest + Vue Test Utils for component/unit tests, Cypress for end-to-end testing (login, submission, result display).
 - **Integration tests:** Docker Compose environment with test database, simulating student submissions and admin actions.
 
+#### Test data with factory-boy + Faker
+
+All test fixtures are built with **factory-boy** factories that live *inside* each
+Django app (one `factory.py` per app: `users`, `substances`, `config`, `analyses`),
+so the factories sit next to the models they build and can be imported anywhere the
+domain is tested. They use **Faker** (bundled with factory-boy) for realistic random
+values and the full factory-boy toolbox:
+
+| Feature | Where it is used |
+|---|---|
+| `Faker` | Realistic names, emails, companies, IPs, datetimes, formulas, URLs, matriculation numbers |
+| `Sequence` | Guaranteed-unique values (`username`, `labspace_id`, ion `symbol`, `pubchem_id`) |
+| `SubFactory` | Building object graphs inline (barcode → student, instance → type/course, assignment → student/instance) |
+| `LazyFunction` / `LazyAttribute` | Values computed at build time (fresh UUID idempotency keys, window datetimes, per-instance lists) |
+| `post_generation` | Optional M2M / FK relations (possible/correct/selected ions, substance ions, course enrollment) |
+| `django_get_or_create` | Idempotent creation keyed on natural keys (`username`, `(symbol, kind)`, `name`, `pk=1`) |
+| `create_batch` / `make` | Bulk creation and named catalog helpers (`IonFactory.make('copper')`, `create_ion_catalog([...])`) |
+| Custom `_create` | `UserFactory` routes through `create_user`/`create_superuser` so passwords are **hashed**; `AdminUserFactory`/`AssistantUserFactory` are ready-made role sub-factories |
+| Singleton factories | `GradingConfigFactory`/`AppSettingsFactory` pin `pk=1` so repeated calls return the same row |
+
+Concretely:
+
+- **`users/factory.py`** — `UserFactory` (role field + `AdminUserFactory`/`AssistantUserFactory`), `StudentBarcodeFactory`, `LoginAttemptFactory`, `StudentAssignmentFactory`.
+- **`substances/factory.py`** — `IonFactory` with a named first-semester catalog (`ION_CATALOG` + `IonFactory.make(name)` + `create_ion_catalog(names)`), and `SubstanceFactory` (ions via `post_generation`).
+- **`config/factory.py`** — `CourseFactory`, `GradingConfigFactory` (singleton), `AssistantCourseFactory`, `AppSettingsFactory` (singleton).
+- **`analyses/factory.py`** — `AnalysisTypeFactory`, `AnalysisInstanceFactory` (with an `AnalysisInstanceFactory.make(window='open'|'too_early'|'too_late')` helper that produces a window in the requested state relative to "now"), and `SubmissionFactory` (auto UUID idempotency key).
+
+The shared fixtures in `tests/conftest.py` are thin wrappers over these factories (fixture
+names are stable so test modules stay unchanged), and `tests/test_factories.py` exercises
+the factories themselves (uniqueness, hashed passwords, M2M handling, idempotency,
+window states, full-graph `SubFactory` building) — doubling as living documentation.
+
+> **Note:** the project pins factory-boy 3.x, whose `Trait`/`Params` expansion does not
+> interact reliably with a custom `_create` and `django_get_or_create` in the current
+> environment. Named variants are therefore implemented with explicit field overrides,
+> sub-factories and small `make()` helpers rather than `Trait`, which is the more robust
+> pattern for this version.
+
 ### 4.3 Deployment
 - Nginx serving built Vue assets + proxying API to Django (Gunicorn).
 - Database configurable via `.env` (`DATABASE_URL`): **SQLite by default**, or **PostgreSQL** for larger deployments (the `db` service in the Compose file is opt-in via a profile).

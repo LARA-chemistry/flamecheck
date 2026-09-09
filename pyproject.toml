@@ -140,6 +140,11 @@ lint.isort.known-first-party = [ "flamecheck", "tests" ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "flamecheck.settings.test"
+# The real test suite lives in the top-level ``tests/`` directory. The per-app
+# ``packages/*/src/*/tests/`` trees are leftover template cruft (some import
+# django-rest-framework, which this project does not use), so they are excluded
+# from collection by pinning ``testpaths`` to the canonical suite.
+testpaths = [ "tests" ]
 addopts = """\
     -v
     -Wdefault

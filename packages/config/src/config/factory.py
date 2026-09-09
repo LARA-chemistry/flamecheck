@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from factory import Faker, post_generation, Sequence, SubFactory
+from factory import Faker, Sequence, SubFactory, post_generation
 from factory.django import DjangoModelFactory
 
 from .models import AppSettings, AssistantCourse, Course, GradingConfig
@@ -25,6 +25,8 @@ class CourseFactory(DjangoModelFactory):
     """Factory for :class:`config.models.Course`."""
 
     class Meta:
+        """Meta options for :class:`CourseFactory`."""
+
         model = Course
         django_get_or_create = ("name",)
 
@@ -38,6 +40,8 @@ class GradingConfigFactory(DjangoModelFactory):
     """Factory for the singleton :class:`config.models.GradingConfig` (``pk=1``)."""
 
     class Meta:
+        """Meta options for :class:`GradingConfigFactory`."""
+
         model = GradingConfig
         django_get_or_create = ("pk",)
 
@@ -60,6 +64,8 @@ class AssistantCourseFactory(DjangoModelFactory):
     """Factory for :class:`config.models.AssistantCourse`."""
 
     class Meta:
+        """Meta options for :class:`AssistantCourseFactory`."""
+
         model = AssistantCourse
         django_get_or_create = ("assistant", "course")
 
@@ -71,13 +77,14 @@ class AppSettingsFactory(DjangoModelFactory):
     """Factory for the singleton :class:`config.models.AppSettings` (``pk=1``)."""
 
     class Meta:
+        """Meta options for :class:`AppSettingsFactory`."""
+
         model = AppSettings
         django_get_or_create = ("pk",)
 
     pk = 1
     points_per_analysis = 10
     analyses_per_course = 3
-    active_course = None
 
     @post_generation
     def active_course(obj, create, extracted, **kwargs):

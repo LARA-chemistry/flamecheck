@@ -16,8 +16,7 @@ import uuid
 from datetime import timedelta
 
 from django.utils import timezone
-
-from factory import Faker, LazyFunction, post_generation, Sequence, SubFactory
+from factory import Faker, LazyFunction, Sequence, SubFactory, post_generation
 from factory.django import DjangoModelFactory
 
 from .models import AnalysisInstance, AnalysisType, Submission
@@ -42,8 +41,11 @@ class AnalysisTypeFactory(DjangoModelFactory):
     """Factory for :class:`analyses.models.AnalysisType`."""
 
     class Meta:
+        """Meta options for :class:`AnalysisTypeFactory`."""
+
         model = AnalysisType
         django_get_or_create = ("name",)
+        skip_postgeneration_save = True
 
     name = Sequence(lambda n: f"Analysis {n}")
     description = Faker("sentence")
@@ -66,7 +68,10 @@ class AnalysisInstanceFactory(DjangoModelFactory):
     """Factory for :class:`analyses.models.AnalysisInstance`."""
 
     class Meta:
+        """Meta options for :class:`AnalysisInstanceFactory`."""
+
         model = AnalysisInstance
+        skip_postgeneration_save = True
 
     type = SubFactory(AnalysisTypeFactory)
     course = SubFactory("config.factory.CourseFactory")
@@ -77,7 +82,7 @@ class AnalysisInstanceFactory(DjangoModelFactory):
     created_at = Faker("date_time_this_year", before_now=True)
 
     @classmethod
-    def make(cls, window: str = "open", **overrides) -> "AnalysisInstance":
+    def make(cls, window: str = "open", **overrides) -> AnalysisInstance:
         """
         Build an instance whose window is in a given state relative to "now".
 
@@ -109,14 +114,16 @@ class SubmissionFactory(DjangoModelFactory):
     """Factory for the immutable :class:`analyses.models.Submission`."""
 
     class Meta:
+        """Meta options for :class:`SubmissionFactory`."""
+
         model = Submission
-        # Idempotency key is unique per (instance, student), so generate a
-        # fresh UUID for each submission to keep batches collision-free.
-        exclude = ("idempotency_key",)
+        skip_postgeneration_save = True
 
     analysis_instance = SubFactory(AnalysisInstanceFactory)
     student = SubFactory("users.factory.UserFactory")
     submission_number = 1
+    # Fresh UUID per instance so a batch never collides on the
+    # (instance, student, idempotency_key) uniqueness constraint.
     idempotency_key = LazyFunction(lambda: uuid.uuid4().hex)
     score = 0
     correct_count = 0

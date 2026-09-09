@@ -1,15 +1,16 @@
 """Tests for the assistant endpoints (roster, detail, stats, CSV export)."""
 
 import pytest
-from config.models import AssistantCourse, Course
+from config.factory import AssistantCourseFactory, CourseFactory
+from config.models import AssistantCourse
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
 def assistant_course(assistant, course) -> AssistantCourse:
-    """Link the assistant fixture to the course fixture."""
-    return AssistantCourse.objects.create(assistant=assistant, course=course)
+    """Link the assistant fixture to the course fixture (via factory)."""
+    return AssistantCourseFactory(assistant=assistant, course=course)
 
 
 class TestCourseVisibility:
@@ -28,13 +29,13 @@ class TestCourseVisibility:
         assert data[0]["name"] == course.name
 
     def test_assistant_does_not_see_other_courses(self, client, assistant, assistant_course, auth_headers):
-        other = Course.objects.create(name="Other Course", is_active=True)
+        other = CourseFactory(name="Other Course", is_active=True)
         resp = client.get("/api/v1/assistant/courses", **auth_headers(assistant))
         names = {c["name"] for c in resp.json()}
         assert other.name not in names
 
     def test_admin_sees_all_active_courses(self, client, admin_user, assistant_course, auth_headers):
-        other = Course.objects.create(name="Other Course", is_active=True)
+        other = CourseFactory(name="Other Course", is_active=True)
         resp = client.get("/api/v1/assistant/courses", **auth_headers(admin_user))
         names = {c["name"] for c in resp.json()}
         assert other.name in names

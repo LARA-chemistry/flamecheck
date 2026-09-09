@@ -1,40 +1,26 @@
-from collections.abc import Sequence
-from typing import Any
+"""
+Per-app test factories for the ``users`` app.
 
-from factory import Faker, post_generation
-from factory.django import DjangoModelFactory
+The canonical factory definitions live in :mod:`users.factory` (one ``factory.py``
+per app, per the project convention). This module re-exports them so the
+cookiecutter-style per-app tests (``users/tests/``) keep working while there is a
+single source of truth for how a ``User`` is built.
+"""
 
-from users.models import User
+from users.factory import (
+    AdminUserFactory,
+    AssistantUserFactory,
+    LoginAttemptFactory,
+    StudentAssignmentFactory,
+    StudentBarcodeFactory,
+    UserFactory,
+)
 
-
-class UserFactory(DjangoModelFactory[User]):
-    username = Faker("user_name")
-    email = Faker("email")
-    name = Faker("name")
-
-    @post_generation
-    def password(self, create: bool, extracted: Sequence[Any], **kwargs):
-        password = (
-            extracted
-            if extracted
-            else Faker(
-                "password",
-                length=42,
-                special_chars=True,
-                digits=True,
-                upper_case=True,
-                lower_case=True,
-            ).evaluate(None, None, extra={"locale": None})
-        )
-        self.set_password(password)
-
-    @classmethod
-    def _after_postgeneration(cls, instance, create, results=None):
-        """Save again the instance if creating and at least one hook ran."""
-        if create and results and not cls._meta.skip_postgeneration_save:
-            # Some post-generation hooks ran, and may have modified us.
-            instance.save()
-
-    class Meta:
-        model = User
-        django_get_or_create = ["username"]
+__all__ = [
+    "AdminUserFactory",
+    "AssistantUserFactory",
+    "LoginAttemptFactory",
+    "StudentAssignmentFactory",
+    "StudentBarcodeFactory",
+    "UserFactory",
+]

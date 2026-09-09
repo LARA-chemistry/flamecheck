@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from factory import Faker, post_generation, Sequence
+from factory import Faker, LazyAttribute, Sequence, post_generation
 from factory.django import DjangoModelFactory
 
 from .models import Ion, Substance
@@ -57,6 +57,8 @@ class IonFactory(DjangoModelFactory):
     """Factory for :class:`substances.models.Ion`."""
 
     class Meta:
+        """Meta options for :class:`IonFactory`."""
+
         model = Ion
         django_get_or_create = ("symbol", "kind")
 
@@ -69,7 +71,7 @@ class IonFactory(DjangoModelFactory):
     group = Faker("word")
 
     @classmethod
-    def make(cls, name: str = "sodium", **overrides) -> "Ion":
+    def make(cls, name: str = "sodium", **overrides) -> Ion:
         """
         Build a named ion from :data:`ION_CATALOG` (e.g. ``IonFactory.make('copper')``).
 
@@ -97,7 +99,7 @@ class IonFactory(DjangoModelFactory):
         )
 
 
-def create_ion_catalog(names: list[str] | None = None) -> list["Ion"]:
+def create_ion_catalog(names: list[str] | None = None) -> list[Ion]:
     """
     Create (idempotently) a set of catalog ions.
 
@@ -117,13 +119,17 @@ class SubstanceFactory(DjangoModelFactory):
     """Factory for :class:`substances.models.Substance`."""
 
     class Meta:
+        """Meta options for :class:`SubstanceFactory`."""
+
         model = Substance
         django_get_or_create = ("name",)
+        skip_postgeneration_save = True
 
     name = Faker("company")
     formula = Faker("bothify", text="H?O?")
-    synonyms = []
-    pubchem_id = Faker("pystr", charset_string="0123456789", variable_length=True)
+    # Fresh list per instance (mutable defaults are not shared).
+    synonyms = LazyAttribute(lambda obj: [])
+    pubchem_id = Sequence(lambda n: str(n + 1000))
     wikipedia_link = Faker("url")
 
     @post_generation
