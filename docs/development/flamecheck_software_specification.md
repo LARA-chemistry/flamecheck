@@ -71,7 +71,7 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 ### 4.1 Backend — Django
 - **Django 6.x + django Ninja** REST API.
      - use models.Manager, where appropriate, to encapsulate business logic (e.g., submission validation, scoring).
-- **SQLite** or **PostgreSQL** database. (.env config for DB connection)
+- **SQLite** (default) or **PostgreSQL** database. The backend is selected through the `DATABASE_URL` variable in the `.env` file (see `.env-template`); the default is a local SQLite file, and PostgreSQL is opt-in.
 - **Authentication:** Token-based (JWT) for API; session cookie for web frontend. Django allauth (with shibboleth support) for login (students, assistants, admins).
 - **Models (core):
   - separate apps for `users`, `analyses`, `substances`, `config`:
@@ -130,8 +130,8 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 
 ### 4.3 Deployment
 - Nginx serving built Vue assets + proxying API to Django (Gunicorn).
-- PostgreSQL database.
-- Docker Compose setup (web, api, db) for easy lab-room deployment.
+- Database configurable via `.env` (`DATABASE_URL`): **SQLite by default**, or **PostgreSQL** for larger deployments (the `db` service in the Compose file is opt-in via a profile).
+- Docker Compose setup (web, plus optional db) for easy lab-room deployment.
 - Deployment for development: local Docker Compose; staging: cloud VM with Docker Compose; production: cloud VM with Docker Compose + HTTPS (Let's Encrypt).
 
 ## 5. Non-Functional Requirements

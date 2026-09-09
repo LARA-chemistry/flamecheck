@@ -93,7 +93,15 @@ ASGI_APPLICATION = "flamecheck.asgi.application"
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-# e.g. sqlite:///db.sqlite3 or postgres://user:pass@host:5432/flamecheck
+# The default backend is SQLite (``<repo>/db.sqlite3``) so the project runs with
+# zero external services. Any other engine can be selected by setting
+# ``DATABASE_URL`` (e.g. in ``.env`` / the container environment):
+#
+#   SQLite (default):  sqlite:////absolute/path/to/db.sqlite3
+#   PostgreSQL:        postgres://user:pass@host:5432/flamecheck
+#
+# ``env.db()`` maps the URL to Django's ``DATABASES`` dict, so the same
+# settings work for both engines. See ``.env-template`` for an example.
 DATABASES = {
     "default": env.db(
         "DATABASE_URL",

@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-# Apply database migrations
+# Database backend is engine-agnostic: it is whatever DATABASE_URL points at
+# (SQLite by default, or PostgreSQL when set). Migrations work for both.
 uv run python manage.py migrate --noinput
 
 # Run the development server (reloads on change)

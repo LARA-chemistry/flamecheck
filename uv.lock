@@ -447,11 +447,15 @@ dependencies = [
     { name = "django-filter" },
     { name = "django-ninja" },
     { name = "gunicorn" },
-    { name = "psycopg" },
     { name = "pyjwt" },
     { name = "substances" },
     { name = "users" },
     { name = "whitenoise" },
+]
+
+[package.optional-dependencies]
+postgres = [
+    { name = "psycopg" },
 ]
 
 [package.dev-dependencies]
@@ -487,12 +491,13 @@ requires-dist = [
     { name = "django-filter", specifier = ">=25.1" },
     { name = "django-ninja", specifier = ">=1.4" },
     { name = "gunicorn", specifier = ">=23.0.0" },
-    { name = "psycopg", specifier = ">=3.2.0" },
+    { name = "psycopg", marker = "extra == 'postgres'", specifier = ">=3.2.0" },
     { name = "pyjwt", specifier = ">=2.9.0" },
     { name = "substances", editable = "packages/substances" },
     { name = "users", editable = "packages/users" },
     { name = "whitenoise", specifier = ">=6.9.0" },
 ]
+provides-extras = ["postgres"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -9,7 +9,8 @@
   <a href="https://www.python.org/"><img alt="Python 3.13" src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
   <a href="https://vuejs.org/"><img alt="Vue 3" src="https://img.shields.io/badge/Vue-3.x-42B883?logo=vue.js&logoColor=white"></a>
   <a href="https://uv.pypa.io/"><img alt="uv" src="https://img.shields.io/badge/uv-workspace-20C49E?logo=python&logoColor=white"></a>
-  <a href="https://www.postgresql.org/"><img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white"></a>
+  <a href="https://www.sqlite.org/"><img alt="SQLite default" src="https://img.shields.io/badge/SQLite-default-003B57?logo=sqlite&logoColor=white"></a>
+  <a href="https://www.postgresql.org/"><img alt="PostgreSQL optional" src="https://img.shields.io/badge/PostgreSQL-optional-336791?logo=postgresql&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -76,7 +77,7 @@ diagrams — see the
 | Auth         | **PyJWT** (HS256, `token_version` revocation) + django-allauth (SSO-ready) |
 | Frontend     | **Vite 7 · Vue 3 · Pinia · Vue Router · Naive UI** |
 | Barcode scan | **@zxing/browser** (webcam + manual/USB fallback) |
-| Database     | PostgreSQL (production) / SQLite (dev & tests) |
+| Database     | **SQLite by default**; PostgreSQL optional (set `DATABASE_URL`) |
 | Tooling      | **uv** workspace, ruff, pytest, WhiteNoise, Gunicorn |
 
 ---
@@ -85,7 +86,9 @@ diagrams — see the
 
 ```
 flamecheck/
+├── .env-template          # env template (copy to .env); configures DB, JWT, etc.
 ├── src/flamecheck/        # Django project: settings, URLs, ninja API wiring
+│   └── settings/          #   base / development / production / test
 ├── packages/              # uv workspace members
 │   ├── users/             #   User, barcodes, JWT auth, login API
 │   ├── substances/        #   Ion + Substance catalog (+ JSON seed data)
@@ -104,33 +107,40 @@ lifecycle are in the [architecture documentation](docs/development/architecture.
 
 ## Installation
 
-> **Prerequisites:** Python **3.13**, [`uv`](https://docs.astral.sh/uv/),
-> Node.js **20+** (frontend), and a PostgreSQL database (SQLite is used
-> automatically for local development).
+> **Prerequisites:** Python **3.13**, [`uv`](https://docs.astral.sh/uv/), and
+> Node.js **20+** (frontend). **No database is required to start** — SQLite is
+> the default and needs no external service. PostgreSQL is optional.
 
 ### Development
+
+The default backend is **SQLite** (a `db.sqlite3` file at the repo root), so the
+steps below need nothing beyond `uv` and Node.
 
 ```bash
 # 1. Get the code
 git clone <repository-url> flamecheck
 cd flamecheck
 
-# 2. Python environment (creates .venv, installs the 4 workspace packages)
+# 2. (Optional) copy the environment template. Everything works without it,
+#    because the defaults are SQLite + development.
+cp .env-template .env
+
+# 4. Python environment (creates .venv, installs the 4 workspace packages)
 uv sync
 
-# 3. Frontend dependencies + build (output → frontend/dist/)
+# 5. Frontend dependencies + build (output → frontend/dist/)
 npm --prefix frontend install
 npm --prefix frontend run build
 
-# 4. Database schema + seed the ion/substance catalog
+# 6. Database schema (SQLite by default) + seed the ion/substance catalog
 uv run python manage.py migrate
 uv run python manage.py import_catalog
 
-# 5. Create a first admin user, then set its role to `admin`
+# 7. Create a first admin user, then set its role to `admin`
 uv run python manage.py createsuperuser
 uv run python manage.py shell -c "from users.models import User; User.objects.filter(username='admin').update(role='admin')"
 
-# 6. Run the dev server
+# 8. Run the dev server
 uv run python manage.py runserver
 ```
 
@@ -153,21 +163,29 @@ uv run python manage.py init_barcode
 ### Production
 
 Production runs the Django project under **Gunicorn** (WSGI) with **WhiteNoise**
-serving the built frontend, and **PostgreSQL** as the database. The
-recommended deployment is **Docker Compose** (web + database) behind a reverse
-proxy that terminates TLS.
+serving the built frontend. **The database is configurable through `.env`**:
+the default is **SQLite** (no external service), or **PostgreSQL** when you set
+`DATABASE_URL` to a `postgres://` URL. The recommended deployment is **Docker
+Compose** behind a reverse proxy that terminates TLS.
 
 ```bash
-# Build and start the full stack (Django + Postgres)
+# 1. Configure the environment (copy the template and edit)
+cp .env-template .env
+#    -> set ENV=production, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, and
+#       DATABASE_URL if you want PostgreSQL (see .env-template for examples).
+
+# 2. Build and start. SQLite (default) is a single container:
 docker compose -f docker/docker-compose.dev-full.yaml up --build -d
 
-# Inside the container: migrations + collectstatic run via the entrypoint,
-# then Gunicorn starts (see docker/entrypoint.production.sh)
-docker compose -f docker/docker-compose.dev-full.yaml exec flamecheck \
-  uv run python manage.py import_catalog
+# 3. To use PostgreSQL instead, activate the profile (it starts a Postgres
+#    container) and set DATABASE_URL in .env first. Install the driver:
+uv sync --extra postgres
+docker compose -f docker/docker-compose.dev-full.yaml --profile postgres up --build -d
 ```
 
-Key production settings live in
+The entrypoint (`docker/entrypoint.production.sh`) runs `migrate` +
+`collectstatic` and then starts Gunicorn. It is engine-agnostic — it does the
+same thing for SQLite and PostgreSQL. Key production settings live in
 `src/flamecheck/settings/production.py` (select it with
 `DJANGO_SETTINGS_MODULE=flamecheck.settings.production`): secure cookies,
 HTTPS, WhiteNoise-compressed static serving and the Gunicorn worker count

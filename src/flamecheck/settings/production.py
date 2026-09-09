@@ -1,4 +1,10 @@
-"""Production settings for FlameCheck."""
+"""Production settings for FlameCheck.
+
+The database backend is inherited from :mod:`.base`: **SQLite by default**.
+To run production on PostgreSQL, set ``DATABASE_URL`` in the environment
+(e.g. via ``.env`` / the container) to a ``postgres://`` URL. No other change
+is required — Django, migrations and the entrypoint are engine-agnostic.
+"""
 
 from .base import *  # noqa: F403
 

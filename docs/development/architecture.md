@@ -31,8 +31,9 @@ assignments and the global grading configuration.
 | Barcode scanning | **@zxing/browser** | Camera-based multi-format reader |
 | Package manager  | **uv** (workspace) | 4 member packages + root project |
 | Static serving   | Whitenoise | Serves `frontend/dist/assets` in prod |
-| DB (prod)        | PostgreSQL | `psycopg` driver |
-| DB (dev/test)    | SQLite | In-memory for tests |
+| Database         | **SQLite (default)** | `db.sqlite3` at repo root; no external service |
+| Database (opt-in)| PostgreSQL | `psycopg` driver, enabled via `DATABASE_URL` |
+| DB (test)        | SQLite | In-memory (`:memory:`) for speed |
 | Server (prod)    | Gunicorn | ASGI/WSGI entrypoints in `src/flamecheck/` |
 | Lint / format    | ruff | Rules `B D C4 S F E W UP I RUF`, line length 120 |
 | Tests            | pytest + pytest-django | 73 tests, coverage to `coverage.xml` |
@@ -47,6 +48,7 @@ settings, URLs, API wiring) plus four member packages under `packages/`.
 ```
 flamecheck/
 ├── pyproject.toml              # Root project + uv workspace + ruff/pytest/mypy config
+├── .env-template               # env template (copy to .env): DB, JWT, hosts, …
 ├── manage.py
 ├── justfile                    # docker compose task runner
 ├── src/flamecheck/             # The Django project (importable as `flamecheck`)
@@ -134,7 +136,7 @@ flowchart TB
         A["analyses"]
     end
 
-    DB[("PostgreSQL / SQLite")]
+    DB[("Database<br/>SQLite (default) / PostgreSQL")]
     Static[("frontend/dist/assets<br/>(WhiteNoise)")]
 
     Camera --> SPA
@@ -575,12 +577,19 @@ flowchart TB
 
 | Module | `DJANGO_SETTINGS_MODULE` | Purpose |
 |--------|--------------------------|---------|
-| `base.py` | — | Shared config (apps, middleware, auth, JWT, static, paths) |
-| `development.py` | `flamecheck.settings` (default) | DEBUG, SQLite dev DB, reload |
-| `production.py` | `flamecheck.settings.production` | Gunicorn, Postgres, WhiteNoise, secure cookies |
+| `base.py` | — | Shared config (apps, middleware, auth, JWT, static, **DB default**) |
+| `development.py` | `flamecheck.settings` (default) | DEBUG, CORS, reload |
+| `production.py` | `flamecheck.settings.production` | Gunicorn, WhiteNoise, secure cookies |
 | `test.py` | `flamecheck.settings.test` | In-memory SQLite, MD5 hasher (fast) |
 
+The **database is configured in `base.py`** from `DATABASE_URL`
+(`django-environ`). The default is **SQLite** at `db.sqlite3`; any engine can
+be selected by setting `DATABASE_URL` in `.env` (e.g. a `postgres://` URL) —
+no change to the other modules is needed. `production.py` inherits the same
+default and therefore runs on SQLite unless `DATABASE_URL` is overridden.
+
 Key settings: `AUTH_USER_MODEL = "users.User"`, `API_PREFIX = "/api/v1"`,
+`DATABASE_URL` (default `sqlite:///<repo>/db.sqlite3`),
 `JWT_ACCESS_TOKEN_LIFETIME_MINUTES = 30`, `JWT_REFRESH_TOKEN_LIFETIME_DAYS = 14`,
 `LOGIN_MAX_ATTEMPTS = 5`, `STATICFILES_DIRS = [frontend/dist/assets]`,
 `CATALOG_DIR = packages/substances/data`.

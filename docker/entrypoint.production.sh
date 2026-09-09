@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-# Apply database migrations
+# Apply database migrations (engine-agnostic: SQLite by default, or
+# PostgreSQL when DATABASE_URL is set via .env — see .env-template).
 uv run python manage.py migrate --noinput
 
 # Collect static files

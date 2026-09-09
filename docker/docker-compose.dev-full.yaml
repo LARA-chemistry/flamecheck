@@ -1,7 +1,17 @@
 # Development compose for FlameCheck.
-# Usage:
+#
+# The DEFAULT stack is single-container and uses SQLite — no external database
+# service is required. To run against PostgreSQL instead, start with the
+# "postgres" profile and set DATABASE_URL in `.env` (see `.env-template`):
+#
+#   # SQLite (default):
 #   docker compose -f docker/docker-compose.dev-full.yaml up --build
-#   docker compose -f docker/docker-compose.dev-full.yaml exec flamecheck bash
+#
+#   # PostgreSQL (opt-in):
+#   #   in .env set:  DATABASE_URL=postgres://flamecheck:flamecheck@postgres:5432/flamecheck
+#   docker compose -f docker/docker-compose.dev-full.yaml --profile postgres up --build
+#
+# The application reads DATABASE_URL via django-environ; nothing else changes.
 
 services:
   flamecheck:
@@ -12,22 +22,27 @@ services:
     image: flamecheck-dev:${DOCKER_IMAGE_TAG:-latest}
     ports:
       - "8000:8000"
+    env_file:
+      - ../.env
     environment:
       - DJANGO_SETTINGS_MODULE=flamecheck.settings.development
-      - FLAMECHECK_DB_HOST=postgres
-      - FLAMECHECK_DB_PORT=5432
-      - FLAMECHECK_DB_NAME=flamecheck
-      - FLAMECHECK_DB_USER=flamecheck
-      - FLAMECHECK_DB_PASSWORD=flamecheck
+      # DATABASE_URL is read from ../.env. When unset the app falls back to
+      # SQLite at /code/db.sqlite3 (the repo root, mounted as /code).
+      # To use Postgres, activate the profile below and set DATABASE_URL in .env.
     volumes:
+      # Mount the repo so the SQLite file (and code) persist and edits are live.
       - ..:/code
+    # Only wait on the DB service when the postgres profile is active.
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
 
   postgres:
     image: postgres:16-alpine
     container_name: flamecheck-db
+    profiles:
+      - postgres
     environment:
       - POSTGRES_DB=flamecheck
       - POSTGRES_USER=flamecheck
