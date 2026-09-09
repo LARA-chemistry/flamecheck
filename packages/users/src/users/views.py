@@ -21,7 +21,6 @@ class UserCreateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
         This method assumes that the user is authenticated.
         """
-        from django.core.exceptions import PermissionDenied
         if not self.request.user.is_authenticated:
             raise PermissionDenied("User must be authenticated.")
         return self.request.user.get_absolute_url()
@@ -80,13 +79,13 @@ user_redirect_view = UserRedirectView.as_view()
 
 class UserProfileView(SuccessMessageMixin, UpdateView):
     model = User
-    fields = ["entity", "username",  "first_name", "last_name", "email" ]
+    fields = ["entity", "username", "first_name", "last_name", "email"]
     success_message = _("Information successfully updated")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['section_title'] = "LaraUser - Profile - Update"
-        context['update_link'] = 'lara_django_people:lara-user-update'
+        context["section_title"] = "LaraUser - Profile - Update"
+        context["update_link"] = "lara_django_people:lara-user-update"
 
         return context
 
@@ -97,5 +96,6 @@ class UserProfileView(SuccessMessageMixin, UpdateView):
     def get_object(self, queryset: QuerySet | None = None) -> User:
         assert self.request.user.is_authenticated  # type guard
         return self.request.user
+
 
 user_profile_view = UserProfileView.as_view()

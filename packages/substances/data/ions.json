@@ -1,0 +1,26 @@
+{
+  "ions": [
+    {"symbol": "Na+", "name": "Sodium", "charge": 1, "kind": "cation", "group": "Group V"},
+    {"symbol": "K+", "name": "Potassium", "charge": 1, "kind": "cation", "group": "Group V"},
+    {"symbol": "NH4+", "name": "Ammonium", "charge": 1, "kind": "cation", "group": "Group I"},
+    {"symbol": "Mg2+", "name": "Magnesium", "charge": 2, "kind": "cation", "group": "Group IV"},
+    {"symbol": "Ca2+", "name": "Calcium", "charge": 2, "kind": "cation", "group": "Group IV"},
+    {"symbol": "Ba2+", "name": "Barium", "charge": 2, "kind": "cation", "group": "Group IV"},
+    {"symbol": "Cu2+", "name": "Copper(II)", "charge": 2, "kind": "cation", "group": "Group II"},
+    {"symbol": "Fe2+", "name": "Iron(II)", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Fe3+", "name": "Iron(III)", "charge": 3, "kind": "cation", "group": "Group III"},
+    {"symbol": "Al3+", "name": "Aluminium", "charge": 3, "kind": "cation", "group": "Group III"},
+    {"symbol": "Zn2+", "name": "Zinc", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Mn2+", "name": "Manganese(II)", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Cl-", "name": "Chloride", "charge": -1, "kind": "anion", "group": "Halides"},
+    {"symbol": "Br-", "name": "Bromide", "charge": -1, "kind": "anion", "group": "Halides"},
+    {"symbol": "I-", "name": "Iodide", "charge": -1, "kind": "anion", "group": "Halides"},
+    {"symbol": "SO4-2", "name": "Sulfate", "charge": -2, "kind": "anion", "group": "Oxyanions"},
+    {"symbol": "SO3-2", "name": "Sulfite", "charge": -2, "kind": "anion", "group": "Oxyanions"},
+    {"symbol": "CO3-2", "name": "Carbonate", "charge": -2, "kind": "anion", "group": "Oxyanions"},
+    {"symbol": "PO4-3", "name": "Phosphate", "charge": -3, "kind": "anion", "group": "Oxyanions"},
+    {"symbol": "NO3-", "name": "Nitrate", "charge": -1, "kind": "anion", "group": "Oxyanions"},
+    {"symbol": "NO2-", "name": "Nitrite", "charge": -1, "kind": "anion", "group": "Oxyanions"},
+    {"symbol": "S2-", "name": "Sulfide", "charge": -2, "kind": "anion", "group": "Sulfides"}
+  ]
+}

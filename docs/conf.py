@@ -41,7 +41,7 @@ source_suffix = [
 ]
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = [
@@ -63,7 +63,7 @@ exclude_patterns = [
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-#html_theme = "furo"
+# html_theme = "furo"
 html_theme = "python_docs_theme"
 
 # Theme options are theme-specific and customize the look and feel of a
@@ -115,16 +115,13 @@ def setup(app: Sphinx) -> None:
 
 # -- Options for LaTeX output ------------------------------------------
 
-latex_elements : dict[str, str] = {
+latex_elements: dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     # 'papersize': 'letterpaper',
-
     # The font size ('10pt', '11pt' or '12pt').
     # 'pointsize': '10pt',
-
     # Additional stuff for the LaTeX preamble.
     # 'preamble': '',
-
     # Latex figure (float) alignment
     # 'figure_align': 'htbp',
 }
@@ -133,9 +130,7 @@ latex_elements : dict[str, str] = {
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, '.tex',
-     ' Documentation',
-     author, 'manual'),
+    (master_doc, ".tex", " Documentation", author, "manual"),
 ]
 
 
@@ -143,11 +138,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, '',
-     ' Documentation',
-     [author], 1)
-]
+man_pages = [(master_doc, "", " Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output ----------------------------------------
@@ -156,14 +147,5 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, '',
-     ' Documentation',
-     author,
-     '',
-     'One line description of project.',
-     'Miscellaneous'),
+    (master_doc, "", " Documentation", author, "", "One line description of project.", "Miscellaneous"),
 ]
-
-
-
-

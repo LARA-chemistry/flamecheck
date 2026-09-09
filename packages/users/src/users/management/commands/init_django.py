@@ -11,21 +11,13 @@ _____________________________________________________________________.
 ________________________________________________________________________
 """
 
-from ast import Interactive
-import os
-import errno
-from pathlib import Path
 import logging
 
-from django.core.management.base import BaseCommand, CommandError
-from django.core.management import call_command
-from django.core.management.utils import get_random_secret_key
-from django.core.exceptions import ImproperlyConfigured
-from django.core.management.color import color_style, no_style
-from django.db import DEFAULT_DB_ALIAS, connections
 from django.conf import settings
-
-from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
+from django.db import DEFAULT_DB_ALIAS, connections
 
 logger = logging.getLogger(__name__)
 

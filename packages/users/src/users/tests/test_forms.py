@@ -18,7 +18,6 @@ class TestUserAdminCreationForm:
             2) Only 1 error is raised by the UserCreation Form
             3) The desired error message is raised
         """
-
         # The user already exists,
         # hence cannot be created.
         form = UserAdminCreationForm(

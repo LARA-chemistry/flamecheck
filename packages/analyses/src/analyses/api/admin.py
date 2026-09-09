@@ -1,0 +1,325 @@
+"""
+Admin endpoints: CRUD for analysis types, instances, assignments, grading config.
+
+All mutating endpoints are admin-only and logged to the audit logger.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+from analyses.api.schemas import (
+    AnalysisInstanceIn,
+    AnalysisTypeIn,
+    AppSettingsOut,
+    AssignmentIn,
+    CourseIn,
+    GradingConfigOut,
+)
+from analyses.models import AnalysisInstance, AnalysisType
+from config.models import AppSettings, Course, GradingConfig
+from ninja import Router
+from ninja.errors import AuthenticationError, HttpError
+from substances.api.schemas import ion_to_schema
+from users.models import StudentAssignment, User
+
+logger = logging.getLogger("flamecheck.audit")
+
+router = Router(tags=["admin"])
+
+
+def _admin_user(request) -> User:
+    """Return the request user if admin, else raise 401."""
+    user = request.user
+    if not getattr(user, "is_authenticated", False):
+        raise AuthenticationError(401, "Authentication required.")
+    if not user.is_admin:
+        raise AuthenticationError(403, "Admin role required.")
+    return user
+
+
+def _parse_dt(value: str) -> datetime:
+    """Parse an ISO-8601 datetime (with or without trailing Z)."""
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    return datetime.fromisoformat(value)
+
+
+# ---- courses -----------------------------------------------------------------
+@router.get("/courses", response=list[dict])
+def list_courses(request):
+    """List all courses (admin)."""
+    _admin_user(request)
+    return [
+        {"id": c.id, "name": c.name, "semester": c.semester, "track": c.track, "is_active": c.is_active}
+        for c in Course.objects.all()
+    ]
+
+
+@router.post("/courses", response=dict)
+def create_course(request, payload: CourseIn):
+    """Create a course (admin)."""
+    _admin_user(request)
+    course = Course.objects.create(
+        name=payload.name,
+        semester=payload.semester,
+        track=payload.track,
+        is_active=payload.is_active,
+    )
+    logger.info("Admin %s created course %s", request.user.username, course.name)
+    return {"id": course.id, "name": course.name}
+
+
+# ---- analysis types ------------------------------------------------------------
+@router.get("/analysis-types", response=list[dict])
+def list_analysis_types(request):
+    """List all analysis types with their possible ion sets."""
+    _admin_user(request)
+    types = AnalysisType.objects.all().prefetch_related("possible_ions")
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "ions": [ion_to_schema(i) for i in t.possible_ions.all()],
+        }
+        for t in types
+    ]
+
+
+@router.post("/analysis-types", response=dict)
+def create_analysis_type(request, payload: AnalysisTypeIn):
+    """Create an analysis type (admin)."""
+    _admin_user(request)
+    t = AnalysisType.objects.create(name=payload.name, description=payload.description or "")
+    if payload.ion_ids:
+        t.possible_ions.set(payload.ion_ids)
+    logger.info("Admin %s created analysis type %s", request.user.username, t.name)
+    return {"id": t.id, "name": t.name}
+
+
+@router.put("/analysis-types/{type_id}", response=dict)
+def update_analysis_type(request, type_id: int, payload: AnalysisTypeIn):
+    """Update an analysis type (admin)."""
+    _admin_user(request)
+    t = AnalysisType.objects.get(pk=type_id)
+    t.name = payload.name
+    t.description = payload.description if payload.description is not None else t.description
+    t.save()
+    if payload.ion_ids is not None:
+        t.possible_ions.set(payload.ion_ids)
+    logger.info("Admin %s updated analysis type %s", request.user.username, t.name)
+    return {"id": t.id, "name": t.name}
+
+
+@router.delete("/analysis-types/{type_id}", response=None)
+def delete_analysis_type(request, type_id: int):
+    """Delete an analysis type that has no instances (admin)."""
+    _admin_user(request)
+    t = AnalysisType.objects.get(pk=type_id)
+    if t.instances.exists():
+        raise HttpError(409, "Type has instances and cannot be deleted.")
+    t.delete()
+    logger.info("Admin %s deleted analysis type %s", request.user.username, type_id)
+
+
+# ---- analysis instances ---------------------------------------------------------
+@router.get("/analysis-instances", response=list[dict])
+def list_analysis_instances(request, course_id: int | None = None):
+    """List analysis instances (admin), optionally filtered by course."""
+    _admin_user(request)
+    qs = AnalysisInstance.objects.all().prefetch_related("correct_ions", "type", "assignments__student")
+    if course_id is not None:
+        qs = qs.filter(course_id=course_id)
+    return [
+        {
+            "id": i.id,
+            "type": i.type.name,
+            "number": i.number,
+            "course": i.course.name if i.course else None,
+            "window_start": i.window_start.isoformat(),
+            "window_end": i.window_end.isoformat(),
+            "correct_ions": [ion_to_schema(x) for x in i.correct_ions.all()],
+            "assigned_students": [a.student.username for a in i.assignments.all()],
+        }
+        for i in qs
+    ]
+
+
+@router.post("/analysis-instances", response=dict)
+def create_analysis_instance(request, payload: AnalysisInstanceIn):
+    """Create an analysis instance (admin)."""
+    _admin_user(request)
+    try:
+        start = _parse_dt(payload.window_start)
+        end = _parse_dt(payload.window_end)
+    except ValueError as exc:
+        raise HttpError(400, f"Invalid datetime: {exc}") from exc
+    t = AnalysisType.objects.get(pk=payload.type_id)
+    course = Course.objects.filter(pk=payload.course_id).first() if payload.course_id else None
+    inst = AnalysisInstance.objects.create(
+        type=t,
+        course=course,
+        number=payload.number,
+        window_start=start,
+        window_end=end,
+    )
+    if payload.correct_ion_ids:
+        inst.correct_ions.set(payload.correct_ion_ids)
+    logger.info("Admin %s created analysis instance %s", request.user.username, inst)
+    return {"id": inst.id, "type": t.name}
+
+
+@router.put("/analysis-instances/{instance_id}", response=dict)
+def update_analysis_instance(request, instance_id: int, payload: AnalysisInstanceIn):
+    """Update an analysis instance's window/correct set/number (admin)."""
+    _admin_user(request)
+    inst = AnalysisInstance.objects.get(pk=instance_id)
+    if payload.window_start:
+        inst.window_start = _parse_dt(payload.window_start)
+    if payload.window_end:
+        inst.window_end = _parse_dt(payload.window_end)
+    if payload.number is not None:
+        inst.number = payload.number
+    if payload.correct_ion_ids:
+        inst.correct_ions.set(payload.correct_ion_ids)
+    if payload.course_id is not None:
+        inst.course_id = payload.course_id
+    inst.save()
+    logger.info("Admin %s updated analysis instance %s", request.user.username, instance_id)
+    return {"id": inst.id}
+
+
+@router.delete("/analysis-instances/{instance_id}", response=None)
+def delete_analysis_instance(request, instance_id: int):
+    """Delete an analysis instance (admin). Only allowed if no submissions exist."""
+    _admin_user(request)
+    inst = AnalysisInstance.objects.get(pk=instance_id)
+    if inst.submissions.exists():
+        raise HttpError(409, "Instance has submissions and cannot be deleted.")
+    inst.delete()
+    logger.info("Admin %s deleted analysis instance %s", request.user.username, instance_id)
+
+
+# ---- assignments -----------------------------------------------------------------
+@router.get("/assignments", response=list[dict])
+def list_assignments(request, course_id: int | None = None):
+    """List student–instance assignments (admin)."""
+    _admin_user(request)
+    qs = StudentAssignment.objects.all().select_related("student", "instance", "instance__type", "course")
+    if course_id is not None:
+        qs = qs.filter(course_id=course_id)
+    return [
+        {
+            "id": a.id,
+            "course": a.course.name if a.course else None,
+            "student": a.student.username,
+            "student_id": a.student_id,
+            "instance_id": a.instance_id,
+            "analysis": a.instance.type.name,
+            "number": a.number,
+        }
+        for a in qs
+    ]
+
+
+@router.post("/assignments", response=dict)
+def create_assignment(request, payload: AssignmentIn):
+    """Assign an analysis instance to a student (admin)."""
+    _admin_user(request)
+    instance = AnalysisInstance.objects.get(pk=payload.instance_id)
+    student = User.objects.filter(pk=payload.student_id).first()
+    if student is None:
+        raise HttpError(404, "Student not found.")
+    course = instance.course
+    assignment = StudentAssignment.objects.create(
+        course=course,
+        student=student,
+        instance=instance,
+        number=payload.number or instance.number,
+    )
+    logger.info("Admin %s assigned %s to %s", request.user.username, student.username, instance)
+    return {"id": assignment.id, "student": student.username, "instance_id": instance.id}
+
+
+@router.delete("/assignments/{assignment_id}", response=None)
+def delete_assignment(request, assignment_id: int):
+    """Remove an assignment (admin)."""
+    _admin_user(request)
+    assignment = StudentAssignment.objects.get(pk=assignment_id)
+    logger.info("Admin %s removed assignment %s", request.user.username, assignment_id)
+    assignment.delete()
+
+
+# ---- grading config --------------------------------------------------------------
+@router.get("/grading-config", response=GradingConfigOut)
+def get_grading_config(request):
+    """Read the grading configuration (any authenticated user; writes are admin-only)."""
+    if not getattr(request.user, "is_authenticated", False):
+        raise AuthenticationError(401, "Authentication required.")
+    gc = GradingConfig.get_instance()
+    return {
+        "points_per_correct_ion": gc.points_per_correct_ion,
+        "penalty_second_submission": gc.penalty_second_submission,
+        "penalty_third_submission": gc.penalty_third_submission,
+        "false_positive_deduction": gc.false_positive_deduction,
+        "grading_mode": gc.grading_mode,
+        "max_submissions_per_analysis": gc.max_submissions_per_analysis,
+        "final_score_strategy": gc.final_score_strategy,
+    }
+
+
+@router.put("/grading-config", response=GradingConfigOut)
+def update_grading_config(request, payload: GradingConfigOut):
+    """Update the grading configuration (admin)."""
+    _admin_user(request)
+    gc = GradingConfig.get_instance()
+    gc.points_per_correct_ion = payload.points_per_correct_ion
+    gc.penalty_second_submission = payload.penalty_second_submission
+    gc.penalty_third_submission = payload.penalty_third_submission
+    gc.false_positive_deduction = payload.false_positive_deduction
+    gc.grading_mode = payload.grading_mode
+    gc.max_submissions_per_analysis = payload.max_submissions_per_analysis
+    gc.final_score_strategy = payload.final_score_strategy
+    gc.save()
+    logger.info("Admin %s updated grading config", request.user.username)
+    return {
+        "points_per_correct_ion": gc.points_per_correct_ion,
+        "penalty_second_submission": gc.penalty_second_submission,
+        "penalty_third_submission": gc.penalty_third_submission,
+        "false_positive_deduction": gc.false_positive_deduction,
+        "grading_mode": gc.grading_mode,
+        "max_submissions_per_analysis": gc.max_submissions_per_analysis,
+        "final_score_strategy": gc.final_score_strategy,
+    }
+
+
+@router.get("/app-settings", response=AppSettingsOut)
+def get_app_settings(request):
+    """Read global app settings (any authenticated user)."""
+    if not getattr(request.user, "is_authenticated", False):
+        raise AuthenticationError(401, "Authentication required.")
+    s = AppSettings.get_instance()
+    return {
+        "points_per_analysis": s.points_per_analysis,
+        "analyses_per_course": s.analyses_per_course,
+        "active_course_id": s.active_course_id,
+    }
+
+
+@router.put("/app-settings", response=AppSettingsOut)
+def update_app_settings(request, payload: AppSettingsOut):
+    """Update global app settings (admin)."""
+    _admin_user(request)
+    s = AppSettings.get_instance()
+    s.points_per_analysis = payload.points_per_analysis
+    s.analyses_per_course = payload.analyses_per_course
+    s.active_course_id = payload.active_course_id
+    s.save()
+    logger.info("Admin %s updated app settings", request.user.username)
+    return {
+        "points_per_analysis": s.points_per_analysis,
+        "analyses_per_course": s.analyses_per_course,
+        "active_course_id": s.active_course_id,
+    }

@@ -14,16 +14,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Dispatcher based on command line arguments/options."""
-        print('Checking the connection to the database.')
+        print("Checking the connection to the database.")
         database_connected = False
         while not database_connected:
             try:
                 connection.ensure_connection()
                 database_connected = True
             except OperationalError:
-                print(self.style.ERROR(
-                    "Database still unavailable."),
-                    end='')
+                print(self.style.ERROR("Database still unavailable."), end="")
                 print(" Waiting 1 second.")
                 time.sleep(1)
-        print(self.style.SUCCESS('Database available!'))
+        print(self.style.SUCCESS("Database available!"))

@@ -30,23 +30,18 @@ dependencies = [
   "django>=6.0.1",
   "django-environ>=0.12",
   "django-allauth>=0.65",
-  "fido2>=2.0.0",
   "argon2-cffi==25.1.0",
-  # "django-crispy-forms>=1.17.0",
-  "django-redis>=6.0",
-  "django-storages>=1.14",
   "psycopg>=3.2.0",
   "django-filter>=25.1",
   "users",
-  "to-dos-app",
+  "substances",
+  "analyses",
+  "config",
   "django-ninja>=1.4",
-  "django-ninja-extra==0.30.8",
   "django-cors-headers>=4.7.0",
-  "markdown>=3.8",
-  "celery>=5.3.0",
-  "django-celery-beat>=2.4.0",
-  "django-celery-results>=2.4.0",
   "whitenoise>=6.9.0",
+  "PyJWT>=2.9.0",
+  "gunicorn>=23.0.0",
 ]
 urls."Bug Tracker" = "https://github.com/markdoerr//issues"
 urls.Changelog = "https://github.com/markdoerr//blob/main/CHANGELOG.md"
@@ -63,6 +58,8 @@ dev = [
   "python-semantic-release>=9.21",
   "ruff>=0.11.0",
   "pytest-cov>=6,<7",
+  "pytest-django>=4.8",
+  "factory-boy>=3.3",
 ]
 docs = [
   "myst-parser>=0.16; python_version >= '3.11'",
@@ -73,15 +70,18 @@ docs = [
   "furo>=2024.6.0",
 ]
 [tool.uv.sources]
-to-dos-app = { workspace = true }
 users = { workspace = true }
-#  = { workspace = true }
+substances = { workspace = true }
+analyses = { workspace = true }
+config = { workspace = true }
 
 
 [tool.uv.workspace]
 members = [
   "packages/users",
-  "packages/to-dos-app",
+  "packages/substances",
+  "packages/analyses",
+  "packages/config",
   # "packages/",
 ]
 
@@ -106,6 +106,7 @@ lint.ignore = [
   "D104", # Missing docstring in public package
   "D107", # Missing docstring in `__init__`
   "D401", # First line of docstring should be in imperative mood
+  "RUF012", # Mutable class-attribute defaults (false positives for Django admin attrs)
 ]
 lint.per-file-ignores."conftest.py" = [ "D100" ]
 lint.per-file-ignores."docs/conf.py" = [ "D100" ]
@@ -118,18 +119,23 @@ lint.per-file-ignores."tests/**/*" = [
   "D104",
   "S101",
 ]
+lint.per-file-ignores."packages/*/src/*/tests/**/*" = [
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "S101",
+]
 lint.isort.known-first-party = [ "flamecheck", "tests" ]
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "flamecheck.settings.test"
 addopts = """\
     -v
     -Wdefault
-    --cov=src/flamecheck
-    --cov-report=term-missing
-    --cov-report=term
-    --cov-report=xml
     --cov=flamecheck
-    --cov-report=term
+    --cov-report=term-missing
     --cov-report=xml
     """
 

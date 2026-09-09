@@ -1,46 +1,46 @@
-# Description: Docker compose file for  build environment 
-# with all services
-# A qualitative analysis submission system for students in chemistry.
-# docker compose exec service_name bash
-# docker compose -f docker-compose.dev-full.yaml exec -1 bash
+# Development compose for FlameCheck.
+# Usage:
+#   docker compose -f docker/docker-compose.dev-full.yaml up --build
+#   docker compose -f docker/docker-compose.dev-full.yaml exec flamecheck bash
 
-
-#networks:
-#   lan_access:
-#     driver: bridge
-
-#volumes:
-  # add volumnes here ...
-  
 services:
-  # mdns_reflector:
-  #   image: flungo/avahi
-  #   container_name: mDNS_Reflector
-  #   ports:
-  #     - "5354:5353/udp"  # Expose mDNS port
-  #   volumes:
-  #     - /var/run/avahi:/var/run/avahi
+  flamecheck:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: flamecheck
+    image: flamecheck-dev:${DOCKER_IMAGE_TAG:-latest}
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=flamecheck.settings.development
+      - FLAMECHECK_DB_HOST=postgres
+      - FLAMECHECK_DB_PORT=5432
+      - FLAMECHECK_DB_NAME=flamecheck
+      - FLAMECHECK_DB_USER=flamecheck
+      - FLAMECHECK_DB_PASSWORD=flamecheck
+    volumes:
+      - ..:/code
+    depends_on:
+      postgres:
+        condition: service_healthy
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: flamecheck-db
+    environment:
+      - POSTGRES_DB=flamecheck
+      - POSTGRES_USER=flamecheck
+      - POSTGRES_PASSWORD=flamecheck
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flamecheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  :
-    image: "path_to_registry/-dev:${DOCKER_IMAGE_TAG}"
-    # ports:
-    #   - 50065:50065
-    # command:  >
-    #     bash -c "source ./venv/bin/activate &&
-    #     python -m  --insecure --port 50065 --debug"
-    # links:
-    #   -  # network link to other service
-    # volumes:
-    #   - .//certificates:/srv//certificates
-    # depends_on:
-    #   - # add dependent services here - it then waits until they are available ...
-    #   - mdns_reflector
-    env_file:
-      - .env  # adjust .env file (copy and rename the .env-template)
-    # network_mode:
-    #   "host"
-    #networks:
-    #  - lan_access
-    #  - default
-    
+volumes:
+  pgdata:

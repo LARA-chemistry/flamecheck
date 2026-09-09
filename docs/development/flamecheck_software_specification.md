@@ -74,6 +74,7 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 - **SQLite** or **PostgreSQL** database. (.env config for DB connection)
 - **Authentication:** Token-based (JWT) for API; session cookie for web frontend. Django allauth (with shibboleth support) for login (students, assistants, admins).
 - **Models (core):
+  - separate apps for `users`, `analyses`, `substances`, `config`:
   - `User` (extends Django user; role: student/assistant/admin), `StudentBarcode` (unique barcode value, FK student)
   - `Ion` (name, symbol, charge, type: cation/anion, group)
   - `Substance` (name, synonyms, formula, ions M2M, pubchem ids, wikipedia link)

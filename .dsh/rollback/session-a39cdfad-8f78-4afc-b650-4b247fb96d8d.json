@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "sessionId": "session-a39cdfad-8f78-4afc-b650-4b247fb96d8d",
+  "cwd": "/lair/source/projects/science/teaching/inorg_prakticum_submission_system/flamecheck",
+  "updatedAt": 1788904576022,
+  "checkpoints": [
+    {
+      "turn": 1,
+      "commit": "2937609db001fbcc8acbd12afa01a84b42a51a2b",
+      "parent": "948df725f38902a03178e7c5b03dabcdbef3ddb8",
+      "time": 1788891898839,
+      "untracked": [
+        "package-lock.json"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "dfcc4cfd0f5620282173791dc35d7435c28b39e4",
+        "time": 1788904575938
+      }
+    }
+  ],
+  "rolls": [],
+  "undos": []
+}
