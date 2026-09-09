@@ -1,94 +1,285 @@
-# FlameCheck
+<p align="center">
+  <img src="docs/_static/flamecheck_logo.svg" alt="FlameCheck — a Bunsen-burner flame with a checkmark" width="160" height="160"/>
+</p>
 
-A qualitative analysis submission system for students in chemistry.
+<h1 align="center">FlameCheck</h1>
 
+<p align="center">
+  <a href="https://www.djangoproject.com/"><img alt="Django 6" src="https://img.shields.io/badge/Django-6.x-092E20"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.13" src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
+  <a href="https://vuejs.org/"><img alt="Vue 3" src="https://img.shields.io/badge/Vue-3.x-42B883?logo=vue.js&logoColor=white"></a>
+  <a href="https://uv.pypa.io/"><img alt="uv" src="https://img.shields.io/badge/uv-workspace-20C49E?logo=python&logoColor=white"></a>
+  <a href="https://www.postgresql.org/"><img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white"></a>
+</p>
 
-## Getting started
+<p align="center">
+  A web system for first-semester inorganic chemistry students to submit<br/>
+  qualitative ion-analysis results — scanned, time-gated, and auto-graded.
+</p>
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+---
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## What is FlameCheck?
 
-## Add your files
+FlameCheck is a **web-based submission system for inorganic qualitative
+analysis**. First-semester chemistry students authenticate with their
+**university login** (e.g. Shibboleth / LDAP) or a **personal barcode**, see the
+cations and anions that are possible for their assigned analysis, and tick the
+ions they believe are present. The system **automatically scores** the
+submissions (by default **10 points per correctly identified analysis**),
+supports **user-defined analysis types** (e.g. for lab courses specialising in
+biology, pharmacy or materials science), and allows **multiple analyses per
+student, each with its own submission time window**.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+The design is inspired by a classic lab "announcement" workflow: a student scans
+a barcode from their analysis sheet, the system shows which ions can occur, the
+student checks off ("ankreuzen") the ions found and finishes, and a **control
+query** ("Kontrollabfrage") reveals the result. The web system replaces the
+desk computer and the hardware barcode scanner with a **browser-based barcode
+scanner**, while preserving the workflow:
+
+> ⏱️ Each analysis is subject to a **date/time window** — submissions that are
+> too early or too late ("zu früh!" / "zu spät!") are rejected, and the final
+> result and point allocation are awarded at the end.
+
+### Key capabilities
+
+- **Barcode login** (webcam / USB keyboard-wedge scanner via ZXing) with a
+  username/password and institutional SSO fallback.
+- **Time-window gating** per analysis with live status: `open`, `too early`,
+  `too late`, `submitted`.
+- **Immutable, timestamped submissions** with a client-generated
+  **idempotency key** (retries never create duplicates) and an optional
+  **false-positive deduction** plus **retry penalties**.
+- **Two scoring modes** — *per-ion* (default) or *per-analysis* — with a
+  configurable final-score strategy (best or last submission).
+- **Assistant views** — per-course roster, per-student submissions, statistics,
+  and a **CSV audit export**.
+- **Admin configuration** — ion & substance catalog, analysis types/instances,
+  assignments, barcodes, time windows, points, and grading mode.
+- **Role-based access** (Student / Assistant / Admin) enforced on every
+  endpoint, with brute-force lockout, JWT revocation and full audit logging.
+
+For the complete requirements see the
+[software specification](docs/development/flamecheck_software_specification.md),
+and for the deep-dive on how everything fits together — with architecture
+diagrams — see the
+[architecture documentation](docs/development/architecture.md).
+
+---
+
+## Tech stack
+
+| Layer        | Technology |
+|--------------|------------|
+| Backend      | Django 6 + **django-ninja** REST API |
+| Auth         | **PyJWT** (HS256, `token_version` revocation) + django-allauth (SSO-ready) |
+| Frontend     | **Vite 7 · Vue 3 · Pinia · Vue Router · Naive UI** |
+| Barcode scan | **@zxing/browser** (webcam + manual/USB fallback) |
+| Database     | PostgreSQL (production) / SQLite (dev & tests) |
+| Tooling      | **uv** workspace, ruff, pytest, WhiteNoise, Gunicorn |
+
+---
+
+## Project layout
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/opensourcelab/cheminformatics/flamecheck.git
-git branch -M main
-git push -uf origin main
+flamecheck/
+├── src/flamecheck/        # Django project: settings, URLs, ninja API wiring
+├── packages/              # uv workspace members
+│   ├── users/             #   User, barcodes, JWT auth, login API
+│   ├── substances/        #   Ion + Substance catalog (+ JSON seed data)
+│   ├── config/            #   Course, GradingConfig, AppSettings
+│   └── analyses/          #   AnalysisType/Instance/Submission + scoring
+├── frontend/              # Vite + Vue 3 SPA
+├── tests/                 # pytest suite
+├── docker/                # Dockerfiles, compose, entrypoints
+└── docs/                  # Sphinx docs (development/ has spec + architecture)
 ```
 
-## Integrate with your tools
+A full annotated tree, the entity-relationship diagram and the request
+lifecycle are in the [architecture documentation](docs/development/architecture.md).
 
-* [Set up project integrations](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+---
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+
+> **Prerequisites:** Python **3.13**, [`uv`](https://docs.astral.sh/uv/),
+> Node.js **20+** (frontend), and a PostgreSQL database (SQLite is used
+> automatically for local development).
+
+### Development
+
+```bash
+# 1. Get the code
+git clone <repository-url> flamecheck
+cd flamecheck
+
+# 2. Python environment (creates .venv, installs the 4 workspace packages)
+uv sync
+
+# 3. Frontend dependencies + build (output → frontend/dist/)
+npm --prefix frontend install
+npm --prefix frontend run build
+
+# 4. Database schema + seed the ion/substance catalog
+uv run python manage.py migrate
+uv run python manage.py import_catalog
+
+# 5. Create a first admin user, then set its role to `admin`
+uv run python manage.py createsuperuser
+uv run python manage.py shell -c "from users.models import User; User.objects.filter(username='admin').update(role='admin')"
+
+# 6. Run the dev server
+uv run python manage.py runserver
+```
+
+Open:
+
+- <http://127.0.0.1:8000/> — the app
+- <http://127.0.0.1:8000/api/v1/docs> — interactive OpenAPI documentation (DEBUG only)
+- <http://127.0.0.1:8000/admin/> — Django admin
+
+**Frontend hot-reload:** run `npm --prefix frontend run dev` in a second
+terminal. The Vite dev server on `:5173` proxies `/api` to the Django server on
+`:8000`, so you can develop the SPA with live HMR while hitting the real API.
+
+**Optional — create a test student barcode** to try barcode login:
+
+```bash
+uv run python manage.py init_barcode
+```
+
+### Production
+
+Production runs the Django project under **Gunicorn** (WSGI) with **WhiteNoise**
+serving the built frontend, and **PostgreSQL** as the database. The
+recommended deployment is **Docker Compose** (web + database) behind a reverse
+proxy that terminates TLS.
+
+```bash
+# Build and start the full stack (Django + Postgres)
+docker compose -f docker/docker-compose.dev-full.yaml up --build -d
+
+# Inside the container: migrations + collectstatic run via the entrypoint,
+# then Gunicorn starts (see docker/entrypoint.production.sh)
+docker compose -f docker/docker-compose.dev-full.yaml exec flamecheck \
+  uv run python manage.py import_catalog
+```
+
+Key production settings live in
+`src/flamecheck/settings/production.py` (select it with
+`DJANGO_SETTINGS_MODULE=flamecheck.settings.production`): secure cookies,
+HTTPS, WhiteNoise-compressed static serving and the Gunicorn worker count
+(`GUNICORN_WORKERS`).
+
+> **TLS / reverse proxy.** In front of the container, use Nginx (or Caddy with
+> automatic Let's Encrypt) to serve over HTTPS and proxy `/api/` and `/static/`
+> to the Django process. The SPA is same-origin, so no CORS configuration is
+> required in production.
+
+A hardened production image should run as a **non-root** user, use a minimal
+base image, avoid default ports, and apply regular security updates (see the
+[specification, §4.3](docs/development/flamecheck_software_specification.md)).
+
+---
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Students
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+1. **Log in** on the login page — scan your personal barcode (webcam or manual
+   entry) or sign in with username/password.
+2. The home page lists every **assigned analysis** with its live window status
+   (`Open`, `Not Open Yet`, `Closed`, `Submitted`).
+3. Open an analysis while its window is **open**: tick the cations and anions
+   you detected. The **possible** ion set is shown — never the correct one.
+4. **Submit** — a confirmation dialog summarises your selection because
+   submissions are **final** and immutable.
+5. The **control query** immediately reveals the result: correct / wrong /
+   missing ions, the score, and the ideal score.
+6. A student may complete several analyses (e.g. the 3rd and 4th); each is
+   scored independently and accumulated into the **final result**.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Retries are allowed up to a configurable limit and are penalised (default
+**−2** on the 2nd, **−4** on the 3rd submission in per-ion mode). A client
+idempotency key guarantees a retried request never creates a duplicate
+submission.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### Assistants
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+- See every assigned **course** with aggregate statistics (total assignments,
+  submitted, pending, average score).
+- Drill into the **roster** — each student's barcode, assigned analyses and
+  submission status.
+- View **individual student submissions** including the selected and the
+  **correct** ions.
+- **Download a CSV** audit log for a course.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### Admins
+
+- **Courses** — create/list courses (name, semester, track, active).
+- **Grading** — points per ion, retry penalties, false-positive deduction,
+  grading mode (per-ion / per-analysis), submission limit, and final-score
+  strategy (best / last).
+- **Analysis types & instances** — define the possible-ion sets and concrete
+  sessions (time window + correct answer set), then assign them to students.
+- **Ion / substance catalog** — importable from JSON/CSV.
+
+### REST API
+
+The REST API lives under `/api/v1/`. In DEBUG mode the interactive OpenAPI docs
+are at `/api/v1/docs` and the machine-readable schema at `/api/v1/openapi.json`.
+Authentication is via JWT bearer tokens:
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/v1/auth/login` | Username/password login |
+| `POST /api/v1/auth/barcode/scan` | Barcode login (generic 401 for unknown/inactive) |
+| `POST /api/v1/auth/token/refresh` | Rotate the access token |
+| `POST /api/v1/auth/logout` | Revoke the current token version |
+| `GET /api/v1/me` | Current user profile |
+
+Student, assistant and admin endpoints are documented in the
+[architecture documentation](docs/development/architecture.md#7-api-surface).
+
+---
+
+## Testing
+
+```bash
+uv run pytest            # full backend suite (73 tests, coverage → coverage.xml)
+```
+
+Frontend tests use Vitest + Vue Test Utils; end-to-end flows (login →
+submission → result) are covered by Cypress. See
+[§4.4 Testing](docs/development/flamecheck_software_specification.md) in the
+specification.
+
+---
+
+## Development workflow
+
+```bash
+uv run ruff check --fix .   # lint (rules: B D C4 S F E W UP I RUF, line-length 120)
+uv run ruff format .        # format
+uv run mypy                 # type-check (disallow_untyped_defs)
+uv run pytest               # tests
+```
+
+Commits follow **Conventional Commits** (`feat`, `fix`, `docs`, `chore`, …).
+
+---
+
+## Documentation
+
+- 📐 [Software specification](docs/development/flamecheck_software_specification.md) — requirements & rationale
+- 🏛️ [Architecture](docs/development/architecture.md) — system design, ERD, API surface, diagrams
+- 📚 [Installation guide](docs/installation.md) · [Usage guide](docs/usage.md)
+
+---
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+FlameCheck is part of the OpenSourceLab cheminformatics collection. See the
+repository's license file for terms of use and distribution.
