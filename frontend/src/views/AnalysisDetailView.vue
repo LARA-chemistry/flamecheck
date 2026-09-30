@@ -1,18 +1,18 @@
 <template>
-  <div class="page">
-    <header class="header">
+  <div class="fc-page">
+    <header class="fc-header">
       <n-space align="center">
         <n-button quaternary size="small" @click="router.push('/')">← Back</n-button>
-        <h2>{{ detail?.type }} — #{{ detail?.number }}</h2>
+        <h2 class="fc-title">{{ detail?.type }} <span class="analysis-num">#{{ detail?.number }}</span></h2>
       </n-space>
-      <n-tag v-if="detail" :type="windowTagType(detail.window_status)" size="small">
+      <n-tag v-if="detail" :type="windowTagType(detail.window_status)" round>
         {{ windowLabel(detail.window_status) }}
       </n-tag>
     </header>
 
     <n-spin :show="loading">
       <template v-if="detail">
-        <n-grid :cols="2" :x-gap="16" v-if="detail.window_status !== 'submitted'">
+        <n-grid :cols="responsiveCols" :x-gap="16" :y-gap="16" v-if="detail.window_status !== 'submitted'">
           <n-gi>
             <n-card title="Cations" size="small">
               <n-space vertical>
@@ -79,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
@@ -90,6 +90,15 @@ import {
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
+
+// Responsive ion grid: single column on phones, two columns on larger screens.
+const isNarrow = ref(window.innerWidth < 620)
+function onResize() {
+  isNarrow.value = window.innerWidth < 620
+}
+const responsiveCols = computed(() => (isNarrow.value ? 1 : 2))
+onMounted(() => window.addEventListener('resize', onResize))
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -147,15 +156,12 @@ onMounted(load)
 </script>
 
 <style scoped>
-.page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px;
+.analysis-num {
+  color: var(--fc-flame-2);
+  font-weight: 800;
 }
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
+
+:deep(.n-card) {
+  border-radius: var(--fc-radius);
 }
 </style>

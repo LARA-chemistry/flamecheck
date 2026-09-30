@@ -1,10 +1,10 @@
 <template>
-  <div class="page">
-    <header class="header">
-      <h1>Assistant Dashboard</h1>
+  <div class="fc-page">
+    <header class="fc-header">
+      <h1 class="fc-title">Assistant Dashboard</h1>
       <n-space>
-        <n-button size="small" quaternary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
-        <n-button size="small" quaternary @click="handleLogout">Logout</n-button>
+        <n-button size="small" secondary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
+        <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </n-space>
     </header>
 
@@ -183,19 +183,8 @@ onMounted(load)
 </script>
 
 <style scoped>
-.page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px;
-}
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
 .muted {
-  font-size: 13px;
-  color: #888;
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-muted);
 }
 </style>

@@ -191,24 +191,69 @@ class TestAppSettings:
 class TestDjangoAdminSettings:
     """The standard Django admin must expose the settings singletons for editing."""
 
-    def test_grading_config_changelist_is_editable(self, client, admin_user):
+    def test_grading_config_changelist_quick_edit(self, client, admin_user):
         client.force_login(admin_user)
         GradingConfig.get_instance()
         resp = client.get("/admin-django/config/gradingconfig/")
         assert resp.status_code == 200
-        # All grading fields are shown and editable in the change list.
-        for field in (
+        # The change list is a compact quick-edit dashboard (a subset of fields).
+        assert set(resp.context["cl"].list_editable) == {
+            "grading_mode",
+            "points_per_correct_ion",
+            "max_submissions_per_analysis",
+            "final_score_strategy",
+        }
+
+    def test_grading_config_change_form_has_all_fields(self, client, admin_user):
+        """The change form (the singleton's own edit workflow) exposes every field."""
+        client.force_login(admin_user)
+        obj = GradingConfig.get_instance()
+        resp = client.get(f"/admin-django/config/gradingconfig/{obj.pk}/change/")
+        assert resp.status_code == 200
+        fields = set(resp.context["adminform"].form.fields)
+        assert {
+            "grading_mode",
+            "final_score_strategy",
             "points_per_correct_ion",
             "penalty_second_submission",
             "penalty_third_submission",
             "false_positive_deduction",
-            "grading_mode",
             "max_submissions_per_analysis",
-            "final_score_strategy",
-        ):
-            assert field in resp.context["cl"].list_editable
+        } <= fields
 
-    def test_app_settings_changelist_is_editable(self, client, admin_user, course):
+    def test_grading_config_change_form_save(self, client, admin_user):
+        """Editing and saving through the change form updates the singleton."""
+        client.force_login(admin_user)
+        obj = GradingConfig.get_instance()
+        resp = client.post(
+            f"/admin-django/config/gradingconfig/{obj.pk}/change/",
+            {
+                "grading_mode": "per_analysis",
+                "final_score_strategy": "last",
+                "points_per_correct_ion": 12,
+                "penalty_second_submission": 1,
+                "penalty_third_submission": 5,
+                "false_positive_deduction": 3,
+                "max_submissions_per_analysis": 4,
+                "_save": "Save",
+            },
+        )
+        assert resp.status_code == 302  # redirect on success
+        obj.refresh_from_db()
+        assert obj.grading_mode == "per_analysis"
+        assert obj.points_per_correct_ion == 12
+        assert obj.max_submissions_per_analysis == 4
+
+    def test_app_settings_change_form_has_all_fields(self, client, admin_user, course):
+        """The AppSettings change form exposes every field, including active_course."""
+        client.force_login(admin_user)
+        obj = AppSettings.get_instance()
+        resp = client.get(f"/admin-django/config/appsettings/{obj.pk}/change/")
+        assert resp.status_code == 200
+        fields = set(resp.context["adminform"].form.fields)
+        assert {"points_per_analysis", "analyses_per_course", "active_course"} <= fields
+
+    def test_app_settings_changelist_quick_edit(self, client, admin_user, course):
         client.force_login(admin_user)
         AppSettings.get_instance()
         resp = client.get("/admin-django/config/appsettings/")
@@ -219,7 +264,7 @@ class TestDjangoAdminSettings:
             "active_course",
         }
 
-    def test_settings_changelist_denied_for_students(self, client, student):
+    def test_settings_denied_for_students(self, client, student):
         assert client.get("/admin-django/config/gradingconfig/").status_code == 302  # redirect to login
         assert client.get("/admin-django/config/appsettings/").status_code == 302
 

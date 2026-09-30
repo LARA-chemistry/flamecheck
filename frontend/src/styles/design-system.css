@@ -1,0 +1,232 @@
+/* =========================================================================
+ * FlameCheck design system
+ *
+ * A mobile-first set of CSS custom properties (the "Flame" palette) plus a
+ * fluid type scale that grows with the viewport, so the whole UI scales with
+ * the screen resolution. Every view reuses the shared layout classes below
+ * (.fc-page, .fc-header, .fc-title, .fc-card-grid, ...) to stay consistent.
+ * ========================================================================= */
+
+:root {
+  /* --- Flame palette ------------------------------------------------------ */
+  --fc-ink: #0d1b2a;            /* deep navy (logo backdrop) */
+  --fc-ink-soft: #1b2a3b;
+  --fc-flame-1: #ffd54a;        /* amber */
+  --fc-flame-2: #ff8a00;        /* orange (primary) */
+  --fc-flame-3: #e53935;        /* red */
+  --fc-flame-soft: #fff3e0;     /* pale flame tint */
+
+  --fc-bg: #f4f6fb;             /* app background */
+  --fc-surface: #ffffff;        /* card surface */
+  --fc-border: #e6e9f2;
+  --fc-text: #1f2733;
+  --fc-text-soft: #5b6675;
+  --fc-muted: #8a94a6;
+
+  /* --- Fluid type scale (scales with viewport width) ---------------------- */
+  --fc-fs-xs: clamp(0.72rem, 0.68rem + 0.2vw, 0.85rem);
+  --fc-fs-sm: clamp(0.82rem, 0.77rem + 0.25vw, 0.95rem);
+  --fc-fs-base: clamp(0.95rem, 0.87rem + 0.4vw, 1.1rem);
+  --fc-fs-md: clamp(1.05rem, 0.95rem + 0.55vw, 1.3rem);
+  --fc-fs-lg: clamp(1.3rem, 1.1rem + 0.9vw, 1.8rem);
+  --fc-fs-xl: clamp(1.7rem, 1.35rem + 1.6vw, 2.6rem);
+  --fc-fs-hero: clamp(2.2rem, 1.6rem + 2.6vw, 3.6rem);
+
+  /* --- Spacing / shape (fluid) ------------------------------------------- */
+  --fc-space-xs: clamp(6px, 0.5vw, 10px);
+  --fc-space-sm: clamp(10px, 0.8vw, 16px);
+  --fc-space-md: clamp(16px, 1.4vw, 28px);
+  --fc-space-lg: clamp(24px, 2.2vw, 44px);
+  --fc-radius-sm: 10px;
+  --fc-radius: 16px;
+  --fc-radius-lg: 22px;
+  --fc-shadow-sm: 0 1px 2px rgba(13, 27, 42, 0.06), 0 1px 3px rgba(13, 27, 42, 0.08);
+  --fc-shadow: 0 6px 20px rgba(13, 27, 42, 0.08);
+  --fc-shadow-lift: 0 14px 34px rgba(13, 27, 42, 0.16);
+  --fc-flame-gradient: linear-gradient(135deg, var(--fc-flame-1), var(--fc-flame-2) 55%, var(--fc-flame-3));
+  --fc-max-width: 1120px;
+}
+
+/* --- Base ---------------------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--fc-fs-base);
+  line-height: 1.5;
+  color: var(--fc-text);
+  background: var(--fc-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* --- Shared page scaffold ------------------------------------------------ */
+.fc-page {
+  max-width: var(--fc-max-width);
+  margin: 0 auto;
+  padding: var(--fc-space-md) var(--fc-space-sm) var(--fc-space-lg);
+}
+
+@media (min-width: 720px) {
+  .fc-page {
+    padding-left: var(--fc-space-md);
+    padding-right: var(--fc-space-md);
+  }
+}
+
+.fc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--fc-space-sm);
+  margin-bottom: var(--fc-space-md);
+}
+
+.fc-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fc-space-xs);
+  text-decoration: none;
+}
+
+.fc-brand__logo {
+  width: clamp(34px, 4vw, 46px);
+  height: clamp(34px, 4vw, 46px);
+  border-radius: 10px;
+  box-shadow: var(--fc-shadow-sm);
+}
+
+.fc-title {
+  font-size: var(--fc-fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--fc-ink);
+  line-height: 1.15;
+}
+
+.fc-title--hero {
+  font-size: var(--fc-fs-hero);
+}
+
+/* --- Username / identity chip ------------------------------------------- */
+.fc-user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fc-space-xs);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: 999px;
+  padding: 4px 6px 4px 4px;
+  box-shadow: var(--fc-shadow-sm);
+  font-weight: 600;
+  color: var(--fc-ink);
+}
+
+.fc-user__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--fc-flame-gradient);
+  color: #fff;
+  font-weight: 700;
+  font-size: var(--fc-fs-sm);
+}
+
+/* On large screens the username gets a bigger, more prominent chip. */
+@media (min-width: 900px) {
+  .fc-user {
+    padding: 6px 14px 6px 6px;
+    font-size: var(--fc-fs-md);
+  }
+  .fc-user__avatar {
+    width: 40px;
+    height: 40px;
+    font-size: var(--fc-fs-base);
+  }
+}
+
+/* --- Responsive card grid (for per-analysis cards) ---------------------- */
+.fc-card-grid {
+  display: grid;
+  gap: var(--fc-space-sm);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 620px) {
+  .fc-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--fc-space-md);
+  }
+}
+
+@media (min-width: 1024px) {
+  .fc-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* --- Interactive card ---------------------------------------------------- */
+.fc-card {
+  position: relative;
+  border-radius: var(--fc-radius);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  box-shadow: var(--fc-shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  overflow: hidden;
+  height: 100%;
+}
+
+.fc-card--interactive {
+  cursor: pointer;
+}
+
+.fc-card--interactive:hover,
+.fc-card--interactive:focus-within {
+  transform: translateY(-4px);
+  box-shadow: var(--fc-shadow-lift);
+  border-color: color-mix(in srgb, var(--fc-flame-2) 45%, var(--fc-border));
+}
+
+.fc-card__accent {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 5px;
+  background: var(--fc-flame-gradient);
+  opacity: 0.9;
+}
+
+/* --- Section headings ---------------------------------------------------- */
+.fc-section {
+  margin-bottom: var(--fc-space-md);
+}
+
+.fc-section__title {
+  font-size: var(--fc-fs-md);
+  font-weight: 700;
+  color: var(--fc-ink);
+  margin-bottom: var(--fc-space-sm);
+}
+
+/* --- Utility ------------------------------------------------------------- */
+.fc-muted {
+  color: var(--fc-text-soft);
+  font-size: var(--fc-fs-sm);
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .fc-card--interactive,
+  .fc-card--interactive:hover,
+  .fc-card--interactive:focus-within {
+    transition: none;
+    transform: none;
+  }
+}

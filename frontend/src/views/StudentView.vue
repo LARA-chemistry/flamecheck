@@ -1,54 +1,68 @@
 <template>
-  <div class="page">
-    <header class="header">
-      <h1>FlameCheck</h1>
-      <n-space>
-        <n-tag size="small">{{ user?.name || user?.username }}</n-tag>
-        <n-button size="small" quaternary @click="handleLogout">Logout</n-button>
-      </n-space>
+  <div class="fc-page">
+    <header class="fc-header landing-header">
+      <div class="landing-brand">
+        <img class="landing-logo" :src="logo" alt="FlameCheck logo" />
+        <div>
+          <h1 class="fc-title fc-title--hero">FlameCheck</h1>
+          <p class="landing-subtitle">Your flame test analyses</p>
+        </div>
+      </div>
+      <div class="landing-actions">
+        <span class="fc-user" v-if="user">
+          <span class="fc-user__avatar">{{ initial(user) }}</span>
+          <span class="fc-user__name">{{ user.name || user.username }}</span>
+        </span>
+        <n-button size="small" secondary @click="handleLogout">Logout</n-button>
+      </div>
     </header>
 
-    <n-card title="Your Analyses" size="large">
-      <n-spin :show="loading">
-        <n-empty v-if="!loading && analyses.length === 0" description="No analyses assigned yet." />
-        <n-list v-else>
-          <n-list-item v-for="a in analyses" :key="a.id">
-            <n-thing size="small">
-              <template #header>
-                <n-space align="center" justify="space-between" style="width: 100%">
-                  <span>
-                    <strong>{{ a.type }}</strong> — #{{ a.number }}
-                  </span>
-                  <n-tag :type="windowTagType(a.window_status)" size="small">
-                    {{ windowLabel(a.window_status) }}
-                  </n-tag>
-                </n-space>
-              </template>
-              <template #description>
-                <n-space>
-                  <n-text depth="3">
-                    Score: {{ a.score != null ? a.score + ' pts' : '—' }}
-                  </n-text>
-                  <n-text depth="3">
-                    Submissions: {{ a.submission_count }}/{{ a.submission_limit }}
-                  </n-text>
-                </n-space>
-              </template>
-              <template #footer>
-                <n-button
-                  size="small"
-                  type="primary"
-                  :disabled="a.window_status !== 'open' && a.window_status !== 'submitted'"
-                  @click="router.push(`/analysis/${a.id}`)"
-                >
-                  {{ a.window_status === 'submitted' ? 'View Result' : 'Open Analysis' }}
-                </n-button>
-              </template>
-            </n-thing>
-          </n-list-item>
-        </n-list>
-      </n-spin>
-    </n-card>
+    <n-spin :show="loading">
+      <n-empty v-if="!loading && analyses.length === 0" class="empty" description="No analyses assigned yet." />
+      <div v-else class="fc-card-grid">
+        <div
+          v-for="a in analyses"
+          :key="a.id"
+          class="fc-card fc-card--interactive"
+          role="button"
+          tabindex="0"
+          :aria-label="`Open ${a.type} number ${a.number}`"
+          @click="openAnalysis(a)"
+          @keyup.enter="openAnalysis(a)"
+        >
+          <span class="fc-card__accent"></span>
+          <div class="analysis-card">
+            <div class="analysis-card__top">
+              <span class="analysis-card__num">#{{ a.number }}</span>
+              <n-tag :type="windowTagType(a.window_status)" round size="small">
+                {{ windowLabel(a.window_status) }}
+              </n-tag>
+            </div>
+            <h3 class="analysis-card__title">{{ a.type }}</h3>
+            <div class="analysis-card__stats">
+              <div class="stat">
+                <span class="stat__value">{{ a.score != null ? a.score : '—' }}</span>
+                <span class="stat__label">points</span>
+              </div>
+              <div class="stat">
+                <span class="stat__value">{{ a.submission_count }}/{{ a.submission_limit }}</span>
+                <span class="stat__label">submissions</span>
+              </div>
+            </div>
+            <n-button
+              class="analysis-card__action"
+              type="primary"
+              secondary
+              block
+              :disabled="a.window_status !== 'open' && a.window_status !== 'submitted'"
+              @click.stop="openAnalysis(a)"
+            >
+              {{ a.window_status === 'submitted' ? 'View Result' : 'Open Analysis' }}
+            </n-button>
+          </div>
+        </div>
+      </div>
+    </n-spin>
   </div>
 </template>
 
@@ -57,10 +71,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
-import {
-  NCard, NSpin, NEmpty, NList, NListItem, NThing, NSpace, NText,
-  NButton, NTag,
-} from 'naive-ui'
+import logo from '../assets/flamecheck-logo.svg'
+import { NSpin, NEmpty, NTag, NButton } from 'naive-ui'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -75,6 +87,14 @@ function windowTagType(status) {
 function windowLabel(status) {
   const map = { open: 'Open', too_early: 'Not Open Yet', too_late: 'Closed', submitted: 'Submitted' }
   return map[status] || status
+}
+function initial(u) {
+  return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
+}
+function openAnalysis(a) {
+  if (a.window_status === 'open' || a.window_status === 'submitted') {
+    router.push(`/analysis/${a.id}`)
+  }
 }
 
 async function load() {
@@ -95,15 +115,111 @@ onMounted(load)
 </script>
 
 <style scoped>
-.page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px;
+.landing-header {
+  align-items: flex-start;
 }
-.header {
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-sm);
+}
+
+.landing-logo {
+  width: clamp(48px, 7vw, 72px);
+  height: clamp(48px, 7vw, 72px);
+  border-radius: 16px;
+  box-shadow: var(--fc-shadow);
+  flex-shrink: 0;
+}
+
+.landing-subtitle {
+  color: var(--fc-text-soft);
+  font-size: var(--fc-fs-sm);
+  margin-top: 2px;
+}
+
+.landing-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-xs);
+}
+
+.fc-user__name {
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .fc-user__name {
+    max-width: none;
+  }
+}
+
+.empty {
+  padding: var(--fc-space-lg) 0;
+  text-align: center;
+}
+
+.analysis-card {
+  padding: var(--fc-space-sm);
+  padding-top: calc(var(--fc-space-sm) + 4px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-xs);
+  height: 100%;
+}
+
+.analysis-card__top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+}
+
+.analysis-card__num {
+  font-weight: 800;
+  font-size: var(--fc-fs-md);
+  color: var(--fc-flame-2);
+}
+
+.analysis-card__title {
+  font-size: var(--fc-fs-md);
+  font-weight: 700;
+  color: var(--fc-ink);
+  line-height: 1.25;
+}
+
+.analysis-card__stats {
+  display: flex;
+  gap: var(--fc-space-md);
+  padding: var(--fc-space-xs) var(--fc-space-sm);
+  background: var(--fc-flame-soft);
+  border-radius: var(--fc-radius-sm);
+  margin-top: auto;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat__value {
+  font-size: var(--fc-fs-md);
+  font-weight: 800;
+  color: var(--fc-ink);
+  line-height: 1.1;
+}
+
+.stat__label {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analysis-card__action {
+  margin-top: var(--fc-space-xs);
 }
 </style>

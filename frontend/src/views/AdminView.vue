@@ -1,13 +1,13 @@
 <template>
-  <div class="page">
-    <header class="header">
-      <h1>Admin</h1>
+  <div class="fc-page">
+    <header class="fc-header">
+      <h1 class="fc-title">Admin</h1>
       <n-space>
-        <n-button size="small" quaternary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
-        <n-button size="small" quaternary tag="a" href="/admin-django/" target="_blank" rel="noopener">
+        <n-button size="small" secondary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
+        <n-button size="small" secondary tag="a" href="/admin-django/" target="_blank" rel="noopener">
           Django admin
         </n-button>
-        <n-button size="small" quaternary @click="handleLogout">Logout</n-button>
+        <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </n-space>
     </header>
 
@@ -231,15 +231,5 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 24px;
-}
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
+/* Layout + header styling comes from the shared design system (.fc-page/.fc-header). */
 </style>

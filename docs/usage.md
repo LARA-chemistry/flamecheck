@@ -57,8 +57,11 @@ penalised according to the grading configuration (second attempt, third attempt)
      sets per course track.
 3. The same settings are also editable in the standard Django admin
    (`/admin-django/`, reachable via the "Django admin" link in the SPA admin
-   panel) — the singleton rows for *Grading configuration* and
-   *Application settings* are editable directly in their change lists.
+   panel). Each setting has its own edit page: open *Grading configuration* or
+   *Application settings* and click the row to get a dedicated change form with
+   the fields grouped into labelled sections (e.g. *Scoring mode* /
+   *Penalties & limits*), or quick-edit a subset of values directly in the
+   change list.
    Analysis instances (concrete sessions with a time window and the correct
    ion set) and student assignments are managed through the admin API and the
    Django admin.
