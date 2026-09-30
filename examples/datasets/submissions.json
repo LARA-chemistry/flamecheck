@@ -1,0 +1,28 @@
+{
+  "submissions": [
+    {
+      "student": "student-anna",
+      "type": "Analysis 1 - Cations I-II",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 1,
+      "selected_ions": ["Na+", "K+"],
+      "idempotency_key": "seed-anna-bio1"
+    },
+    {
+      "student": "student-ben",
+      "type": "Analysis 1 - Cations I-II",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 1,
+      "selected_ions": ["Na+"],
+      "idempotency_key": "seed-ben-bio1-1"
+    },
+    {
+      "student": "student-ben",
+      "type": "Analysis 1 - Cations I-II",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 1,
+      "selected_ions": ["Na+", "K+"],
+      "idempotency_key": "seed-ben-bio1-2"
+    }
+  ]
+}

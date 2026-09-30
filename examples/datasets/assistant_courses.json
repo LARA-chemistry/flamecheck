@@ -1,0 +1,12 @@
+{
+  "assistant_courses": [
+    {
+      "assistant": "assistant.bio",
+      "course": "Inorganic Chemistry WS 2026 - Biology"
+    },
+    {
+      "assistant": "assistant.pharma",
+      "course": "Inorganic Chemistry WS 2026 - Pharmacy"
+    }
+  ]
+}

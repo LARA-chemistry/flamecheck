@@ -1,0 +1,52 @@
+{
+  "instances": [
+    {
+      "type": "Analysis 1 - Cations I-II",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 1,
+      "correct_ions": ["Na+", "K+"],
+      "window_start_offset_minutes": -120,
+      "window_end_offset_minutes": 240
+    },
+    {
+      "type": "Analysis 2 - Anions I",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 2,
+      "correct_ions": ["Cl-", "SO4-2"],
+      "window_start_offset_minutes": -120,
+      "window_end_offset_minutes": 240
+    },
+    {
+      "type": "Analysis 3 - Cations II & Anions",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 3,
+      "correct_ions": ["NH4+", "Cu2+", "SO4-2"],
+      "window_start_offset_minutes": 1440,
+      "window_end_offset_minutes": 2880
+    },
+    {
+      "type": "Analysis 4 - Mixed Unknown",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "number": 4,
+      "correct_ions": ["K+", "PO4-3"],
+      "window_start_offset_minutes": -2880,
+      "window_end_offset_minutes": -1440
+    },
+    {
+      "type": "Analysis 1 - Cations I-II",
+      "course": "Inorganic Chemistry WS 2026 - Pharmacy",
+      "number": 1,
+      "correct_ions": ["K+", "Ca2+"],
+      "window_start_offset_minutes": -60,
+      "window_end_offset_minutes": 300
+    },
+    {
+      "type": "Analysis 2 - Anions I",
+      "course": "Inorganic Chemistry WS 2026 - Pharmacy",
+      "number": 2,
+      "correct_ions": ["NO3-"],
+      "window_start_offset_minutes": -60,
+      "window_end_offset_minutes": 300
+    }
+  ]
+}

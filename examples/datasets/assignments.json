@@ -1,0 +1,21 @@
+{
+  "assignments": [
+    {
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "students": [
+        "student-anna",
+        "student-ben",
+        "student-clara",
+        "student-david",
+        "student-emma",
+        "student-felix"
+      ],
+      "numbers": [1, 2, 3, 4]
+    },
+    {
+      "course": "Inorganic Chemistry WS 2026 - Pharmacy",
+      "students": ["student-greta", "student-hugo"],
+      "numbers": [1, 2]
+    }
+  ]
+}

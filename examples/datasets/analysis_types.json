@@ -1,0 +1,24 @@
+{
+  "types": [
+    {
+      "name": "Analysis 1 - Cations I-II",
+      "description": "Qualitative detection of the most common group I and II cations.",
+      "possible_ions": ["Na+", "K+", "NH4+", "Ca2+", "Mg2+"]
+    },
+    {
+      "name": "Analysis 2 - Anions I",
+      "description": "Identification of common anions (halides and oxyanions).",
+      "possible_ions": ["Cl-", "Br-", "SO4-2", "CO3-2", "NO3-"]
+    },
+    {
+      "name": "Analysis 3 - Cations II & Anions",
+      "description": "Mixed unknown: cations of groups II-III together with anions.",
+      "possible_ions": ["NH4+", "Cu2+", "Fe2+", "Zn2+", "Al3+", "Mg2+", "Cl-", "SO4-2", "NO3-"]
+    },
+    {
+      "name": "Analysis 4 - Mixed Unknown",
+      "description": "Advanced mixed unknown with rarer cations and oxyanions.",
+      "possible_ions": ["K+", "Ba2+", "Mn2+", "PO4-3", "NO2-", "S2-"]
+    }
+  ]
+}

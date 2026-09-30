@@ -1,0 +1,22 @@
+{
+  "courses": [
+    {
+      "name": "Inorganic Chemistry WS 2026 - Biology",
+      "semester": "WS 2026",
+      "track": "biology",
+      "is_active": true
+    },
+    {
+      "name": "Inorganic Chemistry WS 2026 - Pharmacy",
+      "semester": "WS 2026",
+      "track": "pharmacy",
+      "is_active": true
+    },
+    {
+      "name": "Inorganic Chemistry SS 2026 - Materials",
+      "semester": "SS 2026",
+      "track": "materials",
+      "is_active": false
+    }
+  ]
+}

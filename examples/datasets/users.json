@@ -1,0 +1,113 @@
+{
+  "default_password": "FlameCheck-Demo-123",
+  "users": [
+    {
+      "username": "admin",
+      "name": "Ada Admin",
+      "email": "admin@example.com",
+      "role": "admin",
+      "is_staff": true,
+      "is_superuser": true
+    },
+    {
+      "username": "assistant.bio",
+      "name": "Ben Bio",
+      "email": "assistant.bio@example.com",
+      "role": "assistant"
+    },
+    {
+      "username": "assistant.pharma",
+      "name": "Paula Pharma",
+      "email": "assistant.pharma@example.com",
+      "role": "assistant"
+    },
+    {
+      "username": "student-anna",
+      "name": "Anna Schulz",
+      "email": "anna.schulz@example.com",
+      "role": "student",
+      "matriculation_no": "2601001",
+      "lab": "Inorganic Chemistry (Biology track)",
+      "labspace_id": "LS-2601001",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "barcode": "FC-DEMO-0001"
+    },
+    {
+      "username": "student-ben",
+      "name": "Ben Weber",
+      "email": "ben.weber@example.com",
+      "role": "student",
+      "matriculation_no": "2601002",
+      "lab": "Inorganic Chemistry (Biology track)",
+      "labspace_id": "LS-2601002",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "barcode": "FC-DEMO-0002"
+    },
+    {
+      "username": "student-clara",
+      "name": "Clara Neumann",
+      "email": "clara.neumann@example.com",
+      "role": "student",
+      "matriculation_no": "2601003",
+      "lab": "Inorganic Chemistry (Biology track)",
+      "labspace_id": "LS-2601003",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "barcode": "FC-DEMO-0003"
+    },
+    {
+      "username": "student-david",
+      "name": "David Krause",
+      "email": "david.krause@example.com",
+      "role": "student",
+      "matriculation_no": "2601004",
+      "lab": "Inorganic Chemistry (Biology track)",
+      "labspace_id": "LS-2601004",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "barcode": "FC-DEMO-0004"
+    },
+    {
+      "username": "student-emma",
+      "name": "Emma Fischer",
+      "email": "emma.fischer@example.com",
+      "role": "student",
+      "matriculation_no": "2601005",
+      "lab": "Inorganic Chemistry (Biology track)",
+      "labspace_id": "LS-2601005",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "barcode": "FC-DEMO-0005"
+    },
+    {
+      "username": "student-felix",
+      "name": "Felix Braun",
+      "email": "felix.braun@example.com",
+      "role": "student",
+      "matriculation_no": "2601006",
+      "lab": "Inorganic Chemistry (Biology track)",
+      "labspace_id": "LS-2601006",
+      "course": "Inorganic Chemistry WS 2026 - Biology",
+      "barcode": "FC-DEMO-0006"
+    },
+    {
+      "username": "student-greta",
+      "name": "Greta Hoffmann",
+      "email": "greta.hoffmann@example.com",
+      "role": "student",
+      "matriculation_no": "2601007",
+      "lab": "Inorganic Chemistry (Pharmacy track)",
+      "labspace_id": "LS-2601007",
+      "course": "Inorganic Chemistry WS 2026 - Pharmacy",
+      "barcode": "FC-DEMO-0007"
+    },
+    {
+      "username": "student-hugo",
+      "name": "Hugo Wagner",
+      "email": "hugo.wagner@example.com",
+      "role": "student",
+      "matriculation_no": "2601008",
+      "lab": "Inorganic Chemistry (Pharmacy track)",
+      "labspace_id": "LS-2601008",
+      "course": "Inorganic Chemistry WS 2026 - Pharmacy",
+      "barcode": "FC-DEMO-0008"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "points_per_correct_ion": 10,
+  "penalty_second_submission": 2,
+  "penalty_third_submission": 4,
+  "false_positive_deduction": 0,
+  "grading_mode": "per_ion",
+  "max_submissions_per_analysis": 3,
+  "final_score_strategy": "best"
+}
