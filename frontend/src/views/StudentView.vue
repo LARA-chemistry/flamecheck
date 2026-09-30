@@ -169,7 +169,8 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: var(--fc-space-xs);
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .analysis-card__top {
