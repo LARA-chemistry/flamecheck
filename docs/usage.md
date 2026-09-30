@@ -36,6 +36,11 @@ penalised according to the grading configuration (second attempt, third attempt)
 2. The assistant dashboard lists every course they are assigned to, with aggregate
    statistics (total assignments, submitted, pending, average score).
 3. Expand a course to see the full roster with each student's barcode and progress.
+   Click a student's row (or its **Details** link) to open the **per-student
+   statistics** view: overall numbers (analyses, submitted, total / average /
+   best score) plus a per-analysis breakdown showing the correct ion set, the
+   final score, and the full submission history (each attempt's score,
+   correct / wrong / missing counts, retry penalty and selected ions).
 4. Use **Download CSV** to export the full submission audit log for a course.
 5. Use **Substance Overview** to plan lab preparation: for every analysis of the
    course it lists the substances that share at least one of the analysis'
@@ -46,15 +51,21 @@ penalised according to the grading configuration (second attempt, third attempt)
 ## Admins
 
 1. Log in with an admin account.
-2. The admin panel offers tabs for:
-   - **Courses** — create and list courses (name, semester, track, active).
+2. The admin panel (`/admin`) has a navigation bar with one dedicated page
+   per concern:
    - **Settings** — every setting of the submission system in one place:
      the *application settings* (points per analysis, analyses per course,
      the currently active course) and the *grading configuration* (points per
      ion, retry penalties, false-positive deduction, grading mode per ion /
      per analysis, submission limit, final-score strategy best / last).
-   - **Analysis Types** — the user-defined analysis catalog with the possible ion
-     sets per course track.
+   - **Courses** — create, edit and delete courses (name, semester, track,
+     active). Open *Students* on any course to see who is enrolled there and
+     remove students; assign a student to a course from here.
+   - **Analysis Types** — the user-defined analysis catalog. Create, edit and
+     delete types and pick each type's possible ion set.
+   - **Assignments** — pick a course to see its analysis sheets (instances);
+     open *Manage* on a sheet to choose which students receive it (and the
+     announcement number).
 3. The same settings are also editable in the standard Django admin
    (`/admin-django/`, reachable via the "Django admin" link in the SPA admin
    panel). Each setting has its own edit page: open *Grading configuration* or

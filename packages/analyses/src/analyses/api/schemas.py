@@ -190,6 +190,24 @@ class CourseIn(Schema):
     is_active: bool = True
 
 
+class StudentOut(Schema):
+    """A student, as shown in the admin's student-management views."""
+
+    id: int
+    username: str
+    name: str | None = None
+    course_id: int | None = None
+    course_name: str | None = None
+    is_active: bool = True
+
+
+class StudentCourseAssignIn(Schema):
+    """Payload for assigning a student to a course (or detaching with ``null``)."""
+
+    student_id: int
+    course_id: int | None
+
+
 def _ion_dict(ion: Any) -> dict:
     """Serialize an ion for inclusion in result payloads."""
     return {"id": ion.id, "symbol": ion.symbol, "name": ion.name, "charge": ion.charge, "kind": ion.kind}

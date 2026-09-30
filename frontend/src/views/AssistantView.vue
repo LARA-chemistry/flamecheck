@@ -20,7 +20,7 @@
                 <n-statistic label="Pending" :value="c.stats.pending" />
                 <n-statistic label="Avg Score" :value="c.stats.average_score ?? '—'" />
               </n-space>
-              <n-data-table :columns="cols" :data="c.students" size="small" :max-height="400" />
+              <n-data-table :columns="cols" :data="c.students" size="small" :max-height="400" :row-props="rowProps" />
               <n-space align="center">
                 <n-button size="small" @click="downloadCsv(c.id)">Download CSV</n-button>
                 <n-button
@@ -80,18 +80,76 @@
         </n-collapse>
       </n-spin>
     </n-card>
+
+    <!-- Per-student statistics -->
+    <n-modal
+      v-model:show="studentModal.show"
+      preset="card"
+      :title="studentModal.student ? `Student: ${studentModal.student.name || studentModal.student.username}` : 'Student'"
+      style="width: 860px; max-width: 96vw"
+      :segmented="{ content: true }"
+    >
+      <n-spin :show="studentModal.loading">
+        <n-empty v-if="!studentModal.loading && !studentModal.detail" description="No data." />
+        <n-space v-else vertical size="large">
+          <!-- Overall statistics -->
+          <n-space size="large" align="center">
+            <n-statistic label="Analyses" :value="studentModal.detail ? studentModal.detail.length : 0" />
+            <n-statistic label="Submitted" :value="studentModal.detail ? submittedCount : 0" />
+            <n-statistic label="Total score" :value="studentModal.detail ? totalScore : '—'" />
+            <n-statistic label="Average" :value="studentModal.detail ? avgScore : '—'" />
+            <n-statistic label="Best" :value="studentModal.detail ? bestScore : '—'" />
+          </n-space>
+
+          <!-- Per-analysis breakdown -->
+          <n-space vertical v-for="a in (studentModal.detail || [])" :key="a.analysis_id">
+            <n-card size="small" :bordered="false" class="analysis-card">
+              <template #header>
+                <div class="analysis-card__head">
+                  <span class="analysis-card__title">{{ a.analysis }}</span>
+                  <n-tag :type="submittedTagType(a)" round size="small">{{ a.submissions.length ? 'Submitted' : 'Pending' }}</n-tag>
+                </div>
+              </template>
+              <template #header-extra>
+                <span class="analysis-card__score">
+                  Score: <strong>{{ finalScore(a) ?? '—' }}</strong>
+                </span>
+              </template>
+
+              <div class="analysis-card__correct">
+                <span class="muted">Correct ions:</span>
+                <n-space size="small" style="flex-wrap: wrap">
+                  <n-tag v-for="i in a.correct_ions" :key="i.id" size="small" :bordered="false" type="success">
+                    {{ i.symbol }}
+                  </n-tag>
+                </n-space>
+              </div>
+
+              <n-empty v-if="a.submissions.length === 0" description="No submissions yet." size="small" />
+              <n-data-table
+                v-else
+                :columns="submissionCols"
+                :data="a.submissions"
+                size="small"
+                :bordered="false"
+              />
+            </n-card>
+          </n-space>
+        </n-space>
+      </n-spin>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { homeForRole } from '../router'
 import { api } from '../api/client'
 import {
   NCard, NSpin, NEmpty, NCollapse, NCollapseItem, NSpace, NButton,
-  NDataTable, NStatistic, NInputNumber,
+  NDataTable, NStatistic, NInputNumber, NModal, NTag,
 } from 'naive-ui'
 
 const router = useRouter()
@@ -101,6 +159,8 @@ const courses = ref([])
 const overview = ref({})
 const overviewLoading = ref({})
 
+const studentModal = ref({ show: false, loading: false, student: null, detail: null })
+
 const cols = [
   { title: 'Student', key: 'name' },
   { title: 'Barcode', key: 'barcode' },
@@ -109,7 +169,96 @@ const cols = [
     key: 'analyses',
     render: (row) => `${row.analyses.filter((a) => a.window_status === 'submitted').length}/${row.analyses.length}`,
   },
+  {
+    title: 'Avg',
+    key: 'avg',
+    render: (row) => avgFor(row) ?? '—',
+  },
+  {
+    title: '',
+    key: 'actions',
+    width: 90,
+    render: (row) =>
+      h('button', { class: 'link-btn', onClick: () => openStudent(row) }, 'Details'),
+  },
 ]
+
+// Make the whole roster row clickable to open the student's statistics.
+function rowProps(row) {
+  return {
+    style: 'cursor: pointer',
+    onClick: () => openStudent(row),
+  }
+}
+
+function avgFor(row) {
+  const scores = row.analyses.map((a) => a.score).filter((s) => s != null)
+  if (!scores.length) return null
+  return Math.round((scores.reduce((x, y) => x + y, 0) / scores.length) * 100) / 100
+}
+
+// ---- per-student statistics ----------------------------------------------
+const submittedCount = computed(() =>
+  (studentModal.value.detail || []).filter((a) => a.submissions.length > 0).length,
+)
+const totalScore = computed(() =>
+  (studentModal.value.detail || []).reduce((sum, a) => sum + (finalScore(a) ?? 0), 0),
+)
+const avgScore = computed(() => {
+  const scores = (studentModal.value.detail || [])
+    .map((a) => finalScore(a))
+    .filter((s) => s != null)
+  if (!scores.length) return null
+  return Math.round((scores.reduce((x, y) => x + y, 0) / scores.length) * 100) / 100
+})
+const bestScore = computed(() => {
+  const scores = (studentModal.value.detail || [])
+    .map((a) => finalScore(a))
+    .filter((s) => s != null)
+  return scores.length ? Math.max(...scores) : null
+})
+
+// The roster already carries each analysis's final `score`; prefer it, else
+// fall back to the best submission in the detail payload.
+function finalScore(a) {
+  const roster = studentModal.value.student?.analyses?.find(
+    (r) => r.id === a.analysis_id,
+  )
+  if (roster && roster.score != null) return roster.score
+  if (!a.submissions.length) return null
+  return Math.max(...a.submissions.map((s) => s.score))
+}
+
+function submittedTagType(a) {
+  return a.submissions.length ? 'success' : 'default'
+}
+
+const submissionCols = [
+  { title: '#', key: 'submission_number', width: 44 },
+  { title: 'Submitted', key: 'submitted_at', render: (row) => row.submitted_at.replace('T', ' ').slice(0, 16) },
+  { title: 'Score', key: 'score', width: 60 },
+  { title: 'Correct', key: 'correct_count', width: 70 },
+  { title: 'Wrong', key: 'wrong_count', width: 70 },
+  { title: 'Missing', key: 'missing_count', width: 70 },
+  { title: 'Penalty', key: 'penalty', width: 70 },
+  {
+    title: 'Selected ions',
+    key: 'selected_ions',
+    render: (row) => row.selected_ions.map((i) => i.symbol).join(', ') || '—',
+  },
+]
+
+async function openStudent(row) {
+  studentModal.value = { show: true, loading: true, student: row, detail: null }
+  try {
+    studentModal.value.detail = await api.get(`/assistant/students/${row.id}/submissions`)
+  } catch (e) {
+    studentModal.value.detail = null
+    window.alert(e.message || 'Failed to load the student\'s statistics.')
+  } finally {
+    studentModal.value.loading = false
+  }
+}
 
 const overviewAnalysisCols = [
   { title: '#', key: 'number', width: 50 },
@@ -186,5 +335,36 @@ onMounted(load)
 .muted {
   font-size: var(--fc-fs-sm);
   color: var(--fc-muted);
+}
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--fc-flame-2);
+  font-weight: 600;
+  font-size: var(--fc-fs-sm);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+.analysis-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-xs);
+}
+.analysis-card__title {
+  font-weight: 700;
+  color: var(--fc-ink);
+}
+.analysis-card__score {
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-text-soft);
+}
+.analysis-card__correct {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-xs);
+  margin-bottom: var(--fc-space-sm);
 }
 </style>

@@ -279,3 +279,103 @@ class TestCourses:
         )
         assert resp.status_code == 200
         assert Course.objects.filter(name="Pharmacy Inorg 2026").exists()
+
+    def test_admin_updates_course(self, client, admin_user, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/courses/{course.id}",
+            {"name": "Renamed Course", "semester": "SS 2027", "track": "materials", "is_active": False},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        course.refresh_from_db()
+        assert course.name == "Renamed Course"
+        assert course.semester == "SS 2027"
+        assert course.track == "materials"
+        assert course.is_active is False
+
+    def test_update_unknown_course_404(self, client, admin_user, auth_headers):
+        resp = client.put(
+            "/api/v1/admin/courses/99999",
+            {"name": "Ghost", "semester": "", "track": "", "is_active": True},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_student_cannot_update_course(self, client, student, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/courses/{course.id}",
+            {"name": "Hack", "semester": "", "track": "", "is_active": True},
+            content_type="application/json",
+            **auth_headers(student),
+        )
+        assert resp.status_code == 403
+
+    def test_cannot_delete_course_with_students(self, client, admin_user, course, student, auth_headers):
+        student.course = course
+        student.save(update_fields=["course"])
+        resp = client.delete(f"/api/v1/admin/courses/{course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 409
+        assert Course.objects.filter(pk=course.id).exists()
+
+    def test_delete_empty_course(self, client, admin_user, course, auth_headers):
+        resp = client.delete(f"/api/v1/admin/courses/{course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert not Course.objects.filter(pk=course.id).exists()
+
+
+class TestStudentCourse:
+    def test_list_students(self, client, admin_user, student, course, auth_headers):
+        student.course = course
+        student.save(update_fields=["course"])
+        resp = client.get("/api/v1/admin/students", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert any(r["username"] == student.username and r["course_id"] == course.id for r in rows)
+
+    def test_filter_students_by_course(self, client, admin_user, student, student2, course, auth_headers):
+        student.course = course
+        student.save(update_fields=["course"])
+        resp = client.get(f"/api/v1/admin/students?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        usernames = {r["username"] for r in resp.json()}
+        assert student.username in usernames
+        assert student2.username not in usernames
+
+    def test_assign_student_to_course(self, client, admin_user, student, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/students/{student.id}/course",
+            {"student_id": student.id, "course_id": course.id},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        student.refresh_from_db()
+        assert student.course_id == course.id
+
+    def test_detach_student_from_course(self, client, admin_user, student, course, auth_headers):
+        student.course = course
+        student.save(update_fields=["course"])
+        resp = client.put(
+            f"/api/v1/admin/students/{student.id}/course",
+            {"student_id": student.id, "course_id": None},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        student.refresh_from_db()
+        assert student.course_id is None
+
+    def test_assign_unknown_course_404(self, client, admin_user, student, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/students/{student.id}/course",
+            {"student_id": student.id, "course_id": 99999},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_student_cannot_manage_students(self, client, student, course, auth_headers):
+        resp = client.get("/api/v1/admin/students", **auth_headers(student))
+        assert resp.status_code == 403

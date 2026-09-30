@@ -31,6 +31,33 @@ const routes = [
     name: 'admin',
     component: () => import('../views/AdminView.vue'),
     meta: { roles: ['admin'] },
+    redirect: { name: 'admin-settings' },
+    children: [
+      {
+        path: 'settings',
+        name: 'admin-settings',
+        component: () => import('../views/AdminSettingsView.vue'),
+        meta: { roles: ['admin'] },
+      },
+      {
+        path: 'courses',
+        name: 'admin-courses',
+        component: () => import('../views/AdminCoursesView.vue'),
+        meta: { roles: ['admin'] },
+      },
+      {
+        path: 'analysis-types',
+        name: 'admin-types',
+        component: () => import('../views/AdminTypesView.vue'),
+        meta: { roles: ['admin'] },
+      },
+      {
+        path: 'assignments',
+        name: 'admin-assignments',
+        component: () => import('../views/AdminAssignView.vue'),
+        meta: { roles: ['admin'] },
+      },
+    ],
   },
 ]
 

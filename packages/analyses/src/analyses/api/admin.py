@@ -1,5 +1,4 @@
-"""
-Admin endpoints: CRUD for analysis types, instances, assignments, grading config.
+"""Admin endpoints: CRUD for analysis types, instances, assignments, grading config.
 
 All mutating endpoints are admin-only and logged to the audit logger.
 """
@@ -16,6 +15,8 @@ from analyses.api.schemas import (
     AssignmentIn,
     CourseIn,
     GradingConfigOut,
+    StudentCourseAssignIn,
+    StudentOut,
 )
 from analyses.models import AnalysisInstance, AnalysisType
 from config.models import AppSettings, Course, GradingConfig
@@ -69,6 +70,80 @@ def create_course(request, payload: CourseIn):
     )
     logger.info("Admin %s created course %s", request.user.username, course.name)
     return {"id": course.id, "name": course.name}
+
+
+@router.put("/courses/{course_id}", response=dict)
+def update_course(request, course_id: int, payload: CourseIn):
+    """Update a course (admin)."""
+    _admin_user(request)
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    course.name = payload.name
+    course.semester = payload.semester
+    course.track = payload.track
+    course.is_active = payload.is_active
+    course.save()
+    logger.info("Admin %s updated course %s", request.user.username, course.name)
+    return {"id": course.id, "name": course.name}
+
+
+@router.delete("/courses/{course_id}", response=None)
+def delete_course(request, course_id: int):
+    """Delete a course (admin). Refused while students or analyses still reference it."""
+    _admin_user(request)
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    if course.students.exists() or course.analysis_instances.exists() or course.assignments.exists():
+        raise HttpError(409, "Course still has students, analyses or assignments and cannot be deleted.")
+    course.delete()
+    logger.info("Admin %s deleted course %s", request.user.username, course_id)
+
+
+# ---- students ------------------------------------------------------------------
+@router.get("/students", response=list[StudentOut])
+def list_students(request, course_id: int | None = None):
+    """List students (admin), optionally filtered by their course."""
+    _admin_user(request)
+    qs = User.objects.filter(role=User.Role.STUDENT).select_related("course")
+    if course_id is not None:
+        qs = qs.filter(course_id=course_id)
+    return [
+        {
+            "id": s.id,
+            "username": s.username,
+            "name": s.name or None,
+            "course_id": s.course_id,
+            "course_name": s.course.name if s.course else None,
+            "is_active": s.is_active,
+        }
+        for s in qs
+    ]
+
+
+@router.put("/students/{student_id}/course", response=dict)
+def assign_student_course(request, student_id: int, payload: StudentCourseAssignIn):
+    """Assign a student to a course (or detach with ``course_id = null``) (admin)."""
+    _admin_user(request)
+    student = User.objects.filter(pk=payload.student_id, role=User.Role.STUDENT).first()
+    if student is None:
+        raise HttpError(404, "Student not found.")
+    if payload.course_id is not None:
+        course = Course.objects.filter(pk=payload.course_id).first()
+        if course is None:
+            raise HttpError(404, "Course not found.")
+        student.course = course
+    else:
+        student.course = None
+    student.save(update_fields=["course"])
+    logger.info(
+        "Admin %s set course for student %s to %s",
+        request.user.username,
+        student.username,
+        payload.course_id,
+    )
+    return {"id": student.id, "username": student.username, "course_id": student.course_id}
 
 
 # ---- analysis types ------------------------------------------------------------
