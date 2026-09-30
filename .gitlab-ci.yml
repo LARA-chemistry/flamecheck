@@ -74,14 +74,24 @@ before_script:
     matrix:
       - PACKAGE_DIR: ["."]
 
+# Runs on any branch push (develop, main, feature branches, ...) as well as
+# merge requests, triggers and tags. Used by the validation jobs (lint, test,
+# build) so that every push - including feature/"patch" branches - is checked.
 .run_on_all_branches:
   rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "trigger"
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+.*/
+
+# Runs on any branch push. Used by the docker image build so that a fresh image
+# is produced for every patch/feature commit, not just develop/main.
+.run_on_any_branch:
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
 
 .run_on_main:
   rules:
@@ -219,7 +229,7 @@ docker-build:
         .
     # buildx --push already pushes all tags, so no separate push commands needed.
   extends:
-    - .run_on_develop_or_main
+    - .run_on_any_branch
 
 # Jobs: =================================== Publish to PyPI ================================
 
