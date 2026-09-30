@@ -19,8 +19,10 @@ variables:
   UV_PUBLISH_USERNAME: "gitlab-ci-token"
   UV_PUBLISH_PASSWORD: "${CI_JOB_TOKEN}"
 
-# image: ghcr.io/astral-sh/uv:$UV_VERSION-python${PYTHON_VERSION}-$BASE_LAYER    
-image: ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-$BASE_LAYER
+# Pin the uv version so the image (and therefore the cached virtualenv) does
+# not drift under a rolling tag. An unpinned image tag silently changes the uv
+# version, which invalidates the cached .venv and breaks `uv sync --frozen`.
+image: ghcr.io/astral-sh/uv:$UV_VERSION-python${PYTHON_VERSION}-$BASE_LAYER
 
 stages:
   - compliance
@@ -41,10 +43,12 @@ cache:
     paths:
       - $UV_CACHE_DIR
     policy: pull-push
+  # Include the uv version in the key: a uv version change rebuilds the venv so
+  # we never restore a .venv created by an incompatible uv.
   - key:
       files:
         - uv.lock
-      prefix: uv-venv-$PYTHON_VERSION
+      prefix: uv-venv-$PYTHON_VERSION-$UV_VERSION
     paths:
       - .venv/
     policy: pull-push
@@ -54,14 +58,18 @@ cache:
 
 before_script:
   - python -V # Print out python version for debugging
-  # Only sync if .venv doesn't exist or is incomplete
+  - uv --version # Print out uv version for debugging
+  # Always reconcile the environment with the lockfile. `uv sync` is idempotent
+  # (fast when the venv already matches) but it REPAIRS a stale or incomplete
+  # cached .venv (e.g. one built by a different uv version), so we do not trust
+  # a cached venv blindly.
   - |
-    if [ ! -d ".venv" ] || ! uv run python -c "import sys; sys.exit(0)" 2>/dev/null; then
-      echo "Installing dependencies..."
-      uv sync --group dev --frozen
+    if [ ! -d ".venv" ]; then
+      echo "No cached venv - installing dependencies..."
     else
-      echo "Using cached virtual environment"
+      echo "Repairing/validating cached venv..."
     fi
+    uv sync --group dev --frozen
 
 .parallel_python_jobs:
     parallel:
