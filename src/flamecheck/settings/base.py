@@ -162,9 +162,11 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# The Vite-built frontend assets are emitted into frontend/dist/assets and
-# collected here as a static dir so they are served under /static/assets/.
-STATICFILES_DIRS = [BASE_DIR / "frontend" / "dist" / "assets"]
+# The Vite build runs with ``--base /static/`` (see frontend/package.json), so
+# the built index.html references its chunks as /static/assets/*. Pointing the
+# staticfiles dir at frontend/dist maps dist/assets/* to /static/assets/* and
+# dist/favicon.* to /static/favicon.* exactly as the built page expects.
+STATICFILES_DIRS = [BASE_DIR / "frontend" / "dist"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},

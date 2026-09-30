@@ -188,6 +188,42 @@ class TestAppSettings:
         assert s.active_course_id == course.id
 
 
+class TestDjangoAdminSettings:
+    """The standard Django admin must expose the settings singletons for editing."""
+
+    def test_grading_config_changelist_is_editable(self, client, admin_user):
+        client.force_login(admin_user)
+        GradingConfig.get_instance()
+        resp = client.get("/admin-django/config/gradingconfig/")
+        assert resp.status_code == 200
+        # All grading fields are shown and editable in the change list.
+        for field in (
+            "points_per_correct_ion",
+            "penalty_second_submission",
+            "penalty_third_submission",
+            "false_positive_deduction",
+            "grading_mode",
+            "max_submissions_per_analysis",
+            "final_score_strategy",
+        ):
+            assert field in resp.context["cl"].list_editable
+
+    def test_app_settings_changelist_is_editable(self, client, admin_user, course):
+        client.force_login(admin_user)
+        AppSettings.get_instance()
+        resp = client.get("/admin-django/config/appsettings/")
+        assert resp.status_code == 200
+        assert set(resp.context["cl"].list_editable) == {
+            "points_per_analysis",
+            "analyses_per_course",
+            "active_course",
+        }
+
+    def test_settings_changelist_denied_for_students(self, client, student):
+        assert client.get("/admin-django/config/gradingconfig/").status_code == 302  # redirect to login
+        assert client.get("/admin-django/config/appsettings/").status_code == 302
+
+
 class TestCourses:
     def test_admin_creates_course(self, client, admin_user, auth_headers):
         resp = client.post(

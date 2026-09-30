@@ -104,3 +104,68 @@ class TestCsvExport:
         body = resp.content.decode()
         assert "student_username" in body.splitlines()[0]
         assert student.username in body
+
+
+class TestSubstanceOverview:
+    def test_requires_assistant_role(self, client, student, assistant_course, course, auth_headers):
+        resp = client.get(f"/api/v1/assistant/courses/{course.id}/substance-overview", **auth_headers(student))
+        assert resp.status_code == 403
+
+    def test_invisible_course_404(self, client, assistant, assistant_course, auth_headers):
+        other = CourseFactory(name="Other Course", is_active=True)
+        resp = client.get(f"/api/v1/assistant/courses/{other.id}/substance-overview", **auth_headers(assistant))
+        assert resp.status_code == 404
+
+    def test_overview_lists_substances_of_correct_ions(
+        self, client, assistant, assistant_course, course, student, assigned_instance, auth_headers
+    ):
+        from substances.factory import IonFactory, SubstanceFactory
+        from substances.models import Ion
+
+        # The assigned instance's correct set is NH4+, SO4-2, Cu2+.
+        sulfate = IonFactory.make("sulfate")
+        relevant = SubstanceFactory(name="Copper sulfate", formula="CuSO4")
+        relevant.ions.add(sulfate)
+        unrelated_ion = IonFactory(symbol="Unrelated9", name="Unrelated", kind=Ion.Kind.ANION)
+        unrelated = SubstanceFactory(name="Unrelated salt", formula="UX9")
+        unrelated.ions.add(unrelated_ion)
+
+        resp = client.get(f"/api/v1/assistant/courses/{course.id}/substance-overview", **auth_headers(assistant))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["analyses"]) == 1
+        analysis = data["analyses"][0]
+        assert {i["symbol"] for i in analysis["correct_ions"]} == {"NH4+", "SO4-2", "Cu2+"}
+        assert analysis["student_count"] == 1
+        assert analysis["sample_count"] == 1  # default: one sample per assigned student
+        assert [s["name"] for s in analysis["substances"]] == ["Copper sulfate"]
+        assert data["totals"] == [
+            {
+                "id": relevant.id,
+                "name": "Copper sulfate",
+                "formula": "CuSO4",
+                "count": 1,
+                "used_in_analyses": 1,
+            }
+        ]
+        assert data["total_units"] == 1
+        assert data["distinct_substances"] == 1
+
+    def test_samples_per_analysis_override(
+        self, client, assistant, assistant_course, course, student, assigned_instance, auth_headers
+    ):
+        from substances.factory import IonFactory, SubstanceFactory
+
+        relevant = SubstanceFactory(name="Copper sulfate", formula="CuSO4")
+        relevant.ions.add(IonFactory.make("sulfate"))
+
+        resp = client.get(
+            f"/api/v1/assistant/courses/{course.id}/substance-overview?samples_per_analysis=5",
+            **auth_headers(assistant),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["samples_per_analysis"] == 5
+        assert data["analyses"][0]["sample_count"] == 5
+        assert data["totals"][0]["count"] == 5
+        assert data["total_units"] == 5

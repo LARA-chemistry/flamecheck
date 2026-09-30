@@ -102,7 +102,10 @@ def login(request, payload: LoginIn):
     ip = _client_ip(request)
     key = f"login:{payload.username}:{ip or 'no-ip'}"
     if _rate_limited(key, _LOGIN_RATE_LIMIT, _LOGIN_WINDOW_SECONDS):
-        raise ValidationError({"username": ["Too many failed attempts. Try again later."]})
+        # Note: the limiter counts every attempt (successful ones included),
+        # so the message must not imply the password is wrong.
+        message = f"Too many login attempts (max {_LOGIN_RATE_LIMIT} per minute). Try again in a minute."
+        raise ValidationError({"username": [message]})
 
     user = authenticate(request, username=payload.username, password=payload.password)
     if user is None:

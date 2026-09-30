@@ -81,7 +81,29 @@ Create an initial admin user:
 uv run python manage.py createsuperuser
 ```
 
-Then set that user's `role` to `admin` (via Django admin at `/admin/` or the shell).
+Then set that user's `role` to `admin` (via Django admin at `/admin-django/` or the shell).
+
+### Quick demo: example dataset
+
+Instead of creating users and courses by hand, load the ready-made demo
+environment (3 courses, admin + 2 assistants + 8 students with barcodes,
+analysis sheets in open/too-early/too-late windows, and a few graded
+submissions):
+
+```bash
+uv run python manage.py load_examples --reset
+```
+
+All demo accounts share the password `FlameCheck-Demo-123` (log in as
+`admin`, `assistant.bio`, or `student-david`). Then verify the whole app over
+live HTTP with the end-to-end checker (54 checks):
+
+```bash
+uv run python examples/verify_demo.py
+```
+
+See [`examples/README.md`](../examples/README.md) for the full dataset layout,
+the per-student sheet design, and what to try.
 
 ## 6. Run the development server
 

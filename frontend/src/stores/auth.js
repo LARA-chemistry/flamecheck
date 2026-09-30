@@ -23,21 +23,21 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('fc_user', JSON.stringify(user))
     },
     async login(username, password) {
+      // The login endpoint returns { tokens: { access, refresh, ... }, user, analyses }.
       const res = await api.post('/auth/login', { username, password })
-      this.setTokens(res.access, res.refresh)
-      const me = await api.get('/me')
-      this.setUser(me)
-      return me
-    },
-    async scanBarcode(barcode) {
-      const res = await api.post('/auth/barcode/scan', { barcode })
-      this.setTokens(res.access, res.refresh)
-      const me = await api.get('/me')
-      this.setUser(me)
-      return me
+      const tokens = res.tokens ?? {}
+      this.setTokens(tokens.access, tokens.refresh)
+      // The login response already carries the authenticated user, so no
+      // separate /me round-trip is needed.
+      this.setUser(res.user ?? (await api.get('/me')))
+      return res.user
     },
     async refresh() {
-      const res = await api.post('/auth/token/refresh', { refresh: this.refreshToken }, { raw: true })
+      // The refresh endpoint returns a flat TokenPairOut ({ access, refresh, ... }).
+      // `raw: true` keeps this call out of the client's 401 auto-refresh retry
+      // (preventing an infinite refresh loop); we parse the JSON body ourselves.
+      const response = await api.post('/auth/token/refresh', { refresh: this.refreshToken }, { raw: true })
+      const res = await response.json()
       this.setTokens(res.access, res.refresh)
     },
     logout() {

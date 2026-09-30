@@ -134,6 +134,90 @@ def course_detail(request, course_id: int):
     }
 
 
+@router.get("/courses/{course_id}/substance-overview")
+def course_substance_overview(request, course_id: int, samples_per_analysis: int | None = None):
+    """
+    Substance preparation overview for one course.
+
+    The course's per-student sheets are grouped by (announcement number,
+    correct ion set), i.e. by sample composition. For every group, lists the
+    substances that share at least one of the group's correct ions (the same
+    convention as the student reference list, but based on the actual sample
+    composition instead of the possible-ion set). ``sample_count`` is the
+    number of prepared samples per group: by default the number of sheets in
+    the group, overridable via the ``samples_per_analysis`` query parameter.
+    The per-substance totals aggregate the number of substance units the
+    course needs in total.
+    """
+    user = _assistant_user(request)
+    entry = next(
+        (c for c in _visible_courses(user) if (c.course.id if hasattr(c, "course") else c.id) == course_id), None
+    )
+    if entry is None:
+        raise HttpError(404, "Course not found.")
+    course = entry.course if hasattr(entry, "course") else entry
+
+    from substances.api.schemas import ion_to_schema, substance_to_schema
+    from substances.models import Ion, Substance
+
+    # Instances are per-student sheets; the preparation unit is the *composition*.
+    # Group by (number, correct ion set) so identical announcements collapse into
+    # one row, while differing compositions within a number stay separate.
+    instances = (
+        AnalysisInstance.objects.filter(course=course).order_by("number").prefetch_related("correct_ions", "type")
+    )
+    groups: dict[tuple[int, frozenset[int]], dict] = {}
+    for inst in instances:
+        key = (inst.number, frozenset(inst.correct_ions.values_list("id", flat=True)))
+        group = groups.setdefault(
+            key,
+            {"number": inst.number, "type_name": inst.type.name, "correct_ids": set(key[1]), "sheets": 0},
+        )
+        group["sheets"] += 1
+
+    analyses = []
+    totals: dict[int, dict] = {}
+    total_units = 0
+    for key in sorted(groups):
+        group = groups[key]
+        correct_ids = sorted(group["correct_ids"])
+        substances = (
+            list(Substance.objects.filter(ions__id__in=correct_ids).distinct().prefetch_related("ions"))
+            if correct_ids
+            else []
+        )
+        samples = samples_per_analysis if (samples_per_analysis or 0) > 0 else group["sheets"]
+        correct_ions = list(Ion.objects.filter(id__in=correct_ids).order_by("symbol"))
+        for s in substances:
+            t = totals.setdefault(
+                s.id,
+                {"id": s.id, "name": s.name, "formula": s.formula, "count": 0, "used_in_analyses": 0},
+            )
+            t["count"] += samples
+            t["used_in_analyses"] += 1
+        total_units += samples * len(substances)
+        analyses.append(
+            {
+                "number": group["number"],
+                "type": group["type_name"],
+                "student_count": group["sheets"],
+                "sample_count": samples,
+                "correct_ions": [ion_to_schema(i) for i in correct_ions],
+                "substances": [substance_to_schema(s) for s in substances],
+            }
+        )
+    totals_list = sorted(totals.values(), key=lambda t: (-t["count"], t["name"].lower()))
+    return {
+        "course_id": course.id,
+        "course_name": course.name,
+        "samples_per_analysis": samples_per_analysis,
+        "analyses": analyses,
+        "totals": totals_list,
+        "total_units": total_units,
+        "distinct_substances": len(totals_list),
+    }
+
+
 @router.get("/students/{student_id}/submissions")
 def student_submissions(request, student_id: int):
     """All of a student's submissions across their analyses (with the correct answer key)."""

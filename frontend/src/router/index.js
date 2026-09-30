@@ -34,6 +34,27 @@ const routes = [
   },
 ]
 
+/**
+ * Map a user role to the route name of their landing page.
+ *
+ * Each role has a dedicated dashboard: students land on the analysis home,
+ * assistants on the assistant dashboard, admins on the admin panel.
+ *
+ * @param {string} role - The user's role (`student`, `assistant` or `admin`).
+ * @returns {string} The route name to navigate to for that role.
+ */
+export function homeForRole(role) {
+  switch (role) {
+    case 'assistant':
+      return 'assistant'
+    case 'admin':
+      return 'admin'
+    case 'student':
+    default:
+      return 'home'
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
@@ -45,10 +66,10 @@ router.beforeEach((to) => {
     return { name: 'login' }
   }
   if (to.meta.public && auth.isAuthenticated) {
-    return { name: 'home' }
+    return { name: homeForRole(auth.user?.role) }
   }
   if (to.meta.roles && auth.user && !to.meta.roles.includes(auth.user.role)) {
-    return { name: 'home' }
+    return { name: homeForRole(auth.user.role) }
   }
 })
 

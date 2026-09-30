@@ -16,8 +16,8 @@ role.
 
 ## Students
 
-1. **Log in** on the login page using either a username/password or by scanning the
-   student barcode (camera or manual entry).
+1. **Log in** on the login page with your username and password (the password
+   field has a show/hide toggle).
 2. The home page lists every analysis assigned to the student with its current
    window state (`Open`, `Not Open Yet`, `Closed`, `Submitted`).
 3. Open an analysis while its window is **open**: pick the cations and anions that
@@ -37,20 +37,31 @@ penalised according to the grading configuration (second attempt, third attempt)
    statistics (total assignments, submitted, pending, average score).
 3. Expand a course to see the full roster with each student's barcode and progress.
 4. Use **Download CSV** to export the full submission audit log for a course.
+5. Use **Substance Overview** to plan lab preparation: for every analysis of the
+   course it lists the substances that share at least one of the analysis'
+   correct ions, and aggregates the total number of substance units over the
+   whole course. The number of samples per analysis is configurable (by
+   default one sample per assigned student).
 
 ## Admins
 
 1. Log in with an admin account.
 2. The admin panel offers tabs for:
    - **Courses** — create and list courses (name, semester, track, active).
-   - **Grading** — configure points per ion, retry penalties, false-positive
-     deduction, grading mode (per ion / per analysis), submission limit and the
-     final-score strategy (best / last).
+   - **Settings** — every setting of the submission system in one place:
+     the *application settings* (points per analysis, analyses per course,
+     the currently active course) and the *grading configuration* (points per
+     ion, retry penalties, false-positive deduction, grading mode per ion /
+     per analysis, submission limit, final-score strategy best / last).
    - **Analysis Types** — the user-defined analysis catalog with the possible ion
      sets per course track.
-3. Analysis instances (concrete sessions with a time window and the correct ion
-     set) and student assignments are managed through the admin API and Django
-   admin.
+3. The same settings are also editable in the standard Django admin
+   (`/admin-django/`, reachable via the "Django admin" link in the SPA admin
+   panel) — the singleton rows for *Grading configuration* and
+   *Application settings* are editable directly in their change lists.
+   Analysis instances (concrete sessions with a time window and the correct
+   ion set) and student assignments are managed through the admin API and the
+   Django admin.
 
 ## API
 

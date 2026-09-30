@@ -28,9 +28,8 @@ assignments and the global grading configuration.
 | State            | **Pinia** | One auth store |
 | Routing (SPA)    | Vue Router | Role-guarded routes |
 | UI kit           | **Naive UI** | Components (cards, tables, tabs, forms) |
-| Barcode scanning | **@zxing/browser** | Camera-based multi-format reader |
 | Package manager  | **uv** (workspace) | 4 member packages + root project |
-| Static serving   | Whitenoise | Serves `frontend/dist/assets` in prod |
+| Static serving   | Whitenoise | Serves `frontend/dist` (built with `--base /static/`) under `/static/` |
 | Database         | **SQLite (default)** | `db.sqlite3` at repo root; no external service |
 | Database (opt-in)| PostgreSQL | `psycopg` driver, enabled via `DATABASE_URL` |
 | DB (test)        | SQLite | In-memory (`:memory:`) for speed |
@@ -79,10 +78,10 @@ flamecheck/
 │       └── src/analyses/
 │           ├── models.py       # Domain logic: window status, atomic submit, scoring
 │           ├── api/{student.py, assistant.py, admin.py, schemas.py}
-│           └── management/
+│           └── management/commands/load_examples.py
 ├── frontend/                   # Vite + Vue 3 app (independent package.json)
 │   ├── package.json
-│   ├── vite.config.js          # Dev proxy /api → :8000, build → dist/
+│   ├── vite.config.js          # Dev proxy /api → :8000; build uses --base /static/
 │   ├── index.html
 │   └── src/
 │       ├── main.js / App.vue
@@ -92,9 +91,20 @@ flamecheck/
 │       └── views/{LoginView, StudentView, AnalysisDetailView,
 │                   AssistantView, AdminView}.vue
 ├── tests/                      # pytest suite (django_db, fixtures in conftest.py)
+├── examples/                   # demo dataset + E2E checker
+│   ├── datasets/               # courses, users, types, instances, … (JSON)
+│   ├── verify_demo.py          # 54-check E2E over live HTTP
+│   └── README.md
 ├── docker/                     # Dockerfiles + compose + entrypoints
 └── docs/                       # Sphinx docs (installation, usage, development/)
 ```
+
+The `examples/` directory is loaded with `manage.py load_examples [--reset]`
+(a command in the `analyses` app). It fans the announcement templates out into
+one `AnalysisInstance` per assigned student — because an instance's submission
+counters (limit, retry ordinal) are per-instance — and grades a few seeded
+submissions through the real `AnalysisInstance.submit()` logic.
+`examples/verify_demo.py` then drives the whole app over live HTTP (54 checks).
 
 ---
 
@@ -125,7 +135,7 @@ flowchart TB
             R5["admin router"]
         end
         SPAView["frontend_index()<br/>serves dist/index.html"]
-        AdminSite["Django admin (/admin/)"]
+        AdminSite["Django admin (/admin-django/)"]
         AllAuth["allauth (web login)"]
     end
 
@@ -137,7 +147,7 @@ flowchart TB
     end
 
     DB[("Database<br/>SQLite (default) / PostgreSQL")]
-    Static[("frontend/dist/assets<br/>(WhiteNoise)")]
+    Static[("frontend/dist<br/>built with --base /static/<br/>(WhiteNoise → /static/)")]
 
     Camera --> SPA
     SPA -->|"dev"| ViteDev
@@ -478,6 +488,7 @@ flowchart LR
         A2["GET /assistant/courses/{id}"]
         A3["GET /assistant/students/{id}/submissions"]
         A4["GET /assistant/courses/{id}/export/csv"]
+        A5["GET /assistant/courses/{id}/substance-overview"]
     end
     subgraph Admin["Admin only"]
         M1["/admin/courses (CRUD)"]
@@ -591,8 +602,15 @@ default and therefore runs on SQLite unless `DATABASE_URL` is overridden.
 Key settings: `AUTH_USER_MODEL = "users.User"`, `API_PREFIX = "/api/v1"`,
 `DATABASE_URL` (default `sqlite:///<repo>/db.sqlite3`),
 `JWT_ACCESS_TOKEN_LIFETIME_MINUTES = 30`, `JWT_REFRESH_TOKEN_LIFETIME_DAYS = 14`,
-`LOGIN_MAX_ATTEMPTS = 5`, `STATICFILES_DIRS = [frontend/dist/assets]`,
+`LOGIN_MAX_ATTEMPTS = 5`, `STATICFILES_DIRS = [frontend/dist]`,
 `CATALOG_DIR = packages/substances/data`.
+
+The frontend build runs with `vite build --base /static/` (see
+`frontend/package.json`), so the built `index.html` references its hashed
+chunks as `/static/assets/*.js|css` and the favicon as `/static/favicon.svg`
+(from `frontend/public/`). With `STATICFILES_DIRS = [frontend/dist]`,
+WhiteNoise maps `dist/assets/*` → `/static/assets/*` and `dist/favicon.svg` →
+`/static/favicon.svg` exactly as the page expects.
 
 ---
 
@@ -601,6 +619,7 @@ Key settings: `AUTH_USER_MODEL = "users.User"`, `API_PREFIX = "/api/v1"`,
 | Command | Package | Effect |
 |---------|---------|--------|
 | `import_catalog` | substances | Loads `ions.json` (22 ions) + `substances.json` (35 substances) idempotently (`get_or_create` by `(symbol, kind)` / `name`) |
+| `load_examples` | analyses | Loads the `examples/datasets/` demo environment (courses, users, types, per-student instances, assignments, singletons, seeded submissions); idempotent, `--reset` to wipe first |
 | `init_barcode` | users | Creates a test barcode `FC-<id>-<uuid8>` (`--reset` to regenerate) |
 | `init_admin` | users | Creates an admin user |
 | `init_django` | users | Legacy bootstrap (references `LOCAL_APPS`/`FIXTURES`) |

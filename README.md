@@ -141,7 +141,7 @@ Open:
 
 - <http://127.0.0.1:8000/> — the app
 - <http://127.0.0.1:8000/api/v1/docs> — interactive OpenAPI documentation (DEBUG only)
-- <http://127.0.0.1:8000/admin/> — Django admin
+- <http://127.0.0.1:8000/admin-django/> — Django admin (also linked from the SPA admin panel)
 
 **Frontend hot-reload:** run `npm --prefix frontend run dev` in a second
 terminal. The Vite dev server on `:5173` proxies `/api` to the Django server on

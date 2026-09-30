@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="FlameCheck logo: a Bunsen burner flame with a checkmark">
+  <defs>
+    <linearGradient id="flameOuter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD54A"/>
+      <stop offset="45%" stop-color="#FF8A00"/>
+      <stop offset="100%" stop-color="#E53935"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF8E1"/>
+      <stop offset="60%" stop-color="#FFE082"/>
+      <stop offset="100%" stop-color="#FFB300"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8A97A5"/>
+      <stop offset="50%" stop-color="#C9D4DE"/>
+      <stop offset="100%" stop-color="#6B7887"/>
+    </linearGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2E7D32"/>
+      <stop offset="100%" stop-color="#1B5E20"/>
+    </linearGradient>
+  </defs>
+
+  <!-- backdrop -->
+  <rect x="0" y="0" width="240" height="240" rx="40" fill="#0D1B2A"/>
+
+  <!-- ===== Bunsen burner base (trivet + body + collar) ===== -->
+  <!-- trivet (three-pronged stand) -->
+  <g fill="url(#metal)">
+    <rect x="70" y="205" width="100" height="8" rx="4"/>
+    <rect x="72" y="196" width="8" height="14" rx="3"/>
+    <rect x="160" y="196" width="8" height="14" rx="3"/>
+    <rect x="116" y="196" width="8" height="14" rx="3"/>
+  </g>
+  <!-- burner body -->
+  <rect x="98" y="150" width="44" height="52" rx="8" fill="url(#metal)"/>
+  <!-- collar / adjustment ring -->
+  <rect x="92" y="144" width="56" height="10" rx="5" fill="#5C6B7A"/>
+  <!-- gas inlet hint -->
+  <rect x="112" y="168" width="16" height="24" rx="4" fill="#46525F" opacity="0.55"/>
+
+  <!-- ===== Flame ===== -->
+  <!-- outer flame (tall, teardrop) -->
+  <path d="M120 30
+           C 132 52, 150 78, 146 112
+           C 143 134, 132 148, 120 152
+           C 108 148, 97 134, 94 112
+           C 90 78, 108 52, 120 30 Z"
+        fill="url(#flameOuter)"/>
+  <!-- inner (blue-hot core) -->
+  <path d="M120 78
+           C 127 90, 135 104, 133 122
+           C 132 135, 126 143, 120 146
+           C 114 143, 108 135, 107 122
+           C 105 104, 113 90, 120 78 Z"
+        fill="url(#flameInner)"/>
+
+  <!-- ===== Checkmark badge (bottom-right) ===== -->
+  <g transform="translate(168,150)">
+    <circle r="34" fill="url(#badge)" stroke="#0D1B2A" stroke-width="4"/>
+    <path d="M -14 2 L -4 13 L 16 -11"
+          fill="none" stroke="#FFFFFF" stroke-width="8"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

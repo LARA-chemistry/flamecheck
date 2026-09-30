@@ -2,7 +2,7 @@
   "version": 2,
   "sessionId": "session-a39cdfad-8f78-4afc-b650-4b247fb96d8d",
   "cwd": "/lair/source/projects/science/teaching/inorg_prakticum_submission_system/flamecheck",
-  "updatedAt": 1788952979643,
+  "updatedAt": 1790791681718,
   "checkpoints": [
     {
       "turn": 1,
@@ -66,6 +66,297 @@
       "after": {
         "commit": "7a63c69bcdf30f29fe70e89160f33643ae9fbf1f",
         "time": 1788952979552
+      }
+    },
+    {
+      "turn": 6,
+      "commit": "696f85467dd68fdbe9c2d735e5c351fb211bd014",
+      "parent": "7a63c69bcdf30f29fe70e89160f33643ae9fbf1f",
+      "time": 1790529348567,
+      "untracked": [
+        "examples/substance_list.csv"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "3b7af864c83c6a228215809d0af5d6d1bc1318bd",
+        "time": 1790550973075
+      }
+    },
+    {
+      "turn": 7,
+      "commit": "3b7af864c83c6a228215809d0af5d6d1bc1318bd",
+      "parent": "3b7af864c83c6a228215809d0af5d6d1bc1318bd",
+      "time": 1790572715060,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/substance_list.csv",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false
+    },
+    {
+      "turn": 8,
+      "commit": "3b7af864c83c6a228215809d0af5d6d1bc1318bd",
+      "parent": "3b7af864c83c6a228215809d0af5d6d1bc1318bd",
+      "time": 1790577884301,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/substance_list.csv",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "1162153d4cccd0a875308f57bca774c4373c2752",
+        "time": 1790582388997
+      }
+    },
+    {
+      "turn": 9,
+      "commit": "1162153d4cccd0a875308f57bca774c4373c2752",
+      "parent": "1162153d4cccd0a875308f57bca774c4373c2752",
+      "time": 1790775605075,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "23384b2d190c1e1388dd638933c2f9b092b188dd",
+        "time": 1790779134280
+      }
+    },
+    {
+      "turn": 10,
+      "commit": "23384b2d190c1e1388dd638933c2f9b092b188dd",
+      "parent": "23384b2d190c1e1388dd638933c2f9b092b188dd",
+      "time": 1790782140968,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "42fb585841b7f99b4d9fb25893302a4d934fa8a5",
+        "time": 1790786651935
+      }
+    },
+    {
+      "turn": 11,
+      "commit": "42fb585841b7f99b4d9fb25893302a4d934fa8a5",
+      "parent": "42fb585841b7f99b4d9fb25893302a4d934fa8a5",
+      "time": 1790786651943,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "7c335ea6e5b8bb674cf21cbe3b6c197edb5b39c4",
+        "time": 1790787380249
+      }
+    },
+    {
+      "turn": 12,
+      "commit": "7c335ea6e5b8bb674cf21cbe3b6c197edb5b39c4",
+      "parent": "7c335ea6e5b8bb674cf21cbe3b6c197edb5b39c4",
+      "time": 1790787380255,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "e94127dcd47b400581f54dec988d860b4566019b",
+        "time": 1790788926645
+      }
+    },
+    {
+      "turn": 13,
+      "commit": "e94127dcd47b400581f54dec988d860b4566019b",
+      "parent": "e94127dcd47b400581f54dec988d860b4566019b",
+      "time": 1790789894502,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "fd986ca70e69acfb5ed2c2b88a8c2168c2f33448",
+        "time": 1790790178119
+      }
+    },
+    {
+      "turn": 14,
+      "commit": "fd986ca70e69acfb5ed2c2b88a8c2168c2f33448",
+      "parent": "fd986ca70e69acfb5ed2c2b88a8c2168c2f33448",
+      "time": 1790790178154,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py",
+        "tests/test_spa_routing.py"
+      ],
+      "truncated": false
+    },
+    {
+      "turn": 15,
+      "commit": "fd986ca70e69acfb5ed2c2b88a8c2168c2f33448",
+      "parent": "fd986ca70e69acfb5ed2c2b88a8c2168c2f33448",
+      "time": 1790790412593,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py",
+        "tests/test_spa_routing.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "a458bef33ddb1b05d84fbe6e408cd059ffca680f",
+        "time": 1790790701695
+      }
+    },
+    {
+      "turn": 16,
+      "commit": "a458bef33ddb1b05d84fbe6e408cd059ffca680f",
+      "parent": "a458bef33ddb1b05d84fbe6e408cd059ffca680f",
+      "time": 1790791396531,
+      "untracked": [
+        "examples/README.md",
+        "examples/datasets/analysis_instances.json",
+        "examples/datasets/analysis_types.json",
+        "examples/datasets/app_settings.json",
+        "examples/datasets/assignments.json",
+        "examples/datasets/assistant_courses.json",
+        "examples/datasets/courses.json",
+        "examples/datasets/grading_config.json",
+        "examples/datasets/submissions.json",
+        "examples/datasets/users.json",
+        "examples/verify_demo.py",
+        "frontend/public/favicon.svg",
+        "packages/analyses/src/analyses/management/__init__.py",
+        "packages/analyses/src/analyses/management/commands/__init__.py",
+        "packages/analyses/src/analyses/management/commands/load_examples.py",
+        "tests/test_spa_routing.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "8481cf0a62f016d1d46806a1f4a4fb766d63b69f",
+        "time": 1790791681593
       }
     }
   ],
