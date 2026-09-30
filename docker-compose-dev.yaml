@@ -1,44 +1,71 @@
-# Description: Docker compose file for  - for local development 
-# with all services
+# Development compose for FlameCheck.
+#
 # A qualitative analysis submission system for students in chemistry.
-# docker compose exec service_name bash
-# docker compose exec -1 bash
+#
+# The dev image runs Django's autoreloading server. The repository is
+# bind-mounted over /opt so Python code edits are live; the frontend is built
+# into the image at build time (run `docker compose build` after changing
+# frontend/ source). Everything is configurable through the `.env` file.
+#
+#   DOCKER_IMAGE_TAG    image tag to build/run (default: latest)
+#   APP_PORT            host port to expose (default: 8000)
+#   DATABASE_URL        SQLite (default) or postgres:// to run on PostgreSQL
+#
+# Usage:
+#   cp .env-template .env   # then edit .env if needed
+#   docker compose -f docker-compose-dev.yaml --env-file .env up -d --build
+#   docker compose -f docker-compose-dev.yaml --env-file .env logs -f
+#   docker compose -f docker-compose-dev.yaml --env-file .env exec flamecheck python manage.py shell
+#   docker compose -f docker-compose-dev.yaml --env-file .env down
 
-
-#networks:
-#   lan_access:
-#     driver: bridge
-
-#volumes:
-  # add volumnes here ...
-  
 services:
-  # mdns_reflector:
-  #   image: flungo/avahi
-  #   container_name: mDNS_Reflector
-  #   ports:
-  #     - "5354:5353/udp"  # Expose mDNS port
-  #   volumes:
-  #     - /var/run/avahi:/var/run/avahi
-
-  :
-    image: "path_to_registry/-dev:${DOCKER_IMAGE_TAG}"
-    # ports:
-    #   - 50065:50065
-    # command:  >
-    #     bash -c "source ./venv/bin/activate &&
-    #     python -m  --insecure --port 50065 --debug"
-    # links:
-    #   -  # network link to other service
-    # volumes:
-    #   - .//certificates:/srv//certificates
-    # depends_on:
-    #   - # add dependent services here - it then waits until they are available ...
-    #   - mdns_reflector
+  flamecheck:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    image: flamecheck-dev:${DOCKER_IMAGE_TAG:-latest}
+    container_name: flamecheck
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
     env_file:
-      - .env  # adjust .env file (copy and rename the .env-template)
-    # network_mode:
-    #   "host"
-    #networks:
-    #  - lan_access
-    #  - default
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-flamecheck.settings.development}
+      # DATABASE_URL is taken from .env (SQLite default, or postgres://).
+    volumes:
+      # Mount only the editable source trees so Python edits are live under the
+      # autoreloading server. The venv, entrypoint, manage.py and the built
+      # frontend (frontend/dist, served via WhiteNoise) come from the image and
+      # are NOT overwritten by these mounts.
+      - ./src:/opt/src
+      - ./packages:/opt/packages
+      # Persist the SQLite database.
+      - dev_db:/opt/db
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  # Optional PostgreSQL (activate with --profile postgres + DATABASE_URL).
+  db:
+    image: postgres:16-alpine
+    container_name: flamecheck-db
+    profiles:
+      - postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flamecheck}
+      POSTGRES_USER: ${POSTGRES_USER:-flamecheck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flamecheck}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flamecheck}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dev_db:
+  db_data:

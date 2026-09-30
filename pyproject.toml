@@ -134,8 +134,32 @@ lint.per-file-ignores."packages/*/src/*/tests/**/*" = [
   "D102",
   "D103",
   "D104",
+  "D200",
+  "D205",
+  "D400",
+  "D415",
   "S101",
 ]
+
+# Legacy files with pre-existing docstring debt. These ignore the missing-
+# docstring (D1xx) and docstring-formatting (D2xx/D4xx) rules only, so that the
+# rest of the lint gate stays strict. Remove an entry as the docstrings are
+# backfilled.
+lint.per-file-ignores."packages/users/src/users/views.py" = [ "D101", "D102" ]
+lint.per-file-ignores."packages/users/src/users/forms.py" = [ "D101", "D106", "D205" ]
+lint.per-file-ignores."packages/users/src/users/adapters.py" = [ "D101", "D102" ]
+lint.per-file-ignores."packages/users/src/users/apps.py" = [ "D101", "D102" ]
+lint.per-file-ignores."packages/users/src/users/models.py" = [ "D105", "D106" ]
+lint.per-file-ignores."packages/users/src/users/admin.py" = [ "D102" ]
+lint.per-file-ignores."packages/users/src/users/templatetags/model_descriptions.py" = [ "D103" ]
+lint.per-file-ignores."packages/users/src/users/management/commands/init_barcode.py" = [ "D102" ]
+lint.per-file-ignores."packages/analyses/src/analyses/models.py" = [ "D105", "D106" ]
+lint.per-file-ignores."packages/analyses/src/analyses/admin.py" = [ "D102" ]
+lint.per-file-ignores."packages/config/src/config/models.py" = [ "D105", "D106" ]
+lint.per-file-ignores."packages/substances/src/substances/models.py" = [ "D105", "D106" ]
+lint.per-file-ignores."packages/substances/src/substances/admin.py" = [ "D102" ]
+lint.per-file-ignores."packages/substances/src/substances/management/commands/import_catalog.py" = [ "D102" ]
+
 lint.isort.known-first-party = [ "flamecheck", "tests" ]
 
 [tool.pytest.ini_options]

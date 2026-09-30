@@ -1,22 +1,56 @@
-node_modules
-npm-debug.log
+# Keep the Docker build context small: exclude VCS, caches, virtualenvs, the
+# local SQLite DB and anything the image does not need. The build itself
+# re-creates frontend/node_modules and frontend/dist inside the image.
+
+# Version control / metadata
 .git
 .gitignore
-README.md
-.env
-.env*
-.envs/
+.gitattributes
+.github
+.gitlab-ci.yml
+.gitlab-ci_orig.yml
+.gitpod.yml
+
+# Virtualenvs and Python caches (the image builds its own venv)
 .venv/
 venv/
-__pycache__
-.pytest_cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
 .coverage
-.mypy_cache
-.ruff_cache
-dist
-build
+coverage.xml
+
+# Node (the image runs `npm ci` itself)
+node_modules/
+frontend/node_modules/
+npm-debug.log
+
+# Local databases / media / collected static (rebuilt in-image)
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+media/
+staticfiles/
+dist/
+frontend/dist/
+build/
+sdist/
+
+# Environment files (secrets; the image reads env from the runtime env_file)
+.env
+.env.*
+.envrc
+
+# Docs / tests / IDE / OS clutter
+# NOTE: README.md and LICENSE are intentionally NOT ignored — the build backend
+# (uv_build) reads them when the project itself is built.
+docs/
+tests/
+jupyter/
+.vscode/
+.idea/
 .DS_Store
 *.log
-tests
-docs
-.github

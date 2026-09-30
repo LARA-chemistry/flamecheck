@@ -20,7 +20,8 @@ class Command(BaseCommand):
                 password=os.getenv("DJANGO_SUPERUSER_PASSWORD", "yxcv4321"),
             )
             new_admin.save()
-            # print(f"Django Admin/Superuser account created with username: {os.getenv('DJANGO_SUPERUSER', 'admin')} and pw: {os.getenv('DJANGO_SUPERUSER_PASSWORD', 'yxcv4321')}")
+            # Debug (do NOT print the password):
+            # print(f"created superuser: {os.getenv('DJANGO_SUPERUSER', 'admin')}")
             print("Django Admin/Superuser account created")
         else:
             print("Admin accounts can only be initialized if no Accounts exist")

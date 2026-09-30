@@ -57,7 +57,7 @@ class TokenPairOut(Schema):
     refresh: str
     access_expires_in: int
     refresh_expires_in: int
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105  # standard JWT token-type value
 
 
 class LoginOut(Schema):

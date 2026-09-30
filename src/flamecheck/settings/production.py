@@ -1,4 +1,5 @@
-"""Production settings for FlameCheck.
+"""
+Production settings for FlameCheck.
 
 The database backend is inherited from :mod:`.base`: **SQLite by default**.
 To run production on PostgreSQL, set ``DATABASE_URL`` in the environment
@@ -7,10 +8,11 @@ is required — Django, migrations and the entrypoint are engine-agnostic.
 """
 
 from .base import *  # noqa: F403
+from .base import env
 
 DEBUG = False
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])  # noqa: F405
-CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])  # noqa: F405
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
+CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 # Security hardening (assumes a TLS-terminating reverse proxy such as nginx)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

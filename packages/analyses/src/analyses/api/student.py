@@ -177,7 +177,7 @@ def analysis_result(request, analysis_id: int):
     instance = _owned_instance(request, analysis_id)
     submissions = instance.submissions.filter(student=request.user).order_by("submitted_at", "id")
     if not submissions:
-        raise HttpError(404, "No submissions yet – the result is not available.")
+        raise HttpError(404, "No submissions yet  -  the result is not available.")
     subs_out: list[dict] = []
     for s in submissions:
         breakdown = s.ion_breakdown()

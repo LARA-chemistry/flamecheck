@@ -27,11 +27,16 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=flamecheck.settings.development
       # DATABASE_URL is read from ../.env. When unset the app falls back to
-      # SQLite at /code/db.sqlite3 (the repo root, mounted as /code).
-      # To use Postgres, activate the profile below and set DATABASE_URL in .env.
+      # SQLite at /opt/db/db.sqlite3 (a volume). To use Postgres, activate the
+      # profile below and set DATABASE_URL in .env.
     volumes:
-      # Mount the repo so the SQLite file (and code) persist and edits are live.
-      - ..:/code
+      # Mount only the editable source trees so Python edits are live under the
+      # autoreloading server. The venv, entrypoint, manage.py and the built
+      # frontend (frontend/dist, served via WhiteNoise) come from the image.
+      - ../src:/opt/src
+      - ../packages:/opt/packages
+      # Persist the SQLite database (separate from the Postgres data volume).
+      - flamecheck_db:/opt/db
     # Only wait on the DB service when the postgres profile is active.
     depends_on:
       postgres:
@@ -59,3 +64,4 @@ services:
 
 volumes:
   pgdata:
+  flamecheck_db:

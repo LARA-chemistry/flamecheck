@@ -75,7 +75,11 @@ class GradingConfig(models.Model):
         verbose_name_plural = _("Grading configurations")
 
     def __str__(self) -> str:
-        return f"Grading ({self.grading_mode}, {self.points_per_correct_ion} pts/ion, max {self.max_submissions_per_analysis})"
+        return (
+            f"Grading ({self.grading_mode}, "
+            f"{self.points_per_correct_ion} pts/ion, "
+            f"max {self.max_submissions_per_analysis})"
+        )
 
     @classmethod
     def get_instance(cls) -> "GradingConfig":

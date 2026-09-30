@@ -528,15 +528,16 @@ The working mount:
 
 ```python
 # src/flamecheck/urls.py
-api_url_path = settings.API_PREFIX.lstrip("/") + "/"          # "api/v1/"
+api_url_path = settings.API_PREFIX.lstrip("/") + "/"  # "api/v1/"
 from flamecheck.api import api
+
 _ninja_patterns, _ninja_app_name, _ninja_namespace = api.urls  # once only
 urlpatterns = [
     path("admin/", admin.site.urls),
     path(api_url_path, include((_ninja_patterns, _ninja_app_name), namespace="api")),
     path("", include("allauth.urls")),
     path("accounts/", include("users.urls")),
-    path("", frontend_index, name="frontend-index"),            # SPA catch-all
+    path("", frontend_index, name="frontend-index"),  # SPA catch-all
 ]
 ```
 

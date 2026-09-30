@@ -21,7 +21,7 @@ STATUS_SUBMITTED = "submitted"
 
 class AnalysisType(models.Model):
     """
-    A kind of analysis (e.g. 'Analysis 3 – cations I+II & anions').
+    A kind of analysis (e.g. 'Analysis 3  -  cations I+II & anions').
 
     Defines the *possible* ion set that is shown to students. The concrete
     correct answer lives on the :class:`AnalysisInstance`.
@@ -104,7 +104,7 @@ class AnalysisInstance(models.Model):
         ordering = ["number", "window_start"]
 
     def __str__(self) -> str:
-        return f"{self.type.name} (#{self.number}, {self.window_start:%Y-%m-%d %H:%M} – {self.window_end:%H:%M})"
+        return f"{self.type.name} (#{self.number}, {self.window_start:%Y-%m-%d %H:%M}  -  {self.window_end:%H:%M})"
 
     # -- status / scoring --------------------------------------------------
     def window_status(self) -> str:

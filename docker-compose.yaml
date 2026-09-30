@@ -1,45 +1,77 @@
-# Description: Docker compose file for  - for production 
-# with all services
+# Production compose for FlameCheck.
+#
 # A qualitative analysis submission system for students in chemistry.
-# docker compose exec service_name bash
-# docker compose exec -1 bash
+#
+# The stack is a single application container (SQLite by default — no external
+# database service required). Everything is configurable through the `.env`
+# file (copy `.env-template` to `.env` and adjust):
+#
+#   DOCKER_IMAGE_TAG    image tag to build/run (default: latest)
+#   APP_PORT            host port to expose (default: 8000)
+#   DATABASE_URL        SQLite (default) or postgres:// to run on PostgreSQL
+#   DJANGO_SECRET_KEY   REQUIRED in production (long, random)
+#   DJANGO_ALLOWED_HOSTS comma-separated hosts the server responds to
+#   GUNICORN_WORKERS    number of gunicorn workers (default: 3)
+#
+# To run on PostgreSQL, add a `db` service (see below) and set DATABASE_URL in
+# `.env` to point at it.
+#
+# Usage:
+#   cp .env-template .env   # then edit .env (secret key, hosts, ...)
+#   docker compose -f docker-compose.yaml --env-file .env up -d --build
+#   docker compose -f docker-compose.yaml --env-file .env exec flamecheck python manage.py shell
+#   docker compose -f docker-compose.yaml --env-file .env down
 
-
-#networks:
-#   lan_access:
-#     driver: bridge
-
-#volumes:
-  # add volumnes here ...
-  
 services:
-  # mdns_reflector:
-  #   image: flungo/avahi
-  #   container_name: mDNS_Reflector
-  #   ports:
-  #     - "5354:5353/udp"  # Expose mDNS port
-  #   volumes:
-  #     - /var/run/avahi:/var/run/avahi
-
-
-  :
-    image: "path_to_registry/-dev:${DOCKER_IMAGE_TAG}"
-    # ports:
-    #   - 50065:50065
-    # command:  >
-    #     bash -c "source ./venv/bin/activate &&
-    #     python -m "
-    # links:
-    #   -  # network link to other service
-    # volumes:
-    #   - .//certificates:/srv//certificates
-    # depends_on:
-    #   - # add dependent services here - it then waits until they are available ...
-    #   - mdns_reflector
+  flamecheck:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: flamecheck:${DOCKER_IMAGE_TAG:-latest}
+    container_name: flamecheck
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
     env_file:
-      - .env  # adjust .env file (copy and rename the .env-template)
-    # network_mode:
-    #   "host"
-    #networks:
-    #  - lan_access
-    #  - default
+      - .env
+    environment:
+      # The Dockerfile defaults to the production settings; override here so
+      # staging can reuse this file with DJANGO_DEBUG=true if desired.
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-flamecheck.settings.production}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      # DATABASE_URL is taken from .env (SQLite default, or postgres://).
+    volumes:
+      # Persist the SQLite database and collected static files.
+      - flamecheck_db:/opt/db
+      - flamecheck_static:/opt/staticfiles
+    # Only wait on the DB service when it is part of the stack.
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  # Optional PostgreSQL. Activate by setting DATABASE_URL=postgres://flamecheck:flamecheck@db:5432/flamecheck
+  # in `.env` and removing the `profiles:` line (or running with `--profile postgres`).
+  db:
+    image: postgres:16-alpine
+    container_name: flamecheck-db
+    profiles:
+      - postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flamecheck}
+      POSTGRES_USER: ${POSTGRES_USER:-flamecheck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flamecheck}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flamecheck}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  flamecheck_db:
+  flamecheck_static:
+  db_data:

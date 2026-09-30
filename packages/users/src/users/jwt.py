@@ -18,8 +18,9 @@ from django.conf import settings
 from django.utils import timezone
 from ninja import errors as ninja_errors
 
-ACCESS_TOKEN = "access"
-REFRESH_TOKEN = "refresh"
+# These are JWT token *type* names (the `token_type` value), not secret values.
+ACCESS_TOKEN = "access"  # noqa: S105
+REFRESH_TOKEN = "refresh"  # noqa: S105
 
 
 class TokenError(Exception):

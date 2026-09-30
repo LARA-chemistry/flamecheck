@@ -116,9 +116,9 @@ linting_formatting:
   stage: compliance
   script:
     - echo "Check linting"
-    # - uvx ruff check src
+    - uvx ruff check .
     - echo "Check formatting"
-    # - uvx ruff format --check src
+    - uvx ruff format --check .
   extends:
     - .run_on_all_branches
     # - .run_on_manual
@@ -130,7 +130,9 @@ test:
   stage: test
   script:
     - python --version
-    # - pytest -vv -s --cov=src --cov-report=term --cov-report=xml
+    # Run the canonical test suite (pyproject.toml configures pytest to collect
+    # from tests/ and emit the Cobertura coverage report referenced below).
+    - uv run pytest
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
   artifacts:
     reports:
@@ -160,8 +162,15 @@ build-packages:
     - .parallel_build_package_jobs
 
 # --- docker ----
-    
-docker-build-dev:
+#
+# Builds and pushes BOTH the development and production images to the GitLab
+# container registry. It is activated for every "patch" pipeline — i.e. the
+# develop branch, the main branch and any merge request (see
+# `.run_on_develop_or_main`) — so the image is always rebuilt when code lands.
+# Images are tagged with the short commit SHA, the semantic (LARA) version and
+# `latest` (production) / `dev-latest` (development).
+
+docker-build:
   # Official docker image.
   image: docker:latest
   stage: build
@@ -176,9 +185,10 @@ docker-build-dev:
     #DOCKER_HOST: tcp://docker:2376
     #DOCKER_TLS_CERTDIR: "/certs"
     #CONTAINER_TEST_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
-    DOCKER_BUILD: $CI_REGISTRY_IMAGE/flamecheck-build-dev:latest
+    DOCKER_BUILD: $CI_REGISTRY_IMAGE/flamecheck-build:latest
     CONTAINER_RELEASE_IMAGE: $CI_REGISTRY_IMAGE/flamecheck:${CI_COMMIT_SHORT_SHA}
     CONTAINER_RELEASE_IMAGE_DEV: $CI_REGISTRY_IMAGE/flamecheck-dev:${CI_COMMIT_SHORT_SHA}
+    CONTAINER_RELEASE_IMAGE_LATEST: $CI_REGISTRY_IMAGE/flamecheck:latest
     CONTAINER_RELEASE_IMAGE_DEV_LATEST: $CI_REGISTRY_IMAGE/flamecheck-dev:latest
 
   before_script:
@@ -187,13 +197,27 @@ docker-build-dev:
     - docker buildx create --use --driver docker-container --name ci-builder || true
     - docker buildx inspect --bootstrap
   script:
-    - CONTAINER_RELEASE_IMAGE_DEV_VER="$CI_REGISTRY_IMAGE/flamecheck-dev:${LARA_VERSION}"
-    # development image
-    - docker buildx build --push -f docker/Dockerfile.dev --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:cache --cache-to type=registry,ref=$CI_REGISTRY_IMAGE:cache,mode=max -t "$CONTAINER_RELEASE_IMAGE_DEV" -t "$CONTAINER_RELEASE_IMAGE_DEV_VER" -t "$CONTAINER_RELEASE_IMAGE_DEV_LATEST" --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
-    # buildx --push already pushes all tags, so no separate push commands needed
-    # production image
-    #- docker build --pull -f docker/Dockerfile -t "$CONTAINER_RELEASE_IMAGE" .
-    #- docker push "$CONTAINER_RELEASE_IMAGE"
+    # Production image (gunicorn + production settings + built frontend).
+    - |
+      docker buildx build --push \
+        -f docker/Dockerfile \
+        --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:cache \
+        --cache-to type=registry,ref=$CI_REGISTRY_IMAGE:cache,mode=max \
+        -t "$CONTAINER_RELEASE_IMAGE" \
+        -t "$CI_REGISTRY_IMAGE/flamecheck:${LARA_VERSION}" \
+        -t "$CONTAINER_RELEASE_IMAGE_LATEST" \
+        .
+    # Development image (runserver + dev settings + dev tools + built frontend).
+    - |
+      docker buildx build --push \
+        -f docker/Dockerfile.dev \
+        --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:cache \
+        --cache-to type=registry,ref=$CI_REGISTRY_IMAGE:cache,mode=max \
+        -t "$CONTAINER_RELEASE_IMAGE_DEV" \
+        -t "$CI_REGISTRY_IMAGE/flamecheck-dev:${LARA_VERSION}" \
+        -t "$CONTAINER_RELEASE_IMAGE_DEV_LATEST" \
+        .
+    # buildx --push already pushes all tags, so no separate push commands needed.
   extends:
     - .run_on_develop_or_main
 

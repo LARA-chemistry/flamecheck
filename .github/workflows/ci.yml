@@ -32,15 +32,12 @@ jobs:
       - uses: wagoid/commitlint-github-action@v6.0.1
 
   test:
+    # The project pins Python 3.13 (see pyproject.toml: requires-python) and the
+    # lockfile is generated for 3.13, so only 3.13 can install the environment.
+    # The OS matrix still exercises the platform-specific install paths.
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.9"
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
         os:
           - ubuntu-latest
           - windows-latest
@@ -48,11 +45,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        id: setup-python
-        with:
-          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
       - run: uv sync --no-python-downloads
         shell: bash
       - run: uv run pytest

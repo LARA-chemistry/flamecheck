@@ -1,0 +1,68 @@
+# Staging compose for FlameCheck.
+#
+# A pre-production environment that mirrors production (same image, same
+# gunicorn entrypoint) but runs with debugging enabled and a separate default
+# port, so it can be inspected / smoke-tested before a production deploy.
+# Everything is configurable through the `.env` file.
+#
+#   DOCKER_IMAGE_TAG     image tag to build/run (default: latest)
+#   APP_PORT             host port to expose (default: 8001)
+#   DATABASE_URL         SQLite (default) or postgres:// to run on PostgreSQL
+#   DJANGO_SECRET_KEY    required (long, random)
+#   DJANGO_ALLOWED_HOSTS comma-separated hosts the server responds to
+#   GUNICORN_WORKERS     number of gunicorn workers (default: 2)
+#
+# Usage:
+#   cp .env-template .env   # then edit .env
+#   docker compose -f docker-compose-staging.yaml --env-file .env up -d --build
+#   docker compose -f docker-compose-staging.yaml --env-file .env down
+
+services:
+  flamecheck:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: flamecheck-staging:${DOCKER_IMAGE_TAG:-latest}
+    container_name: flamecheck-staging
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8001}:8000"
+    env_file:
+      - .env
+    environment:
+      # Staging uses the production settings with DEBUG turned on.
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-flamecheck.settings.production}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      # DATABASE_URL is taken from .env (SQLite default, or postgres://).
+    volumes:
+      - flamecheck_db:/opt/db
+      - flamecheck_static:/opt/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  # Optional PostgreSQL (activate with --profile postgres + DATABASE_URL).
+  db:
+    image: postgres:16-alpine
+    container_name: flamecheck-staging-db
+    profiles:
+      - postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flamecheck}
+      POSTGRES_USER: ${POSTGRES_USER:-flamecheck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flamecheck}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flamecheck}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  flamecheck_db:
+  flamecheck_static:
+  db_data:

@@ -52,7 +52,7 @@ class LoginAttemptAdmin(admin.ModelAdmin):
 
 @admin.register(StudentAssignment)
 class StudentAssignmentAdmin(admin.ModelAdmin):
-    """Admin for student–analysis assignments."""
+    """Admin for student - analysis assignments."""
 
     list_display = ["student", "instance", "number", "course"]
     search_fields = ["student__username"]

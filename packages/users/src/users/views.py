@@ -27,7 +27,7 @@ class UserCreateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
     def get_object(self, queryset: QuerySet | None = None) -> User:
         """Return the current authenticated user for profile onboarding."""
-        assert self.request.user.is_authenticated  # type guard
+        assert self.request.user.is_authenticated  # noqa: S101  # type guard
         return self.request.user
 
     def form_valid(self, form):
@@ -56,11 +56,11 @@ class UserUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     success_message = _("Information successfully updated")
 
     def get_success_url(self) -> str:
-        assert self.request.user.is_authenticated  # type guard
+        assert self.request.user.is_authenticated  # noqa: S101  # type guard
         return self.request.user.get_absolute_url()
 
     def get_object(self, queryset: QuerySet | None = None) -> User:
-        assert self.request.user.is_authenticated  # type guard
+        assert self.request.user.is_authenticated  # noqa: S101  # type guard
         return self.request.user
 
 
@@ -90,11 +90,11 @@ class UserProfileView(SuccessMessageMixin, UpdateView):
         return context
 
     def get_success_url(self) -> str:
-        assert self.request.user.is_authenticated  # type guard
+        assert self.request.user.is_authenticated  # noqa: S101  # type guard
         return self.request.user.get_absolute_url()
 
     def get_object(self, queryset: QuerySet | None = None) -> User:
-        assert self.request.user.is_authenticated  # type guard
+        assert self.request.user.is_authenticated  # noqa: S101  # type guard
         return self.request.user
 
 

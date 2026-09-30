@@ -1,4 +1,5 @@
-"""Admin endpoints: CRUD for analysis types, instances, assignments, grading config.
+"""
+Admin endpoints: CRUD for analysis types, instances, assignments, grading config.
 
 All mutating endpoints are admin-only and logged to the audit logger.
 """
@@ -280,7 +281,7 @@ def delete_analysis_instance(request, instance_id: int):
 # ---- assignments -----------------------------------------------------------------
 @router.get("/assignments", response=list[dict])
 def list_assignments(request, course_id: int | None = None):
-    """List student–instance assignments (admin)."""
+    """List student - instance assignments (admin)."""
     _admin_user(request)
     qs = StudentAssignment.objects.all().select_related("student", "instance", "instance__type", "course")
     if course_id is not None:
