@@ -36,15 +36,16 @@ stages:
 # Cache both uv cache (downloaded packages) and the virtual environment
 # This dramatically speeds up jobs by avoiding re-downloads and re-installations
 cache:
+  # Include the uv version in BOTH cache keys so a uv version change never
+  # restores a package cache or venv built by an incompatible uv (the image tag
+  # is now pinned, so this is stable).
   - key:
       files:
         - uv.lock
-      prefix: uv-cache-$PYTHON_VERSION
+      prefix: uv-cache-$PYTHON_VERSION-$UV_VERSION
     paths:
       - $UV_CACHE_DIR
     policy: pull-push
-  # Include the uv version in the key: a uv version change rebuilds the venv so
-  # we never restore a .venv created by an incompatible uv.
   - key:
       files:
         - uv.lock
@@ -59,17 +60,18 @@ cache:
 before_script:
   - python -V # Print out python version for debugging
   - uv --version # Print out uv version for debugging
-  # Always reconcile the environment with the lockfile. `uv sync` is idempotent
-  # (fast when the venv already matches) but it REPAIRS a stale or incomplete
-  # cached .venv (e.g. one built by a different uv version), so we do not trust
-  # a cached venv blindly.
+  # Reconcile the environment with the lockfile. `uv sync` is idempotent (fast
+  # when the venv already matches) but repairs a stale/incomplete cached venv.
+  # If a cached uv package store is corrupt or was written by another uv, the
+  # first sync can fail - in that case clear the cache and the venv and retry
+  # from scratch.
   - |
-    if [ ! -d ".venv" ]; then
-      echo "No cached venv - installing dependencies..."
-    else
-      echo "Repairing/validating cached venv..."
-    fi
-    uv sync --group dev --frozen
+    set -e
+    uv sync --group dev --frozen || {
+      echo "!! 'uv sync' failed - clearing cache/venv and retrying from scratch"
+      rm -rf .venv "$UV_CACHE_DIR"
+      uv sync --group dev --frozen
+    }
 
 .parallel_python_jobs:
     parallel:
