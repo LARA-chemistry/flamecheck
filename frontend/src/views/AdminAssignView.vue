@@ -93,11 +93,14 @@
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInputNumber, NSelect, NDataTable, NCard, NFormItem,
   NModal, NAlert, NEmpty, NText, NTag,
 } from 'naive-ui'
+
+const route = useRoute()
 
 const message = ref('')
 const msgType = ref('success')
@@ -288,6 +291,13 @@ async function saveAssignments() {
 onMounted(async () => {
   await loadCourses()
   await loadStudents()
+  // Pre-select a course when arriving from the course overview ("Analyses"),
+  // e.g. /admin/assignments?course=13.
+  const q = Number(route.query.course)
+  if (q && courses.value.some((c) => c.id === q)) {
+    courseId.value = q
+    onCourseChange()
+  }
 })
 </script>
 

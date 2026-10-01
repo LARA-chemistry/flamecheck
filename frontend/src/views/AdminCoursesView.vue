@@ -93,17 +93,52 @@
       </template>
     </n-modal>
 
+    <!-- Assign (enroll) students into the course -->
+    <n-modal v-model:show="assign.show" preset="card" :title="`Assign students — ${assign.courseName}`" style="width: 520px; max-width: 94vw">
+      <n-space vertical>
+        <n-text depth="3" style="font-size: 13px; display:block">
+          Students you select are enrolled in this course (their current course, if any, is replaced).
+        </n-text>
+        <n-select
+          v-model:value="assign.studentIds"
+          :options="assignableStudentOptions"
+          multiple
+          filterable
+          placeholder="Select students to add to this course"
+        />
+        <n-text v-if="alreadyInCourseCount" depth="3" style="font-size: 13px">
+          {{ alreadyInCourseCount }} student{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
+        </n-text>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="assign.show = false">Cancel</n-button>
+          <n-button
+            type="primary"
+            :loading="assign.saving"
+            :disabled="assign.studentIds.length === 0"
+            @click="saveAssign"
+          >
+            Assign {{ assign.studentIds.length || '' }} Student{{ assign.studentIds.length === 1 ? '' : 's' }}
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <n-alert v-if="message" :type="msgType">{{ message }}</n-alert>
   </n-space>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
   NModal, NSwitch, NTag, NEmpty, NAlert,
 } from 'naive-ui'
+
+const router = useRouter()
 
 const message = ref('')
 const msgType = ref('success')
@@ -138,8 +173,35 @@ const grading = ref({
   },
 })
 
+// Assign (enroll) students into a course.
+const assign = ref({
+  show: false,
+  saving: false,
+  courseId: null,
+  courseName: '',
+  studentIds: [],
+})
+
 const courseStudents = computed(() =>
   students.value.filter((s) => s.course_id === selected.value?.id),
+)
+
+// Students that can be enrolled into the course being assigned to. Everyone is
+// a candidate (a student can be moved from one course to another); those already
+// in the target course are flagged so the admin knows.
+const assignableStudentOptions = computed(() =>
+  students.value.map((s) => {
+    const inTarget = s.course_id === assign.value.courseId
+    return {
+      label: inTarget ? `${s.name || s.username} (already in course)` : `${s.name || s.username} (${s.course_name ? 'in ' + s.course_name : 'no course'})`,
+      value: s.id,
+      disabled: inTarget,
+    }
+  }),
+)
+
+const alreadyInCourseCount = computed(
+  () => students.value.filter((s) => s.course_id === assign.value.courseId).length,
 )
 
 const courseCols = [
@@ -155,9 +217,11 @@ const courseCols = [
     title: 'Actions',
     key: 'actions',
     render: (row) =>
-      h('div', { style: 'display:flex;gap:6px' }, [
+      h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
         h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => openEdit(row) }, () => 'Edit'),
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openAssign(row) }, () => 'Assign'),
         h(NButton, { size: 'tiny', secondary: true, onClick: () => selectCourse(row) }, () => 'Students'),
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openAnalyses(row) }, () => 'Analyses'),
         h(NButton, { size: 'tiny', secondary: true, onClick: () => openGrading(row) }, () => 'Grading'),
       ]),
   },
@@ -302,6 +366,42 @@ async function saveGrading() {
   } finally {
     grading.value.saving = false
   }
+}
+
+// ---- assign (enroll) students into a course --------------------------------
+function openAssign(row) {
+  assign.value = { show: true, saving: false, courseId: row.id, courseName: row.name, studentIds: [] }
+  // Make sure we have a fresh student list (with current course assignments).
+  loadStudents()
+}
+
+async function saveAssign() {
+  const a = assign.value
+  if (a.studentIds.length === 0) return
+  a.saving = true
+  let ok = 0
+  try {
+    for (const sid of a.studentIds) {
+      await api.put(`/admin/students/${sid}/course`, { student_id: sid, course_id: a.courseId })
+      ok += 1
+    }
+    message.value = `${ok} student${ok === 1 ? '' : 's'} assigned to ${a.courseName}.`
+    msgType.value = 'success'
+    a.show = false
+    // Refresh the student list; the "Students" panel (if open) re-filters itself.
+    await loadStudents()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    a.saving = false
+  }
+}
+
+// ---- analyses: open the per-course analysis-assignment workflow ------------
+function openAnalyses(row) {
+  // Reuse the Assignments page, pre-selecting this course via the query param.
+  router.push({ name: 'admin-assignments', query: { course: String(row.id) } })
 }
 
 onMounted(() => {
