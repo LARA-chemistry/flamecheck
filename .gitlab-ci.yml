@@ -12,6 +12,10 @@ variables:
   DOCS_BUILD_DIR: "docs/_build"
   PYTHON_VERSION: "3.13"
   UV_VERSION: "0.10.0"
+  # Node.js major version used to build the Vue/Vite frontend in CI. Keep in
+  # sync with the NODE_VERSION ARG in docker/Dockerfile so the CI build matches
+  # the production image build.
+  NODE_VERSION: "22"
   BASE_LAYER: "trixie"
   LARA_VERSION: "0.2.108"
   UV_PUBLISH_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
@@ -150,6 +154,35 @@ test:
   stage: test
   script:
     - python --version
+    # The default image (ghcr.io/astral-sh/uv:...) ships Python + uv but NOT
+    # Node.js. Install a Node.js runtime here (matching $NODE_VERSION, which is
+    # kept in sync with docker/Dockerfile) so the Vue/Vite frontend can be
+    # built before the tests run.
+    - |
+      set -e
+      ARCH="$(uname -m)"
+      case "$ARCH" in
+        x86_64) NODE_ARCH="x64" ;;
+        aarch64) NODE_ARCH="arm64" ;;
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;;
+      esac
+      curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}.0.0/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
+      tar -xJf /tmp/node.tar.xz -C /opt/
+      ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/node" /usr/local/bin/node
+      ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/npm" /usr/local/bin/npm
+      ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/npx" /usr/local/bin/npx
+      node --version
+      npm --version
+    # Build the Vue/Vite frontend into frontend/dist. This is REQUIRED for the
+    # SPA routing tests (tests/test_spa_routing.py): the Django catch-all view
+    # (src/flamecheck/urls.py:frontend_index) reads the BUILT frontend/dist/
+    # index.html off disk and serves it for client-side routes. Without a
+    # prebuilt dist/, the view falls back to a plain-text "frontend has not
+    # been built yet" message and the 'id="app"' assertion fails. The
+    # production Docker image builds the frontend the same way, so building it
+    # here keeps the test environment faithful to production.
+    - npm --prefix frontend ci --no-audit --no-fund
+    - npm --prefix frontend run build
     # Run the canonical test suite (pyproject.toml configures pytest to collect
     # from tests/ and emit the Cobertura coverage report referenced below).
     - uv run pytest
