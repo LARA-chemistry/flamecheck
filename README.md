@@ -68,7 +68,7 @@ diagrams — see the
 |--------------|------------|
 | Backend      | Django 6 + **django-ninja** REST API |
 | Auth         | **PyJWT** (HS256, `token_version` revocation) + django-allauth (SSO-ready) |
-| Frontend     | **Vite 7 · Vue 3 · Pinia · Vue Router · Naive UI** |
+| Frontend     | **Vite 6 · Vue 3 · Pinia · Vue Router · Naive UI** |
 | Barcode scan | **@zxing/browser** (webcam + manual/USB fallback) |
 | Database     | **SQLite by default**; PostgreSQL optional (set `DATABASE_URL`) |
 | Tooling      | **uv** workspace, ruff, pytest, WhiteNoise, Gunicorn |
@@ -79,7 +79,10 @@ diagrams — see the
 
 ```
 flamecheck/
-├── .env-template          # env template (copy to .env); configures DB, JWT, etc.
+├── .env-template          # env template (copy to .env); DB, JWT, superuser, demo
+├── docker-compose.yaml            # production compose (SQLite default, Postgres opt-in)
+├── docker-compose-staging.yaml    # staging compose (boots with the demo dataset)
+├── docker-compose-dev.yaml        # development compose (autoreloading dev server)
 ├── src/flamecheck/        # Django project: settings, URLs, ninja API wiring
 │   └── settings/          #   base / development / production / test
 ├── packages/              # uv workspace members
@@ -87,9 +90,9 @@ flamecheck/
 │   ├── substances/        #   Ion + Substance catalog (+ JSON seed data)
 │   ├── config/            #   Course, GradingConfig, AppSettings
 │   └── analyses/          #   AnalysisType/Instance/Submission + scoring
-├── frontend/              # Vite + Vue 3 SPA
+├── frontend/              # Vite 6 + Vue 3 SPA
 ├── tests/                 # pytest suite
-├── docker/                # Dockerfiles, compose, entrypoints
+├── docker/                # Dockerfiles + entrypoints (+ a dev-full compose)
 └── docs/                  # Sphinx docs (development/ has spec + architecture)
 ```
 
@@ -118,19 +121,25 @@ cd flamecheck
 #    because the defaults are SQLite + development.
 cp .env-template .env
 
-# 4. Python environment (creates .venv, installs the 4 workspace packages)
+# 3. Python environment (creates .venv, installs the 4 workspace packages)
 uv sync
 
-# 5. Frontend dependencies + build (output → frontend/dist/)
+# 4. Frontend dependencies + build (output → frontend/dist/)
 npm --prefix frontend install
 npm --prefix frontend run build
 
-# 6. Database schema (SQLite by default) + seed the ion/substance catalog
+# 5. Database schema (SQLite by default) + seed the ion/substance catalog
 uv run python manage.py migrate
 uv run python manage.py import_catalog
 
-# 7. Create a first admin user, then set its role to `admin`
-uv run python manage.py createsuperuser
+# 6. (Optional) load a rich demo dataset — courses, users, analyses and
+#    graded submissions (all accounts share the password FlameCheck32!).
+#    Use --reset to wipe and re-seed the domain from scratch.
+uv run python manage.py seed_demo
+
+# 7. Create a first admin user (credentials come from .env — see
+#    DJANGO_SUPERUSER_* in .env-template), then set its role to `admin`.
+uv run python manage.py init_admin
 uv run python manage.py shell -c "from users.models import User; User.objects.filter(username='admin').update(role='admin')"
 
 # 8. Run the dev server
@@ -168,12 +177,12 @@ cp .env-template .env
 #       DATABASE_URL if you want PostgreSQL (see .env-template for examples).
 
 # 2. Build and start. SQLite (default) is a single container:
-docker compose -f docker/docker-compose.dev-full.yaml up --build -d
+docker compose -f docker-compose.yaml --env-file .env up --build -d
 
 # 3. To use PostgreSQL instead, activate the profile (it starts a Postgres
 #    container) and set DATABASE_URL in .env first. Install the driver:
 uv sync --extra postgres
-docker compose -f docker/docker-compose.dev-full.yaml --profile postgres up --build -d
+docker compose -f docker-compose.yaml --env-file .env --profile postgres up --build -d
 ```
 
 The entrypoint (`docker/entrypoint.production.sh`) runs `migrate` +
@@ -183,6 +192,29 @@ same thing for SQLite and PostgreSQL. Key production settings live in
 `DJANGO_SETTINGS_MODULE=flamecheck.settings.production`): secure cookies,
 HTTPS, WhiteNoise-compressed static serving and the Gunicorn worker count
 (`GUNICORN_WORKERS`).
+
+### Staging
+
+A pre-production environment that mirrors production (same image, same
+Gunicorn entrypoint) but runs with **debugging enabled** and a separate default
+port (8001). It **boots with the demo dataset already loaded** — courses, users,
+analyses and a handful of graded submissions (every demo account shares the
+password `FlameCheck32!`) — so it is ready to explore out of the box.
+
+```bash
+cp .env-template .env
+#    -> set DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, and (optionally) APP_PORT.
+
+# Build and start (SQLite default; the demo dataset is seeded on boot):
+docker compose -f docker-compose-staging.yaml --env-file .env up --build -d
+
+# Re-seed the demo dataset from scratch (wipe the seeded domain first):
+SEED_DEMO=reset docker compose -f docker-compose-staging.yaml --env-file .env up --build -d
+```
+
+Seeding is controlled by the `SEED_DEMO` variable (default `true` in the
+staging compose, unset elsewhere): `true` re-seeds idempotently, `reset` wipes
+and re-seeds, and an empty value skips it.
 
 > **TLS / reverse proxy.** In front of the container, use Nginx (or Caddy with
 > automatic Let's Encrypt) to serve over HTTPS and proxy `/api/` and `/static/`
@@ -234,7 +266,8 @@ submission.
   grading mode (per-ion / per-analysis), submission limit, and final-score
   strategy (best / last).
 - **Analysis types & instances** — define the possible-ion sets and concrete
-  sessions (time window + correct answer set), then assign them to students.
+  sessions (time window + correct answer set), then assign them to the students
+  of a **course** (the Courses view is the admin landing page).
 - **Ion / substance catalog** — importable from JSON/CSV.
 
 ### REST API
@@ -259,11 +292,13 @@ Student, assistant and admin endpoints are documented in the
 ## Testing
 
 ```bash
-uv run pytest            # full backend suite (73 tests, coverage → coverage.xml)
+uv run pytest            # full backend suite (178 tests, coverage → coverage.xml)
 ```
 
-Frontend tests use Vitest + Vue Test Utils; end-to-end flows (login →
-submission → result) are covered by Cypress. See
+The suite covers the REST API (auth, student, assistant, admin), the factories,
+the scoring/grading logic and the demo seeding. End-to-end flows (login →
+submission → result) are exercised manually against a running dev/staging
+instance. See
 [§4.4 Testing](docs/development/flamecheck_software_specification.md) in the
 specification.
 
