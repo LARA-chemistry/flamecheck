@@ -26,7 +26,7 @@ image: ghcr.io/astral-sh/uv:$UV_VERSION-python${PYTHON_VERSION}-$BASE_LAYER
 
 stages:
   - compliance
-  # - test
+  - test
   - build
   - publish_pypi
   - build_and_publish_docs
