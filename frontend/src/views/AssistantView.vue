@@ -178,7 +178,7 @@ import { homeForRole } from '../router'
 import { api } from '../api/client'
 import {
   NCard, NSpin, NEmpty, NCollapse, NCollapseItem, NSpace, NButton,
-  NDataTable, NStatistic, NInputNumber, NModal, NTag,
+  NDataTable, NStatistic, NInputNumber, NModal, NTag, NProgress,
 } from 'naive-ui'
 import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
@@ -201,7 +201,13 @@ const cols = [
   {
     title: 'Analyses',
     key: 'analyses',
-    render: (row) => `${row.analyses.filter((a) => a.window_status === 'submitted').length}/${row.analyses.length}`,
+    render: (row) => `${submittedOf(row)}/${row.analyses.length}`,
+  },
+  {
+    title: 'Progress',
+    key: 'progress',
+    width: 160,
+    render: (row) => renderProgress(row),
   },
   {
     title: 'Avg',
@@ -216,6 +222,32 @@ const cols = [
       h('button', { class: 'link-btn', onClick: () => openStudent(row) }, 'Details'),
   },
 ]
+
+// Number of analyses the student has submitted (window_status === 'submitted').
+function submittedOf(row) {
+  return row.analyses.filter((a) => a.window_status === 'submitted').length
+}
+
+// A per-student progress bar: how far through their assigned analyses they are.
+// Green when complete, orange while in progress, neutral when nothing submitted.
+function renderProgress(row) {
+  const total = row.analyses.length
+  const done = submittedOf(row)
+  const pct = total ? Math.round((done / total) * 100) : 0
+  const status = total && done >= total ? 'success' : done > 0 ? 'error' : 'default'
+  return h(
+    NProgress,
+    {
+      percentage: pct,
+      status,
+      height: 10,
+      showIndicator: true,
+      fillBorder: true,
+      style: 'min-width: 120px',
+    },
+    () => h('div', { class: 'progress-label' }, `${done}/${total} · ${pct}%`),
+  )
+}
 
 // Make the whole roster row clickable to open the student's statistics.
 function rowProps(row) {
@@ -381,6 +413,11 @@ onMounted(load)
 }
 .link-btn:hover {
   text-decoration: underline;
+}
+.progress-label {
+  margin-top: 2px;
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
 }
 .analysis-card__head {
   display: flex;
