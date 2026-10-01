@@ -1,10 +1,10 @@
 <template>
-  <div class="result-card" :class="result.passed ? 'result-card--pass' : 'result-card--fail'">
-    <!-- Verdict banner -->
-    <div class="result-card__verdict">
+  <div class="result-card">
+    <!-- Overall verdict banner (from the final submission / total score) -->
+    <div class="result-card__verdict" :class="passed ? 'result-card__verdict--pass' : 'result-card__verdict--fail'">
       <span class="result-card__icon" aria-hidden="true">
         <!-- Green checkmark (passed) -->
-        <svg v-if="result.passed" viewBox="0 0 52 52" width="46" height="46">
+        <svg v-if="passed" viewBox="0 0 52 52" width="46" height="46">
           <circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" stroke-width="3" />
           <path d="M15 27l7 7 15-16" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -15,53 +15,87 @@
         </svg>
       </span>
       <div class="result-card__verdict-text">
-        <h3 class="result-card__headline">{{ result.passed ? 'Passed' : 'Failed' }}</h3>
+        <h3 class="result-card__headline">{{ passed ? 'Passed' : 'Failed' }}</h3>
         <p class="result-card__sub">
-          {{ result.passed
-            ? 'You identified the ions correctly.'
-            : 'No correct ions in this attempt - try the breakdown below.' }}
+          {{ passed
+            ? 'You identified the ions correctly in your final attempt.'
+            : 'Review the attempts below to see what to add or remove.' }}
         </p>
       </div>
       <div class="result-card__score">
-        <span class="result-card__score-value">{{ result.score }}</span>
-        <span class="result-card__score-max">/ {{ result.ideal_score }}</span>
+        <span class="result-card__score-value">{{ totalScore }}</span>
+        <span class="result-card__score-max">/ {{ idealScore }}</span>
       </div>
     </div>
 
-    <div class="result-card__meta">
-      <span class="result-card__meta-item">Submission #{{ result.submission_number }}</span>
-      <span v-if="result.penalty" class="result-card__meta-item">Penalty -{{ result.penalty }}</span>
-    </div>
+    <!-- Submission history (final first, then earlier attempts) -->
+    <div class="result-card__history">
+      <article
+        v-for="s in ordered"
+        :key="s.id"
+        class="attempt"
+        :class="s.is_last ? 'attempt--final' : 'attempt--earlier'"
+      >
+        <header class="attempt__head">
+          <span class="attempt__tag" :class="s.is_last ? 'attempt__tag--final' : 'attempt__tag--earlier'">
+            {{ s.is_last ? 'Final' : `Attempt #${s.submission_number}` }}
+          </span>
+          <span class="attempt__verdict" :class="s.score > 0 ? 'attempt__verdict--pass' : 'attempt__verdict--fail'">
+            {{ s.score > 0 ? 'Passed' : 'Failed' }}
+          </span>
+          <span class="attempt__score">
+            <strong>{{ s.score }}</strong><small>/ {{ s.ideal_score }}</small>
+            <em v-if="s.penalty" class="attempt__penalty">−{{ s.penalty }} penalty</em>
+          </span>
+        </header>
 
-    <!-- Ion breakdown -->
-    <div class="result-card__breakdown">
-      <section class="breakdown-row">
-        <h4 class="breakdown-row__label breakdown-row__label--correct">Correct</h4>
-        <div class="breakdown-row__tags">
-          <n-tag v-for="ion in result.correct" :key="ion.id" type="success" :bordered="false" round>
-            {{ ion.symbol }}
-          </n-tag>
-          <span v-if="result.correct.length === 0" class="breakdown-row__none">none</span>
+        <!-- FINAL submission: full correct / wrong / missing breakdown (with ions) -->
+        <div v-if="s.is_last" class="attempt__breakdown">
+          <section class="breakdown-row">
+            <h4 class="breakdown-row__label breakdown-row__label--correct">Right</h4>
+            <div class="breakdown-row__tags">
+              <n-tag v-for="ion in s.correct" :key="ion.id" type="success" :bordered="false" round>
+                {{ ion.symbol }}
+              </n-tag>
+              <span v-if="s.correct.length === 0" class="breakdown-row__none">none</span>
+            </div>
+          </section>
+          <section class="breakdown-row">
+            <h4 class="breakdown-row__label breakdown-row__label--wrong">Wrong</h4>
+            <div class="breakdown-row__tags">
+              <n-tag v-for="ion in s.wrong" :key="ion.id" type="error" :bordered="false" round>
+                {{ ion.symbol }}
+              </n-tag>
+              <span v-if="s.wrong.length === 0" class="breakdown-row__none">none</span>
+            </div>
+          </section>
+          <section class="breakdown-row">
+            <h4 class="breakdown-row__label breakdown-row__label--missing">Missing</h4>
+            <div class="breakdown-row__tags">
+              <n-tag v-for="ion in s.missing" :key="ion.id" type="warning" :bordered="false" round>
+                {{ ion.symbol }}
+              </n-tag>
+              <span v-if="s.missing.length === 0" class="breakdown-row__none">none</span>
+            </div>
+          </section>
         </div>
-      </section>
-      <section class="breakdown-row">
-        <h4 class="breakdown-row__label breakdown-row__label--wrong">Wrong</h4>
-        <div class="breakdown-row__tags">
-          <n-tag v-for="ion in result.wrong" :key="ion.id" type="error" :bordered="false" round>
-            {{ ion.symbol }}
-          </n-tag>
-          <span v-if="result.wrong.length === 0" class="breakdown-row__none">none</span>
-        </div>
-      </section>
-      <section class="breakdown-row">
-        <h4 class="breakdown-row__label breakdown-row__label--missing">Missing</h4>
-        <div class="breakdown-row__tags">
-          <n-tag v-for="ion in result.missing" :key="ion.id" type="warning" :bordered="false" round>
-            {{ ion.symbol }}
-          </n-tag>
-          <span v-if="result.missing.length === 0" class="breakdown-row__none">none</span>
-        </div>
-      </section>
+
+        <!-- EARLIER submissions: only how many to add (missing) / remove (wrong) -->
+        <p v-else class="attempt__hint" :class="{ 'attempt__hint--done': s.missing_count === 0 && s.wrong_count === 0 }">
+          <template v-if="s.missing_count === 0 && s.wrong_count === 0">
+            Nothing to add or remove — the selection was complete for this attempt.
+          </template>
+          <template v-else>
+            <span v-if="s.missing_count > 0">
+              Add <strong>{{ s.missing_count }}</strong> ion{{ s.missing_count === 1 ? '' : 's' }}
+            </span>
+            <span v-if="s.missing_count > 0 && s.wrong_count > 0"> and </span>
+            <span v-if="s.wrong_count > 0">
+              remove <strong>{{ s.wrong_count }}</strong> ion{{ s.wrong_count === 1 ? '' : 's' }}
+            </span>
+          </template>
+        </p>
+      </article>
     </div>
 
     <div class="result-card__foot">
@@ -71,16 +105,36 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { NTag, NButton } from 'naive-ui'
 
-defineProps({
+const props = defineProps({
   /**
-   * Normalized result:
-   * { passed, score, ideal_score, submission_number, penalty, correct[], wrong[], missing[] }
+   * Normalized submission list, each:
+   * { id, submission_number, submitted_at, score, penalty, ideal_score,
+   *   correct[], wrong[], missing[], correct_count, wrong_count, missing_count }
+   * The entry with the highest submission_number is treated as the "final"
+   * one and gets the full breakdown; earlier ones show add/remove counts only.
    */
-  result: { type: Object, required: true },
+  submissions: { type: Array, required: true },
+  /** Overall total score (best/last per the grading strategy). */
+  totalScore: { type: Number, required: true },
+  /** Overall ideal score. */
+  idealScore: { type: Number, required: true },
 })
 defineEmits(['back'])
+
+// Final submission = the one with the highest submission_number.
+const finalNumber = computed(() =>
+  props.submissions.reduce((max, s) => Math.max(max, s.submission_number), 0),
+)
+// Newest first: the final attempt is shown at the top, earlier ones below.
+const ordered = computed(() =>
+  [...props.submissions]
+    .map((s) => ({ ...s, is_last: s.submission_number === finalNumber.value }))
+    .sort((a, b) => b.submission_number - a.submission_number),
+)
+const passed = computed(() => props.totalScore > 0)
 </script>
 
 <style scoped>
@@ -104,11 +158,11 @@ defineEmits(['back'])
   border-radius: var(--fc-radius);
   flex-wrap: wrap;
 }
-.result-card--pass .result-card__verdict {
+.result-card__verdict--pass {
   background: rgba(46, 125, 50, 0.1);
   border: 1px solid rgba(46, 125, 50, 0.35);
 }
-.result-card--fail .result-card__verdict {
+.result-card__verdict--fail {
   background: rgba(229, 57, 53, 0.08);
   border: 1px solid rgba(229, 57, 53, 0.3);
 }
@@ -116,10 +170,10 @@ defineEmits(['back'])
   display: inline-flex;
   flex-shrink: 0;
 }
-.result-card--pass .result-card__icon {
+.result-card__verdict--pass .result-card__icon {
   color: #2e7d32;
 }
-.result-card--fail .result-card__icon {
+.result-card__verdict--fail .result-card__icon {
   color: #e53935;
 }
 .result-card__verdict-text {
@@ -132,10 +186,10 @@ defineEmits(['back'])
   margin: 0;
   line-height: 1.1;
 }
-.result-card--pass .result-card__headline {
+.result-card__verdict--pass .result-card__headline {
   color: #2e7d32;
 }
-.result-card--fail .result-card__headline {
+.result-card__verdict--fail .result-card__headline {
   color: #e53935;
 }
 .result-card__sub {
@@ -163,22 +217,80 @@ defineEmits(['back'])
   color: var(--fc-muted);
 }
 
-/* Meta row ---------------------------------------------------------------- */
-.result-card__meta {
+/* Submission history ------------------------------------------------------- */
+.result-card__history {
   display: flex;
-  gap: var(--fc-space-md);
+  flex-direction: column;
+  gap: var(--fc-space-sm);
+}
+.attempt {
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  padding: var(--fc-space-sm) var(--fc-space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-sm);
+  background: var(--fc-bg);
+}
+.attempt--final {
+  border-color: rgba(255, 138, 0, 0.4);
+  background: linear-gradient(180deg, rgba(255, 243, 224, 0.7), var(--fc-bg));
+}
+.attempt__head {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-sm);
   flex-wrap: wrap;
-  font-size: var(--fc-fs-sm);
+}
+.attempt__tag {
+  font-size: var(--fc-fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.attempt__tag--final {
+  background: var(--fc-flame-soft);
+  color: var(--fc-flame-2);
+}
+.attempt__tag--earlier {
+  background: rgba(138, 148, 166, 0.16);
   color: var(--fc-text-soft);
 }
-.result-card__meta-item {
-  background: var(--fc-bg);
-  border-radius: var(--fc-radius-sm);
-  padding: 4px 10px;
+.attempt__verdict {
+  font-size: var(--fc-fs-sm);
+  font-weight: 700;
+}
+.attempt__verdict--pass {
+  color: #2e7d32;
+}
+.attempt__verdict--fail {
+  color: #e53935;
+}
+.attempt__score {
+  margin-left: auto;
+  font-size: var(--fc-fs-md);
+  font-weight: 800;
+  color: var(--fc-ink);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.attempt__score small {
+  font-size: var(--fc-fs-sm);
+  font-weight: 600;
+  color: var(--fc-muted);
+}
+.attempt__penalty {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
+  font-style: normal;
+  margin-left: 6px;
 }
 
-/* Ion breakdown ------------------------------------------------------------ */
-.result-card__breakdown {
+/* Full breakdown (final attempt) ------------------------------------------ */
+.attempt__breakdown {
   display: flex;
   flex-direction: column;
   gap: var(--fc-space-sm);
@@ -190,7 +302,7 @@ defineEmits(['back'])
   align-items: center;
   padding: var(--fc-space-sm);
   border-radius: var(--fc-radius-sm);
-  background: var(--fc-bg);
+  background: var(--fc-surface);
 }
 .breakdown-row__label {
   font-size: var(--fc-fs-sm);
@@ -219,6 +331,27 @@ defineEmits(['back'])
   font-style: italic;
 }
 
+/* Add/remove hint (earlier attempts) -------------------------------------- */
+.attempt__hint {
+  margin: 0;
+  font-size: var(--fc-fs-base);
+  color: var(--fc-text);
+  background: var(--fc-surface);
+  border-radius: var(--fc-radius-sm);
+  padding: var(--fc-space-sm) var(--fc-space-md);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.attempt__hint strong {
+  color: var(--fc-flame-2);
+  font-size: var(--fc-fs-md);
+}
+.attempt__hint--done {
+  color: #2e7d32;
+}
+
 .result-card__foot {
   display: flex;
   justify-content: flex-start;
@@ -232,6 +365,11 @@ defineEmits(['back'])
   .result-card__score {
     border-left: none;
     padding-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .attempt__score {
+    margin-left: 0;
     width: 100%;
     justify-content: flex-end;
   }

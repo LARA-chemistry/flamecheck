@@ -67,20 +67,38 @@
         </n-card>
       </template>
 
-      <!-- Result view -->
-      <ResultCard v-if="result" :result="result" @back="router.push('/')" />
+      <!-- Result view (full submission history) -->
+      <ResultCard
+        v-if="result"
+        :submissions="result.submissions"
+        :total-score="result.total_score"
+        :ideal-score="result.ideal_score"
+        @back="router.push('/')"
+      />
 
       <n-alert v-if="error" type="error" class="error-alert">{{ error }}</n-alert>
     </n-spin>
 
     <!-- Submission confirmation -->
-    <n-modal v-model:show="confirmShow" preset="card" title="Confirm submission" style="width: 460px; max-width: 92vw">
+    <n-modal v-model:show="confirmShow" preset="card" title="Confirm submission" style="width: 480px; max-width: 92vw">
       <n-space vertical size="medium">
         <n-text>
           You are about to submit <strong>{{ selectedIons.length }}</strong>
           ion{{ selectedIons.length === 1 ? '' : 's' }} for
           <strong>{{ detail?.type }} #{{ detail?.number }}</strong>.
         </n-text>
+        <!-- The ions the student is submitting, by name -->
+        <div class="confirm-ions">
+          <n-tag
+            v-for="(label, i) in selectedIonLabels"
+            :key="selectedIons[i]"
+            :type="isCation(selectedIons[i]) ? 'info' : 'warning'"
+            :bordered="false"
+            round
+          >
+            {{ label }}
+          </n-tag>
+        </div>
         <n-alert type="warning" :bordered="false">
           This counts against your submission limit ({{ detail?.submission_count }}/{{ detail?.submission_limit }} used).
           Please make sure your selection is final.
@@ -106,6 +124,11 @@ import {
   NText, NAlert, NModal, NEmpty,
 } from 'naive-ui'
 
+// Is the given ion id one of the cations (used to colour the confirm tags)?
+function isCation(ionId) {
+  return (detail.value?.cations || []).some((c) => c.id === ionId)
+}
+
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
@@ -130,6 +153,19 @@ const selectedAnions = ref([])
 
 const selectedIons = computed(() => [...selectedCations.value, ...selectedAnions.value])
 
+// Resolve the selected ion ids to their symbol/name labels (for the confirm
+// modal). Cations come first, then anions, matching the selection order.
+const selectedIonLabels = computed(() => {
+  const byId = new Map()
+  for (const ion of [...detail.value?.cations, ...detail.value?.anions] || []) {
+    byId.set(ion.id, ion)
+  }
+  return selectedIons.value.map((ionId) => {
+    const ion = byId.get(ionId)
+    return ion ? `${ion.symbol} — ${ion.name}` : `ion #${ionId}`
+  })
+})
+
 function windowTagType(status) {
   const map = { open: 'success', too_early: 'warning', too_late: 'error', submitted: 'info' }
   return map[status] || 'default'
@@ -140,38 +176,52 @@ function windowLabel(status) {
 }
 
 /**
- * Normalize the two different result payloads (the just-created submission and
- * the GET /result history) into a single shape the ResultCard consumes:
- * { passed, score, ideal_score, submission_number, correct[], wrong[], missing[] }.
+ * Normalize a submission-history payload into the shape ResultCard consumes:
+ * { submissions: [ { id, submission_number, submitted_at, score, penalty,
+ *   ideal_score, correct[], wrong[], missing[], correct_count, wrong_count,
+ *   missing_count } ], total_score, ideal_score }.
+ *
+ * Handles both the GET /result payload (full history) and, as a fallback, the
+ * just-created submission from the POST payload.
  */
 function normalizeResult(payload) {
   if (!payload) return null
-  // Submit POST shape: { submission, result }
+  const toSub = (s) => ({
+    id: s.id,
+    submission_number: s.submission_number,
+    submitted_at: s.submitted_at,
+    score: s.score,
+    penalty: s.penalty ?? 0,
+    ideal_score: s.ideal_score,
+    correct: s.correct_ions || [],
+    wrong: s.wrong_ions || [],
+    missing: s.missing_ions || [],
+    correct_count: s.correct_count ?? (s.correct_ions || []).length,
+    wrong_count: s.wrong_count ?? (s.wrong_ions || []).length,
+    missing_count: s.missing_count ?? (s.missing_ions || []).length,
+  })
+  // GET /result shape: full history.
+  if (payload.submissions && payload.submissions.length) {
+    return {
+      submissions: payload.submissions.map(toSub),
+      total_score: payload.total_score,
+      ideal_score: payload.ideal_score,
+    }
+  }
+  // POST /submissions shape: just the one created submission.
   if (payload.submission && payload.result) {
     const s = payload.submission
     return {
-      passed: s.score > 0,
-      score: s.score,
-      ideal_score: s.ideal_score,
-      submission_number: s.submission_number,
-      penalty: s.penalty,
-      correct: payload.result.correct_ions || [],
-      wrong: payload.result.wrong_ions || [],
-      missing: payload.result.missing_ions || [],
-    }
-  }
-  // GET /result shape: { submissions: [...], total_score, ideal_score }
-  if (payload.submissions && payload.submissions.length) {
-    const latest = payload.submissions[payload.submissions.length - 1]
-    return {
-      passed: latest.score > 0,
-      score: latest.score,
-      ideal_score: latest.ideal_score,
-      submission_number: latest.submission_number,
-      penalty: latest.penalty,
-      correct: latest.correct_ions || [],
-      wrong: latest.wrong_ions || [],
-      missing: latest.missing_ions || [],
+      submissions: [
+        {
+          ...toSub(s),
+          correct: payload.result.correct_ions || [],
+          wrong: payload.result.wrong_ions || [],
+          missing: payload.result.missing_ions || [],
+        },
+      ],
+      total_score: payload.result.total_score ?? s.score,
+      ideal_score: payload.result.ideal_score ?? s.ideal_score,
     }
   }
   return null
@@ -197,12 +247,14 @@ async function doSubmit() {
   submitting.value = true
   error.value = ''
   try {
-    const res = await api.post(`/analyses/${id}/submissions`, {
+    await api.post(`/analyses/${id}/submissions`, {
       ion_ids: selectedIons.value,
       confirmed: true,
       idempotency_key: crypto.randomUUID(),
     })
-    result.value = normalizeResult(res)
+    // Re-fetch the full history so the result view shows every attempt.
+    const payload = await api.get(`/analyses/${id}/result`)
+    result.value = normalizeResult(payload)
     detail.value.window_status = 'submitted'
     confirmShow.value = false
   } catch (e) {
@@ -235,5 +287,14 @@ onMounted(load)
 
 .error-alert {
   margin-top: var(--fc-space-sm);
+}
+
+.confirm-ions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fc-space-xs);
+  padding: var(--fc-space-sm);
+  background: var(--fc-bg);
+  border-radius: var(--fc-radius-sm);
 }
 </style>

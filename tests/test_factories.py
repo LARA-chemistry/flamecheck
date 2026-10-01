@@ -54,6 +54,15 @@ class TestUserFactories:
         assert user.name
         assert user.labspace_id.startswith("LS-")
 
+    def test_matriculation_no_is_a_numeric_string(self):
+        # Regression: matriculation_no must be a real 5-digit number (as a
+        # string, the field is a CharField), never a Faker declaration repr.
+        user = UserFactory()
+        assert user.matriculation_no
+        assert user.matriculation_no.isdigit()
+        assert len(user.matriculation_no) == 5
+        assert "Faker" not in user.matriculation_no
+
     def test_barcode_belongs_to_student_and_unique(self):
         student = UserFactory()
         code = StudentBarcodeFactory(student=student)

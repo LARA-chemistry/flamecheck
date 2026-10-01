@@ -18,6 +18,8 @@ class AnalysisSummary(BaseModel):
     submission_count: int
     submission_limit: int
     score: int | None = None
+    window_start: str | None = None
+    window_end: str | None = None
 
     @classmethod
     def from_instance(cls, instance: Any) -> AnalysisSummary:
@@ -30,6 +32,8 @@ class AnalysisSummary(BaseModel):
             submission_count=instance.submission_count(),
             submission_limit=instance.submission_limit(),
             score=instance.score(),
+            window_start=instance.window_start.isoformat(),
+            window_end=instance.window_end.isoformat(),
         )
 
 

@@ -6,12 +6,18 @@
         <div>
           <h1 class="fc-title fc-title--hero">FlameCheck</h1>
           <p class="landing-subtitle">Your flame test analyses</p>
+          <n-tag v-if="user?.course_name" class="landing-course" type="info" :bordered="false" size="small" round>
+            {{ user.course_name }}
+          </n-tag>
         </div>
       </div>
       <div class="landing-actions">
         <span class="fc-user" v-if="user">
           <span class="fc-user__avatar">{{ initial(user) }}</span>
-          <span class="fc-user__name">{{ user.name || user.username }}</span>
+          <span class="fc-user__meta">
+            <span class="fc-user__name">{{ user.name || user.username }}</span>
+            <span v-if="user.matriculation_no" class="fc-user__matric">Mat. {{ user.matriculation_no }}</span>
+          </span>
         </span>
         <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </div>
@@ -41,6 +47,13 @@
               </n-tag>
             </div>
             <h3 class="analysis-card__title">{{ a.type }}</h3>
+            <p v-if="windowInterval(a)" class="analysis-card__window" :title="windowInterval(a)">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" class="analysis-card__window-icon">
+                <rect x="3" y="4" width="18" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <path d="M3 9h18M8 2v4M16 2v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              {{ windowInterval(a) }}
+            </p>
             <div class="analysis-card__stats">
               <div class="stat">
                 <span class="stat__value">{{ a.score != null ? a.score : '—' }}</span>
@@ -89,6 +102,25 @@ function windowTagType(status) {
 function windowLabel(status) {
   const map = { open: 'Open', too_early: 'Not Open Yet', too_late: 'Closed', submitted: 'Submitted' }
   return map[status] || status
+}
+// Format the active window as a compact "date — date" interval (e.g.
+// "01 Oct 13:00 – 15:00", or a full range across days). Returns '' if the
+// window times are missing.
+function windowInterval(a) {
+  if (!a?.window_start || !a?.window_end) return ''
+  const start = new Date(a.window_start)
+  const end = new Date(a.window_end)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return ''
+  const optsDay = { day: '2-digit', month: 'short' }
+  const optsFull = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }
+  const sameDay = start.toDateString() === end.toDateString()
+  if (sameDay) {
+    return `${start.toLocaleDateString(undefined, optsDay)} · ${start.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+    })} – ${end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+  }
+  return `${start.toLocaleDateString(undefined, optsFull)} – ${end.toLocaleDateString(undefined, optsFull)}`
 }
 function initial(u) {
   return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
@@ -146,10 +178,21 @@ onMounted(load)
   margin-top: 2px;
 }
 
+.landing-course {
+  margin-top: var(--fc-space-xs);
+}
+
 .landing-actions {
   display: flex;
   align-items: center;
   gap: var(--fc-space-xs);
+}
+
+.fc-user__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
 }
 
 .fc-user__name {
@@ -157,6 +200,12 @@ onMounted(load)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
+}
+
+.fc-user__matric {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
 }
 
 @media (min-width: 900px) {
@@ -197,6 +246,26 @@ onMounted(load)
   font-weight: 700;
   color: var(--fc-ink);
   line-height: 1.25;
+}
+
+.analysis-card__window {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
+  background: var(--fc-flame-soft);
+  border-radius: var(--fc-radius-sm);
+  padding: 5px 9px;
+  min-width: 0;
+}
+.analysis-card__window-icon {
+  flex-shrink: 0;
+  color: var(--fc-flame-2);
+}
+.fc-card--inactive .analysis-card__window {
+  background: rgba(127, 127, 127, 0.12);
 }
 
 .analysis-card__stats {

@@ -10,7 +10,6 @@ The module exercises the full factory-boy / Faker toolbox:
 - ``Faker``          - realistic random values (names, emails, matriculation numbers).
 - ``Sequence``       - guaranteed-unique values per factory invocation.
 - ``SubFactory``     - build related objects inline (barcodes, assignments).
-- ``LazyFunction``   - values computed from the object being built.
 - ``django_get_or_create`` - idempotent creation keyed on ``username``.
 - ``post_generation`` - optional FK (``course``) handled cleanly.
 - Custom ``_create`` - routes through ``create_user``/``create_superuser`` so
@@ -26,7 +25,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from factory import Faker, LazyFunction, Sequence, SubFactory, post_generation
+from factory import Faker, Sequence, SubFactory, post_generation
 from factory.django import DjangoModelFactory
 
 from .models import LoginAttempt, StudentAssignment, StudentBarcode, User
@@ -48,7 +47,9 @@ class UserFactory(DjangoModelFactory):
     username = Sequence(lambda n: f"user{n}")
     name = Faker("name")  # single name field (first/last removed on the model)
     email = Faker("email")
-    matriculation_no = LazyFunction(lambda: f"{Faker('pyint', min_value=10000, max_value=99999)}")
+    # A 5-digit matriculation number as a string (the model field is a CharField).
+    # ``bothify`` with ``#`` placeholders yields a digit string, e.g. "48291".
+    matriculation_no = Faker("bothify", text="#####")
     lab = Faker("company")
     labspace_id = Sequence(lambda n: f"LS-{n:06d}")
 

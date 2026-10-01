@@ -37,16 +37,21 @@ class UserOut(BaseModel):
     name: str | None
     role: str
     lab: str | None = None
+    matriculation_no: str | None = None
+    course_name: str | None = None
 
     @classmethod
     def from_user(cls, user: Any) -> UserOut:
         """Build a :class:`UserOut` from a Django user."""
+        course = getattr(user, "course", None)
         return cls(
             id=user.id,
             username=user.username,
             name=user.name or None,
             role=user.role,
             lab=user.lab or None,
+            matriculation_no=(user.matriculation_no or None) if user.role == user.Role.STUDENT else None,
+            course_name=course.name if course is not None else None,
         )
 
 

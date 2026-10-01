@@ -108,6 +108,19 @@ class TestMe:
         assert data["username"] == student.username
         assert data["role"] == student.role
 
+    def test_me_includes_course_and_matriculation(self, client, student, auth_headers, course):
+        student.course = course
+        student.matriculation_no = "12345"
+        student.save()
+        data = client.get("/api/v1/me", **auth_headers(student)).json()
+        assert data["course_name"] == course.name
+        assert data["matriculation_no"] == "12345"
+
+    def test_me_course_fields_absent_for_non_student(self, client, admin_user, auth_headers):
+        data = client.get("/api/v1/me", **auth_headers(admin_user)).json()
+        assert data["course_name"] is None
+        assert data["matriculation_no"] is None
+
 
 class TestJwtUnit:
     def test_issue_and_decode_access(self, student):
