@@ -161,6 +161,34 @@ class AssignmentIn(Schema):
     number: int | None = None
 
 
+class RandomizeSubstancesIn(Schema):
+    """Payload for randomly assigning substances to a course's announcement."""
+
+    course_id: int
+    number: int
+    min_ions: int = 3
+    max_ions: int = 5
+
+
+class RandomizeSubstancesStudentOut(Schema):
+    """Per-student outcome of a randomize run."""
+
+    student_id: int
+    student: str
+    instance_id: int
+    correct_ions: list[dict]
+    substances: list[dict]
+
+
+class RandomizeSubstancesOut(Schema):
+    """Summary of a random substance-assignment run."""
+
+    course_id: int
+    number: int
+    randomized: int
+    students: list[RandomizeSubstancesStudentOut]
+
+
 class GradingConfigOut(Schema):
     """Grading configuration (admin read/write)."""
 

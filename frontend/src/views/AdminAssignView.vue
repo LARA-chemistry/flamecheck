@@ -18,9 +18,51 @@
       <n-empty v-if="!courseId" description="Pick a course to manage its assignments." />
 
       <template v-else>
+        <!-- Random substance assignment -->
+        <div class="randomize-bar">
+          <n-text depth="3" class="hint">
+            Randomly assign substances: each student in the chosen announcement gets a random
+            subset of the analysis's possible ions as their answer key, plus the matching
+            reference substances.
+          </n-text>
+          <n-space align="center" :wrap="true">
+            <n-select
+              v-model:value="randomize.number"
+              :options="numberOptions"
+              placeholder="Announcement #"
+              style="width: 150px"
+            />
+            <n-space align="center" size="small">
+              <span class="fc-muted">Ions</span>
+              <n-input-number v-model:value="randomize.minIons" :min="1" :max="randomize.maxIons" size="small" style="width: 72px" />
+              <span class="fc-muted">–</span>
+              <n-input-number v-model:value="randomize.maxIons" :min="randomize.minIons" :max="20" size="small" style="width: 72px" />
+            </n-space>
+            <n-button type="primary" :loading="randomize.running" :disabled="!randomize.number" @click="runRandomize">
+              Randomly assign substances
+            </n-button>
+          </n-space>
+        </div>
+
         <n-data-table :columns="instanceCols" :data="instances" size="small" :loading="loadingInstances" />
       </template>
     </n-card>
+
+    <!-- Randomize result (per-student preview of what was assigned) -->
+    <n-modal v-model:show="randomize.result.show" preset="card" title="Random substance assignment" style="width: 720px; max-width: 94vw">
+      <n-space vertical>
+        <p class="fc-muted">
+          {{ randomize.result.data?.randomized }} students were randomized for announcement #{{ randomize.result.data?.number }}.
+          Click "Randomly assign substances" again to re-roll.
+        </p>
+        <n-data-table :columns="resultCols" :data="randomize.result.data?.students || []" size="small" :max-height="360" />
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="randomize.result.show = false">Close</n-button>
+        </n-space>
+      </template>
+    </n-modal>
 
     <!-- Assign modal for the selected instance -->
     <n-modal v-model:show="assign.show" preset="card" :title="assignTitle" style="width: 520px; max-width: 94vw">
@@ -54,7 +96,7 @@ import { ref, computed, onMounted, h } from 'vue'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInputNumber, NSelect, NDataTable, NCard, NFormItem,
-  NModal, NAlert, NEmpty,
+  NModal, NAlert, NEmpty, NText, NTag,
 } from 'naive-ui'
 
 const message = ref('')
@@ -70,6 +112,37 @@ const students = ref([])
 const assignments = ref([])
 
 const assign = ref({ show: false, saving: false, instanceId: null, number: 1, studentIds: [] })
+
+const randomize = ref({
+  number: null,
+  minIons: 3,
+  maxIons: 5,
+  running: false,
+  result: { show: false, data: null },
+})
+
+const numberOptions = computed(() => {
+  const nums = [...new Set(instances.value.map((i) => i.number))].sort((a, b) => a - b)
+  return nums.map((n) => ({ label: `#${n}`, value: n }))
+})
+
+const resultCols = [
+  { title: 'Student', key: 'student' },
+  {
+    title: 'Answer-key ions',
+    key: 'correct_ions',
+    render: (row) =>
+      h(NSpace, { size: 'small', wrap: true }, row.correct_ions.map((ion) => h(NTag, { size: 'small', bordered: false, type: 'info' }, () => ion.symbol))),
+  },
+  {
+    title: 'Assigned substances',
+    key: 'substances',
+    render: (row) =>
+      row.substances.length
+        ? h(NSpace, { size: 'small', wrap: true }, row.substances.map((s) => h(NTag, { size: 'small', bordered: false }, () => s.name)))
+        : h(NText, { depth: 3 }, () => 'none'),
+  },
+]
 
 const studentOptions = computed(() => {
   const inCourse = students.value.filter((s) => s.course_id === courseId.value)
@@ -141,8 +214,33 @@ async function loadInstances() {
 }
 
 function onCourseChange() {
+  randomize.value.number = null
+  randomize.value.result.show = false
   loadInstances()
   loadAssignments()
+}
+
+async function runRandomize() {
+  if (!courseId.value || !randomize.value.number) return
+  randomize.value.running = true
+  try {
+    const data = await api.post('/admin/analysis-instances/randomize-substances', {
+      course_id: courseId.value,
+      number: randomize.value.number,
+      min_ions: randomize.value.minIons,
+      max_ions: randomize.value.maxIons,
+    })
+    randomize.value.result.data = data
+    randomize.value.result.show = true
+    message.value = `Randomized substances for ${data.randomized} students.`
+    msgType.value = 'success'
+    await loadInstances()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    randomize.value.running = false
+  }
 }
 
 function openAssign(row) {
@@ -206,5 +304,17 @@ onMounted(async () => {
   font-size: var(--fc-fs-md);
   font-weight: 700;
   color: var(--fc-ink);
+}
+.randomize-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-xs);
+  padding: var(--fc-space-sm);
+  margin-bottom: var(--fc-space-sm);
+  border: 1px solid var(--fc-border, rgba(127, 127, 127, 0.2));
+  border-radius: 6px;
+}
+.hint {
+  font-size: var(--fc-fs-sm);
 }
 </style>

@@ -81,6 +81,15 @@ class AnalysisInstance(models.Model):
         related_name="instances",
         help_text=_("Ions actually present in this concrete analysis (the answer key)."),
     )
+    assigned_substances = models.ManyToManyField(
+        "substances.Substance",
+        blank=True,
+        related_name="instances",
+        help_text=_(
+            "Substances randomly assigned to this student for the analysis (the salts to "
+            "prepare / reference), recorded when the answer key is randomized."
+        ),
+    )
     window_start = models.DateTimeField(help_text=_("Earliest time a submission is accepted (inclusive)."))
     window_end = models.DateTimeField(help_text=_("Latest time a submission is accepted (inclusive)."))
     number = models.PositiveSmallIntegerField(

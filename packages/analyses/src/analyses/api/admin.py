@@ -16,14 +16,19 @@ from analyses.api.schemas import (
     AssignmentIn,
     CourseIn,
     GradingConfigOut,
+    RandomizeSubstancesIn,
+    RandomizeSubstancesOut,
+    RandomizeSubstancesStudentOut,
     StudentCourseAssignIn,
     StudentOut,
 )
 from analyses.models import AnalysisInstance, AnalysisType
+from analyses.services import InsufficientIonsError, randomize_substances_for_announcement
 from config.models import AppSettings, Course, GradingConfig
 from ninja import Router
 from ninja.errors import AuthenticationError, HttpError
-from substances.api.schemas import ion_to_schema
+from substances.api.schemas import ion_to_schema, substance_to_schema
+from substances.models import Ion, Substance
 from users.models import StudentAssignment, User
 
 logger = logging.getLogger("flamecheck.audit")
@@ -245,6 +250,76 @@ def create_analysis_instance(request, payload: AnalysisInstanceIn):
         inst.correct_ions.set(payload.correct_ion_ids)
     logger.info("Admin %s created analysis instance %s", request.user.username, inst)
     return {"id": inst.id, "type": t.name}
+
+
+# NOTE: this literal route must be registered before the
+# ``/analysis-instances/{instance_id}`` routes, or the parameterized routes shadow it.
+@router.post("/analysis-instances/randomize-substances", response=RandomizeSubstancesOut)
+def randomize_substances(request, payload: RandomizeSubstancesIn):
+    """
+    Randomly assign substances to the students of a course's announcement (admin).
+
+    For every student assigned to the given ``course_id`` + ``number``, a random
+    subset of the analysis type's possible ions (size in ``[min_ions, max_ions]``)
+    becomes that student's answer key, and the matching substances are recorded as
+    their assigned substances. Returns the per-student outcome.
+    """
+    _admin_user(request)
+    course = Course.objects.filter(pk=payload.course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    if not AnalysisInstance.objects.filter(course=course, number=payload.number).exists():
+        raise HttpError(404, f"No analysis instances for course {payload.course_id} number {payload.number}.")
+    try:
+        results = randomize_substances_for_announcement(
+            course,
+            payload.number,
+            min_ions=payload.min_ions,
+            max_ions=payload.max_ions,
+        )
+    except InsufficientIonsError as exc:
+        raise HttpError(400, str(exc)) from exc
+
+    # Resolve ion/substance ids to display dicts once (shared across students).
+    all_ion_ids = {ion_id for r in results for ion_id in r.correct_ion_ids}
+    all_sub_ids = {s_id for r in results for s_id in r.assigned_substance_ids}
+    ion_map = (
+        {i.id: ion_to_schema(i) for i in Ion.objects.filter(id__in=all_ion_ids).order_by("kind", "symbol")}
+        if all_ion_ids
+        else {}
+    )
+    sub_map = (
+        {
+            s.id: substance_to_schema(s)
+            for s in Substance.objects.filter(id__in=all_sub_ids).prefetch_related("ions").order_by("name")
+        }
+        if all_sub_ids
+        else {}
+    )
+
+    students_out = [
+        RandomizeSubstancesStudentOut(
+            student_id=r.student_id,
+            student=r.student_name,
+            instance_id=r.instance_id,
+            correct_ions=[ion_map[i] for i in r.correct_ion_ids if i in ion_map],
+            substances=[sub_map[s] for s in r.assigned_substance_ids if s in sub_map],
+        )
+        for r in results
+    ]
+    logger.info(
+        "Admin %s randomized substances for course %s number %s (%d students)",
+        request.user.username,
+        course.name,
+        payload.number,
+        len(results),
+    )
+    return {
+        "course_id": course.id,
+        "number": payload.number,
+        "randomized": len(results),
+        "students": students_out,
+    }
 
 
 @router.put("/analysis-instances/{instance_id}", response=dict)
