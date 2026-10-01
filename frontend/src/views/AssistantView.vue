@@ -2,7 +2,8 @@
   <div class="fc-page">
     <header class="fc-header">
       <h1 class="fc-title">Assistant Dashboard</h1>
-      <n-space>
+      <n-space align="center">
+        <HelpToggle :active="helpOpen" @click="helpOpen = !helpOpen" />
         <n-button size="small" secondary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
         <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </n-space>
@@ -138,6 +139,34 @@
         </n-space>
       </n-spin>
     </n-modal>
+
+    <HelpPanel v-model:open="helpOpen" title="Assistant help">
+      <HelpSection title="Your courses">
+        <p>
+          Each course you support is listed with live statistics: total
+          assignments, submitted, pending and the class average score.
+        </p>
+      </HelpSection>
+      <HelpSection title="Student statistics">
+        <p>
+          Click any student row to open their per-analysis breakdown: submitted
+          vs. pending, final scores, and the ions they selected against the
+          correct set.
+        </p>
+      </HelpSection>
+      <HelpSection title="Substance overview">
+        <p>
+          "Substance Overview" groups each announcement by sample composition
+          (the correct ion set) and lists the salts to prepare, with per-course
+          totals. Set "samples per analysis" to scale the preparation counts.
+        </p>
+      </HelpSection>
+      <HelpSection title="Export">
+        <p>
+          "Download CSV" exports the course's results for grading or archiving.
+        </p>
+      </HelpSection>
+    </HelpPanel>
   </div>
 </template>
 
@@ -151,6 +180,11 @@ import {
   NCard, NSpin, NEmpty, NCollapse, NCollapseItem, NSpace, NButton,
   NDataTable, NStatistic, NInputNumber, NModal, NTag,
 } from 'naive-ui'
+import HelpPanel from '../components/HelpPanel.vue'
+import HelpToggle from '../components/HelpToggle.vue'
+import HelpSection from '../components/HelpSection.vue'
+
+const helpOpen = ref(false)
 
 const router = useRouter()
 const auth = useAuthStore()
