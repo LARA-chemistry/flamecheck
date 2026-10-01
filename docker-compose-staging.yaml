@@ -11,11 +11,19 @@
 #   DJANGO_SECRET_KEY    required (long, random)
 #   DJANGO_ALLOWED_HOSTS comma-separated hosts the server responds to
 #   GUNICORN_WORKERS     number of gunicorn workers (default: 2)
+#   SEED_DEMO            seed the demo dataset on boot (default: true)
+#                        "true" = idempotent seed, "reset" = wipe + re-seed
+#
+# Staging boots with the demo dataset loaded (courses, users, analyses and a
+# handful of graded submissions — all demo accounts share the password
+# FlameCheck32!) so the environment is ready to explore out of the box.
 #
 # Usage:
 #   cp .env-template .env   # then edit .env
 #   docker compose -f docker-compose-staging.yaml --env-file .env up -d --build
 #   docker compose -f docker-compose-staging.yaml --env-file .env down
+#   # re-seed from scratch (wipe the seeded domain first):
+#   SEED_DEMO=reset docker compose -f docker-compose-staging.yaml --env-file .env up -d --build
 
 services:
   flamecheck:
@@ -34,6 +42,10 @@ services:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-flamecheck.settings.production}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      # Load the demo dataset on boot (see the entrypoint). Defaults to "true"
+      # when SEED_DEMO is unset; set SEED_DEMO=reset in .env to wipe + re-seed,
+      # or leave it empty (SEED_DEMO=) to skip seeding entirely.
+      SEED_DEMO: ${SEED_DEMO-true}
       # DATABASE_URL is taken from .env (SQLite default, or postgres://).
     volumes:
       - flamecheck_db:/opt/db

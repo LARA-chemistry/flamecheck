@@ -9,6 +9,25 @@ set -e
 # PostgreSQL when DATABASE_URL is set via .env — see .env-template).
 python manage.py migrate --noinput
 
+# Optional demo setup (staging). When SEED_DEMO is set, populate the database
+# with the factory-built demo dataset (courses, users, analyses, submissions)
+# so the environment is ready to explore. Values:
+#   SEED_DEMO=true    -> idempotent seed (refresh without wiping)
+#   SEED_DEMO=reset   -> wipe the seeded domain first, then re-seed
+# Unset (the default, e.g. production) -> no demo data is created.
+if [ -n "${SEED_DEMO:-}" ]; then
+  case "${SEED_DEMO}" in
+    reset)
+      echo "Seeding demo data (reset)..."
+      python manage.py seed_demo --reset
+      ;;
+    *)
+      echo "Seeding demo data (idempotent)..."
+      python manage.py seed_demo
+      ;;
+  esac
+fi
+
 # Collect static files (including the built frontend served via WhiteNoise).
 python manage.py collectstatic --noinput
 
