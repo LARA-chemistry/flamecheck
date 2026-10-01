@@ -120,9 +120,9 @@ uv run python manage.py seed_demo --reset
 It creates:
 
 * the ion / substance reference catalog,
-* **3 courses** (Biology / Pharmacy / Materials), Biology being the *active*
-  course,
-* **12 users** — an admin, two assistants (each linked to a course) and nine
+* **4 courses** (Chemistry / Biology / Pharmacy / Materials), Chemistry being
+  the *active* (default) course,
+* **16 users** — an admin, three assistants (one per course) and twelve
   students (three per course) — **all sharing the password
   `FlameCheck32!`**, plus a barcode for every student,
 * **3 analysis types** (each with a possible-ion set) and **analysis

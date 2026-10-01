@@ -10,8 +10,9 @@ What it creates, illustrating every feature of the system:
 
 * the ion / substance reference catalog (``create_ion_catalog`` +
   :class:`~substances.factory.SubstanceFactory`),
-* three courses (Biology / Pharmacy / Materials), one of them the active one,
-* users — an admin, two assistants (each linked to a course) and nine students
+* four courses (Chemistry / Biology / Pharmacy / Materials), with the
+  Chemistry course the active (default) one,
+* users — an admin, three assistants (one per course) and twelve students
   (three per course) — **all sharing the password ``FlameCheck32!``** —
   plus student barcodes,
 * analysis types (each with a *possible* ion set),
@@ -65,8 +66,10 @@ from analyses.models import AnalysisInstance, AnalysisType, Submission
 DEMO_PASSWORD: str = "FlameCheck32!"  # noqa: S105
 
 # Course / track layout: (name, semester, track, is_active, is_the_active_course).
+# The Chemistry course is the default (active) course the admin sees.
 _COURSES: list[tuple[str, str, str, bool, bool]] = [
-    ("Inorganic Chemistry WS 2026 - Biology", "WS 2026", "biology", True, True),
+    ("Inorganic Chemistry WS 2026 - Chemistry", "WS 2026", "chemistry", True, True),
+    ("Inorganic Chemistry WS 2026 - Biology", "WS 2026", "biology", True, False),
     ("Inorganic Chemistry WS 2026 - Pharmacy", "WS 2026", "pharmacy", True, False),
     ("Inorganic Chemistry SS 2026 - Materials", "SS 2026", "materials", True, False),
 ]
@@ -74,8 +77,12 @@ _COURSES: list[tuple[str, str, str, bool, bool]] = [
 # Users: (username, role, name, course_name_or_None).
 _USERS: list[tuple[str, str, str, str | None]] = [
     ("admin", "admin", "Demo Admin", None),
+    ("assistant.chemistry", "assistant", "Chemistry Lab Assistant", "Inorganic Chemistry WS 2026 - Chemistry"),
     ("assistant.bio", "assistant", "Biology Lab Assistant", "Inorganic Chemistry WS 2026 - Biology"),
     ("assistant.pharmacy", "assistant", "Pharmacy Lab Assistant", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-lena", "student", "Lena Hoffmann", "Inorganic Chemistry WS 2026 - Chemistry"),
+    ("student-max", "student", "Max Braun", "Inorganic Chemistry WS 2026 - Chemistry"),
+    ("student-petra", "student", "Petra Novak", "Inorganic Chemistry WS 2026 - Chemistry"),
     ("student-anna", "student", "Anna Schulz", "Inorganic Chemistry WS 2026 - Biology"),
     ("student-ben", "student", "Ben Weber", "Inorganic Chemistry WS 2026 - Biology"),
     ("student-clara", "student", "Clara Novak", "Inorganic Chemistry WS 2026 - Biology"),
@@ -121,6 +128,20 @@ _TYPES: list[tuple[str, str, list[str]]] = [
 # window_state drives the time window relative to "now" (see
 # :meth:`AnalysisInstanceFactory.make`).
 _ANNOUNCEMENTS: list[tuple[str, int, str, str, list[str]]] = [
+    (
+        "Inorganic Chemistry WS 2026 - Chemistry",
+        1,
+        "Cations I & II",
+        "open",
+        ["ammonium", "calcium", "copper", "barium"],
+    ),
+    (
+        "Inorganic Chemistry WS 2026 - Chemistry",
+        2,
+        "Anions & halides",
+        "too_late",
+        ["chloride", "nitrate", "phosphate"],
+    ),
     (
         "Inorganic Chemistry WS 2026 - Biology",
         1,
@@ -406,6 +427,8 @@ class Command(BaseCommand):
         # 'correct' -> selects exactly the answer key; 'partial' -> selects a
         # subset (misses some); 'wrong' -> selects an ion outside the key.
         plans: list[tuple[str, str, int, str]] = [
+            ("student-lena", "Inorganic Chemistry WS 2026 - Chemistry", 1, "correct"),
+            ("student-max", "Inorganic Chemistry WS 2026 - Chemistry", 1, "partial"),
             ("student-anna", "Inorganic Chemistry WS 2026 - Biology", 1, "correct"),
             ("student-ben", "Inorganic Chemistry WS 2026 - Biology", 1, "partial"),
             ("student-david", "Inorganic Chemistry WS 2026 - Pharmacy", 1, "correct"),

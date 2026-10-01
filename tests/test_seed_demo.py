@@ -40,13 +40,14 @@ class TestSeedCounts:
     """The command seeds the expected volume of demo data."""
 
     def test_courses(self):
-        assert Course.objects.count() == 3
+        assert Course.objects.count() == 4
+        assert Course.objects.filter(name="Inorganic Chemistry WS 2026 - Chemistry").exists()
         assert Course.objects.filter(name="Inorganic Chemistry WS 2026 - Biology").exists()
 
     def test_users_by_role(self):
         assert User.objects.filter(username="admin", role="admin").count() == 1
-        assert User.objects.filter(role="assistant").count() == 2
-        assert User.objects.filter(role="student").count() == 9
+        assert User.objects.filter(role="assistant").count() == 3
+        assert User.objects.filter(role="student").count() == 12
 
     def test_analysis_types(self):
         assert AnalysisType.objects.count() == 3
@@ -56,15 +57,16 @@ class TestSeedCounts:
 
     def test_instances_one_per_student_per_announcement(self):
         # Each student gets one dedicated instance per announcement in their
-        # course: Biology 3x3 + Pharmacy 2x3 + Materials 2x3 = 21 instances.
-        assert AnalysisInstance.objects.count() == 21
-        assert StudentAssignment.objects.count() == 21
+        # course: Chemistry 2x3 + Biology 3x3 + Pharmacy 2x3 + Materials 2x3
+        # = 27 instances.
+        assert AnalysisInstance.objects.count() == 27
+        assert StudentAssignment.objects.count() == 27
         # No student has two instances for the same (course, number).
         dupes = StudentAssignment.objects.values("student", "course", "number").annotate(n=Count("id")).filter(n__gt=1)
         assert dupes.count() == 0
 
     def test_barcodes_for_every_student(self):
-        assert StudentBarcode.objects.count() == 9
+        assert StudentBarcode.objects.count() == 12
         for student in User.objects.filter(role="student"):
             assert student.barcodes.count() == 1
 
@@ -80,13 +82,14 @@ class TestSeedCounts:
         assert GradingConfig.objects.filter(course=biology).exists()
 
     def test_app_settings_active_course(self):
+        # Chemistry is the default (active) course.
         settings_row = AppSettings.get_instance()
         assert settings_row.active_course is not None
-        assert settings_row.active_course.name == "Inorganic Chemistry WS 2026 - Biology"
+        assert settings_row.active_course.name == "Inorganic Chemistry WS 2026 - Chemistry"
 
     def test_assistant_course_links(self):
-        # Each of the two assistants is linked to a course.
-        assert AssistantCourse.objects.count() == 2
+        # Each of the three assistants is linked to a course.
+        assert AssistantCourse.objects.count() == 3
 
 
 class TestDemoPassword:
@@ -122,7 +125,7 @@ class TestSubmissions:
 
     def test_submissions_created_and_graded(self):
         subs = list(Submission.objects.all())
-        assert len(subs) == 4
+        assert len(subs) == 6
         # The "correct" plans score the full ideal score for their course.
         assert any(s.score == s.ideal_score and s.wrong_count == 0 for s in subs)
         # The "partial" plans score below the ideal (missed ions).
@@ -175,11 +178,11 @@ class TestReset:
     def test_reset_wipes_then_reseeds(self):
         # Seed once so there is something to reset.
         call_command("seed_demo", stdout=StringIO())
-        assert Submission.objects.count() == 4
-        assert AnalysisInstance.objects.count() == 21
+        assert Submission.objects.count() == 6
+        assert AnalysisInstance.objects.count() == 27
         # Reset + re-seed: same end state, no accumulation.
         call_command("seed_demo", "--reset", stdout=StringIO())
-        assert Submission.objects.count() == 4
-        assert AnalysisInstance.objects.count() == 21
-        assert Course.objects.count() == 3
-        assert User.objects.filter(role="student").count() == 9
+        assert Submission.objects.count() == 6
+        assert AnalysisInstance.objects.count() == 27
+        assert Course.objects.count() == 4
+        assert User.objects.filter(role="student").count() == 12
