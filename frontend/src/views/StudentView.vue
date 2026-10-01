@@ -6,7 +6,7 @@
         <div>
           <h1 class="fc-title fc-title--hero">FlameCheck</h1>
           <p class="landing-subtitle">Your flame test analyses</p>
-          <n-tag v-if="user?.course_name" class="landing-course" type="info" :bordered="false" size="small" round>
+          <n-tag v-if="user?.course_name" class="landing-course" type="info" :bordered="false" size="medium" round>
             {{ user.course_name }}
           </n-tag>
         </div>
@@ -180,6 +180,7 @@ onMounted(load)
 
 .landing-course {
   margin-top: var(--fc-space-xs);
+  font-size: var(--fc-fs-sm);
 }
 
 .landing-actions {
