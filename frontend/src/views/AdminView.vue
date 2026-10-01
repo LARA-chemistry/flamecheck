@@ -22,6 +22,36 @@
       >
         {{ item.label }}
       </n-button>
+      <!-- Settings is pinned to the far right, with a gear icon. -->
+      <n-button
+        class="admin-nav__settings"
+        :type="isCurrent('admin-settings') ? 'primary' : 'default'"
+        secondary
+        size="small"
+        @click="router.push({ name: 'admin-settings' })"
+      >
+        <template #icon>
+          <svg class="settings-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M19.4 13a1.65 1.65 0 0 0 .34 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.34 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .34-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.34-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.34h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.34 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+            />
+          </svg>
+        </template>
+        Settings
+      </n-button>
     </nav>
 
     <router-view />
@@ -82,12 +112,13 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
+// Main nav (left). Settings is rendered separately, pinned to the far right.
+// The global "Assignments" page was removed: enrolling students is done at the
+// course level (the "Assign" button on each course row), which is more intuitive.
 const navItems = [
-  { to: 'admin-settings', label: 'Settings' },
   { to: 'admin-courses', label: 'Courses' },
   { to: 'admin-types', label: 'Analysis Types' },
   { to: 'admin-substances', label: 'Substances' },
-  { to: 'admin-assignments', label: 'Assignments' },
 ]
 
 function isCurrent(name) {
@@ -104,7 +135,17 @@ function handleLogout() {
 .admin-nav {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--fc-space-xs);
   margin-bottom: var(--fc-space-md);
+}
+
+/* Pin the Settings button to the far right of the nav row. */
+.admin-nav__settings {
+  margin-left: auto;
+}
+
+.settings-icon {
+  display: block;
 }
 </style>

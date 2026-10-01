@@ -31,7 +31,7 @@ const routes = [
     name: 'admin',
     component: () => import('../views/AdminView.vue'),
     meta: { roles: ['admin'] },
-    redirect: { name: 'admin-settings' },
+    redirect: { name: 'admin-courses' },
     children: [
       {
         path: 'settings',
