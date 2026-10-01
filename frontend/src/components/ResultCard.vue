@@ -49,33 +49,76 @@
           </span>
         </header>
 
-        <!-- FINAL submission: full correct / wrong / missing breakdown (with ions) -->
+        <!-- FINAL submission: full correct / wrong / missing breakdown (with ions),
+             aligned in a grid and split into cations vs. anions. -->
         <div v-if="s.is_last" class="attempt__breakdown">
           <section class="breakdown-row">
             <h4 class="breakdown-row__label breakdown-row__label--correct">Right</h4>
-            <div class="breakdown-row__tags">
-              <n-tag v-for="ion in s.correct" :key="ion.id" type="success" :bordered="false" round>
-                {{ ion.symbol }}
-              </n-tag>
-              <span v-if="s.correct.length === 0" class="breakdown-row__none">none</span>
+            <div class="breakdown-row__groups">
+              <div class="ion-group">
+                <span class="ion-group__kind ion-group__kind--cation">Cations</span>
+                <div class="ion-group__tags">
+                  <n-tag v-for="ion in splitByKind(s.correct).cations" :key="ion.id" type="success" :bordered="false" round>
+                    {{ ion.symbol }}
+                  </n-tag>
+                  <span v-if="splitByKind(s.correct).cations.length === 0" class="breakdown-row__none">none</span>
+                </div>
+              </div>
+              <div class="ion-group">
+                <span class="ion-group__kind ion-group__kind--anion">Anions</span>
+                <div class="ion-group__tags">
+                  <n-tag v-for="ion in splitByKind(s.correct).anions" :key="ion.id" type="success" :bordered="false" round>
+                    {{ ion.symbol }}
+                  </n-tag>
+                  <span v-if="splitByKind(s.correct).anions.length === 0" class="breakdown-row__none">none</span>
+                </div>
+              </div>
             </div>
           </section>
           <section class="breakdown-row">
             <h4 class="breakdown-row__label breakdown-row__label--wrong">Wrong</h4>
-            <div class="breakdown-row__tags">
-              <n-tag v-for="ion in s.wrong" :key="ion.id" type="error" :bordered="false" round>
-                {{ ion.symbol }}
-              </n-tag>
-              <span v-if="s.wrong.length === 0" class="breakdown-row__none">none</span>
+            <div class="breakdown-row__groups">
+              <div class="ion-group">
+                <span class="ion-group__kind ion-group__kind--cation">Cations</span>
+                <div class="ion-group__tags">
+                  <n-tag v-for="ion in splitByKind(s.wrong).cations" :key="ion.id" type="error" :bordered="false" round>
+                    {{ ion.symbol }}
+                  </n-tag>
+                  <span v-if="splitByKind(s.wrong).cations.length === 0" class="breakdown-row__none">none</span>
+                </div>
+              </div>
+              <div class="ion-group">
+                <span class="ion-group__kind ion-group__kind--anion">Anions</span>
+                <div class="ion-group__tags">
+                  <n-tag v-for="ion in splitByKind(s.wrong).anions" :key="ion.id" type="error" :bordered="false" round>
+                    {{ ion.symbol }}
+                  </n-tag>
+                  <span v-if="splitByKind(s.wrong).anions.length === 0" class="breakdown-row__none">none</span>
+                </div>
+              </div>
             </div>
           </section>
           <section class="breakdown-row">
             <h4 class="breakdown-row__label breakdown-row__label--missing">Missing</h4>
-            <div class="breakdown-row__tags">
-              <n-tag v-for="ion in s.missing" :key="ion.id" type="warning" :bordered="false" round>
-                {{ ion.symbol }}
-              </n-tag>
-              <span v-if="s.missing.length === 0" class="breakdown-row__none">none</span>
+            <div class="breakdown-row__groups">
+              <div class="ion-group">
+                <span class="ion-group__kind ion-group__kind--cation">Cations</span>
+                <div class="ion-group__tags">
+                  <n-tag v-for="ion in splitByKind(s.missing).cations" :key="ion.id" type="warning" :bordered="false" round>
+                    {{ ion.symbol }}
+                  </n-tag>
+                  <span v-if="splitByKind(s.missing).cations.length === 0" class="breakdown-row__none">none</span>
+                </div>
+              </div>
+              <div class="ion-group">
+                <span class="ion-group__kind ion-group__kind--anion">Anions</span>
+                <div class="ion-group__tags">
+                  <n-tag v-for="ion in splitByKind(s.missing).anions" :key="ion.id" type="warning" :bordered="false" round>
+                    {{ ion.symbol }}
+                  </n-tag>
+                  <span v-if="splitByKind(s.missing).anions.length === 0" class="breakdown-row__none">none</span>
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -135,6 +178,16 @@ const ordered = computed(() =>
     .sort((a, b) => b.submission_number - a.submission_number),
 )
 const passed = computed(() => props.totalScore > 0)
+
+// Split a list of ions into { cations: [], anions: [] } (by ion.kind).
+function splitByKind(ions) {
+  const out = { cations: [], anions: [] }
+  for (const ion of ions || []) {
+    if (ion.kind === 'anion') out.anions.push(ion)
+    else out.cations.push(ion)
+  }
+  return out
+}
 </script>
 
 <style scoped>
@@ -320,7 +373,34 @@ const passed = computed(() => props.totalScore > 0)
 .breakdown-row__label--missing {
   color: #f57c00;
 }
-.breakdown-row__tags {
+/* Cation / anion groups within a breakdown row. */
+.breakdown-row__groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--fc-space-sm);
+  align-items: start;
+  min-width: 0;
+}
+.ion-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ion-group__kind {
+  font-size: var(--fc-fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fc-text-soft);
+}
+.ion-group__kind--cation {
+  color: #1565c0;
+}
+.ion-group__kind--anion {
+  color: #6a1b9a;
+}
+.ion-group__tags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--fc-space-xs);
@@ -359,6 +439,10 @@ const passed = computed(() => props.totalScore > 0)
 
 @media (max-width: 520px) {
   .breakdown-row {
+    grid-template-columns: 1fr;
+    gap: var(--fc-space-xs);
+  }
+  .breakdown-row__groups {
     grid-template-columns: 1fr;
     gap: var(--fc-space-xs);
   }
