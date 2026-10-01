@@ -1,0 +1,491 @@
+"""
+Seed a rich demo dataset for staging using the factory-boy factories.
+
+Unlike :cmd:`load_examples` (which reads a fixed set of JSON files), this
+command builds the demo environment programmatically from the ``factory.py``
+modules that live in each app. That keeps the demo data in code (reviewable,
+easy to tweak) and exercises the same factories the test-suite uses.
+
+What it creates, illustrating every feature of the system:
+
+* the ion / substance reference catalog (``create_ion_catalog`` +
+  :class:`~substances.factory.SubstanceFactory`),
+* three courses (Biology / Pharmacy / Materials), one of them the active one,
+* users — an admin, two assistants (each linked to a course) and nine students
+  (three per course) — **all sharing the password ``FlameCheck32!``** —
+  plus student barcodes,
+* analysis types (each with a *possible* ion set),
+* analysis instances: one per student per announcement, with time windows that
+  span the ``open`` / ``too_early`` / ``too_late`` states relative to "now",
+* student → instance assignments (the per-student sheet design),
+* the singleton :class:`~config.models.GradingConfig` *and* a per-course
+  override (to demonstrate per-course grading),
+* the singleton :class:`~config.models.AppSettings` (active course),
+* a handful of pre-seeded submissions graded through the real
+  :meth:`~analyses.models.AnalysisInstance.submit` business logic.
+
+The command is idempotent: re-running it refreshes the demo rows without
+duplicating them. Pass ``--reset`` to wipe the seeded domain first (useful
+after experimenting).
+
+Run it with::
+
+    uv run python manage.py seed_demo            # create / refresh the demo data
+    uv run python manage.py seed_demo --reset    # wipe + re-seed from scratch
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from config.factory import (
+    AssistantCourseFactory,
+    CourseFactory,
+    GradingConfigFactory,
+)
+from config.models import AppSettings, AssistantCourse, Course, GradingConfig
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+from substances.factory import IonFactory, SubstanceFactory, create_ion_catalog
+from substances.models import Ion, Substance
+from users.factory import (
+    AdminUserFactory,
+    AssistantUserFactory,
+    StudentBarcodeFactory,
+    UserFactory,
+)
+from users.models import StudentAssignment, StudentBarcode, User
+
+from analyses.factory import AnalysisInstanceFactory, AnalysisTypeFactory
+from analyses.models import AnalysisInstance, AnalysisType, Submission
+
+# Uniform demo password for every account the command creates (see the module
+# docstring and the staging docs). Intentionally a fixed, documented value — it
+# is the shared password for staging demo accounts, not a secret.
+DEMO_PASSWORD: str = "FlameCheck32!"  # noqa: S105
+
+# Course / track layout: (name, semester, track, is_active, is_the_active_course).
+_COURSES: list[tuple[str, str, str, bool, bool]] = [
+    ("Inorganic Chemistry WS 2026 - Biology", "WS 2026", "biology", True, True),
+    ("Inorganic Chemistry WS 2026 - Pharmacy", "WS 2026", "pharmacy", True, False),
+    ("Inorganic Chemistry SS 2026 - Materials", "SS 2026", "materials", True, False),
+]
+
+# Users: (username, role, name, course_name_or_None).
+_USERS: list[tuple[str, str, str, str | None]] = [
+    ("admin", "admin", "Demo Admin", None),
+    ("assistant.bio", "assistant", "Biology Lab Assistant", "Inorganic Chemistry WS 2026 - Biology"),
+    ("assistant.pharmacy", "assistant", "Pharmacy Lab Assistant", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-anna", "student", "Anna Schulz", "Inorganic Chemistry WS 2026 - Biology"),
+    ("student-ben", "student", "Ben Weber", "Inorganic Chemistry WS 2026 - Biology"),
+    ("student-clara", "student", "Clara Novak", "Inorganic Chemistry WS 2026 - Biology"),
+    ("student-david", "student", "David Kim", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-emma", "student", "Emma Rossi", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-felix", "student", "Felix Braun", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-greta", "student", "Greta Schmidt", "Inorganic Chemistry SS 2026 - Materials"),
+    ("student-hugo", "student", "Hugo Fischer", "Inorganic Chemistry SS 2026 - Materials"),
+    ("student-ines", "student", "Ines Costa", "Inorganic Chemistry SS 2026 - Materials"),
+]
+
+# Analysis types: (name, description, possible ion catalog keys).
+_TYPES: list[tuple[str, str, list[str]]] = [
+    (
+        "Cations I & II",
+        "Qualitative detection of the main cation groups (groups I and II).",
+        ["ammonium", "magnesium", "calcium", "copper", "iron2", "iron3", "aluminium", "zinc", "manganese", "barium"],
+    ),
+    (
+        "Anions & halides",
+        "Detection of common anions, including the halides and oxyanions.",
+        [
+            "chloride",
+            "bromide",
+            "iodide",
+            "sulfate",
+            "sulfite",
+            "carbonate",
+            "phosphate",
+            "nitrate",
+            "nitrite",
+            "sulfide",
+        ],
+    ),
+    (
+        "Mixed cation / anion panel",
+        "A combined panel covering representative cations and anions.",
+        ["sodium", "potassium", "ammonium", "chloride", "sulfate", "carbonate", "nitrate", "phosphate"],
+    ),
+]
+
+# Announcements: (course_name, number, type_name, window_state, correct ion keys).
+# window_state drives the time window relative to "now" (see
+# :meth:`AnalysisInstanceFactory.make`).
+_ANNOUNCEMENTS: list[tuple[str, int, str, str, list[str]]] = [
+    (
+        "Inorganic Chemistry WS 2026 - Biology",
+        1,
+        "Cations I & II",
+        "open",
+        ["ammonium", "magnesium", "copper", "iron2"],
+    ),
+    ("Inorganic Chemistry WS 2026 - Biology", 2, "Anions & halides", "open", ["chloride", "sulfate", "carbonate"]),
+    (
+        "Inorganic Chemistry WS 2026 - Biology",
+        3,
+        "Mixed cation / anion panel",
+        "too_late",
+        ["sodium", "potassium", "nitrate"],
+    ),
+    ("Inorganic Chemistry WS 2026 - Pharmacy", 1, "Cations I & II", "open", ["calcium", "zinc", "barium", "iron3"]),
+    ("Inorganic Chemistry WS 2026 - Pharmacy", 2, "Anions & halides", "too_early", ["bromide", "sulfite", "phosphate"]),
+    ("Inorganic Chemistry SS 2026 - Materials", 1, "Cations I & II", "open", ["manganese", "aluminium", "iron3"]),
+    (
+        "Inorganic Chemistry SS 2026 - Materials",
+        2,
+        "Mixed cation / anion panel",
+        "too_late",
+        ["potassium", "carbonate", "phosphate", "nitrate"],
+    ),
+]
+
+# Substances: (name, formula, ion keys). A realistic salt per common ion pair.
+_SUBSTANCES: list[tuple[str, str, list[str]]] = [
+    ("Ammonium chloride", "NH4Cl", ["ammonium", "chloride"]),
+    ("Magnesium sulfate", "MgSO4", ["magnesium", "sulfate"]),
+    ("Calcium carbonate", "CaCO3", ["calcium", "carbonate"]),
+    ("Copper sulfate", "CuSO4", ["copper", "sulfate"]),
+    ("Iron(II) sulfate", "FeSO4", ["iron2", "sulfate"]),
+    ("Iron(III) nitrate", "Fe(NO3)3", ["iron3", "nitrate"]),
+    ("Aluminium sulfate", "Al2(SO4)3", ["aluminium", "sulfate"]),
+    ("Zinc chloride", "ZnCl2", ["zinc", "chloride"]),
+    ("Manganese sulfate", "MnSO4", ["manganese", "sulfate"]),
+    ("Barium sulfate", "BaSO4", ["barium", "sulfate"]),
+    ("Sodium chloride", "NaCl", ["sodium", "chloride"]),
+    ("Potassium nitrate", "KNO3", ["potassium", "nitrate"]),
+    ("Sodium bromide", "NaBr", ["sodium", "bromide"]),
+    ("Potassium iodide", "KI", ["potassium", "iodide"]),
+    ("Sodium sulfite", "Na2SO3", ["sodium", "sulfite"]),
+    ("Sodium phosphate", "Na3PO4", ["sodium", "phosphate"]),
+    ("Sodium nitrate", "NaNO3", ["sodium", "nitrate"]),
+    ("Sodium sulfide", "Na2S", ["sodium", "sulfide"]),
+]
+
+
+class Command(BaseCommand):
+    """Seed a factory-built demo dataset for staging (users, courses, analyses)."""
+
+    help = (
+        "Create a rich demo dataset from the factory.py modules for staging. "
+        f"All demo accounts share the password '{DEMO_PASSWORD}'."
+    )
+
+    def add_arguments(self, parser: Any) -> None:
+        """Register the command-line options (--reset)."""
+        parser.add_argument(
+            "--reset",
+            action="store_true",
+            help="Wipe the seeded demo domain (users, courses, analyses) before seeding.",
+        )
+
+    # -- entry point ---------------------------------------------------------
+    @transaction.atomic
+    def handle(self, *args: Any, **options: Any) -> None:
+        """Seed the demo dataset (optionally after a reset)."""
+        if options["reset"]:
+            self._reset()
+
+        self._seed_catalog()
+        courses = self._seed_courses()
+        users = self._seed_users(courses)
+        self._seed_assistant_courses(users, courses)
+        types = self._seed_types()
+        instances = self._seed_announcements(types, courses, users)
+        self._seed_singletons(courses)
+        self._seed_submissions(users, instances)
+
+        self._print_summary(courses, users, instances)
+
+    # -- reset ---------------------------------------------------------------
+    def _reset(self) -> None:
+        """Wipe the seeded domain (submissions, assignments, instances, types, demo users/courses, configs)."""
+        demo_usernames = [u[0] for u in _USERS]
+        demo_course_names = [c[0] for c in _COURSES]
+
+        Submission.objects.all().delete()
+        StudentAssignment.objects.all().delete()
+        AnalysisInstance.objects.all().delete()
+        AnalysisType.objects.all().delete()
+        AssistantCourse.objects.all().delete()
+        GradingConfig.objects.all().delete()
+        AppSettings.objects.all().delete()
+        # Demo students are the ones that carry a barcode; drop those and the
+        # named demo users (covers leftovers from earlier seeding runs too).
+        barcode_students = list(StudentBarcode.objects.values_list("student_id", flat=True))
+        StudentBarcode.objects.all().delete()
+        User.objects.filter(id__in=barcode_students).delete()
+        User.objects.filter(username__in=demo_usernames).delete()
+        Course.objects.filter(name__in=demo_course_names).delete()
+        self.stdout.write(self.style.WARNING("Reset: cleared demo users, courses and the analyses domain."))
+
+    # -- reference catalog ---------------------------------------------------
+    def _seed_catalog(self) -> None:
+        """Create (idempotently) the ion catalog and the demo substances."""
+        create_ion_catalog()  # the full ION_CATALOG
+        ion_by_key = {i.name: i for i in Ion.objects.all()}
+        for name, formula, keys in _SUBSTANCES:
+            ions = [ion_by_key[k] for k in keys if k in ion_by_key]
+            SubstanceFactory(name=name, formula=formula, ions=ions)
+        self.stdout.write(f"  catalog: {Ion.objects.count()} ions, {Substance.objects.count()} substances")
+
+    # -- courses -------------------------------------------------------------
+    def _seed_courses(self) -> dict[str, Course]:
+        """Create the demo courses; returns a name → course map."""
+        result: dict[str, Course] = {}
+        for name, semester, track, is_active, _ in _COURSES:
+            course = CourseFactory(name=name, semester=semester, track=track, is_active=is_active)
+            result[name] = course
+        return result
+
+    # -- users ---------------------------------------------------------------
+    def _seed_users(self, courses: dict[str, Course]) -> dict[str, User]:
+        """
+        Create the demo users (uniform password) + student barcodes.
+
+        ``UserFactory`` overrides ``_create`` (to hash the password via
+        ``create_user``/``create_superuser``), which bypasses its
+        ``django_get_or_create``; so existence is handled explicitly here to
+        keep the command idempotent.
+        """
+        result: dict[str, User] = {}
+        for username, role, name, course_name in _USERS:
+            course = courses.get(course_name) if course_name else None
+            email = f"{username}@flamecheck.local"
+            existing = User.objects.filter(username=username).first()
+            if existing is None:
+                if role == "admin":
+                    user = AdminUserFactory(username=username, email=email)
+                elif role == "assistant":
+                    user = AssistantUserFactory(username=username, email=email)
+                else:
+                    user = UserFactory(username=username, email=email)
+            else:
+                user = existing
+            # Sync profile fields, role flags and the uniform demo password
+            # (idempotent).
+            user.name = name
+            user.email = email
+            user.course = course
+            user.role = User.Role(role)
+            user.is_staff = role == "admin"
+            user.is_superuser = role == "admin"
+            user.set_password(DEMO_PASSWORD)
+            user.save()
+            if user.is_student and not StudentBarcode.objects.filter(student=user).exists():
+                StudentBarcodeFactory(student=user)
+            result[username] = user
+        return result
+
+    # -- assistant → course links -------------------------------------------
+    def _seed_assistant_courses(self, users: dict[str, User], courses: dict[str, Course]) -> None:
+        """Link each assistant to the course they are named after."""
+        for username, role, _name, course_name in _USERS:
+            if role != "assistant" or not course_name:
+                continue
+            assistant = users.get(username)
+            course = courses.get(course_name)
+            if assistant is None or course is None:
+                continue
+            AssistantCourseFactory(assistant=assistant, course=course)
+
+    # -- analysis types ------------------------------------------------------
+    def _seed_types(self) -> dict[str, AnalysisType]:
+        """Create the demo analysis types with their possible ion sets."""
+        result: dict[str, AnalysisType] = {}
+        ion_by_symbol = {i.symbol: i for i in Ion.objects.all()}
+        for name, description, keys in _TYPES:
+            ions = [ion_by_symbol[self._symbol_for_key(k)] for k in keys]
+            # The factory returns an AnalysisType; the ignore silences mypy,
+            # which cannot see the factory's return type (no py.typed stubs).
+            analysis_type: AnalysisType = AnalysisTypeFactory(  # type: ignore[assignment]
+                name=name, description=description, possible_ions=ions
+            )
+            result[name] = analysis_type
+        return result
+
+    @staticmethod
+    def _symbol_for_key(key: str) -> str:
+        """Map an :data:`ION_CATALOG` key (e.g. ``'iron2'``) to its ion symbol."""
+        from substances.factory import ION_CATALOG
+
+        return ION_CATALOG[key][0]
+
+    # -- announcements (instances + assignments) -----------------------------
+    def _seed_announcements(
+        self,
+        types: dict[str, AnalysisType],
+        courses: dict[str, Course],
+        users: dict[str, User],
+    ) -> dict[tuple[str, int], list[AnalysisInstance]]:
+        """
+        For each announcement, give every enrolled student their own instance.
+
+        Returns a (course name, number) → [instance per student] map so the
+        submission step can target specific (student, instance) pairs.
+        """
+        result: dict[tuple[str, int], list[AnalysisInstance]] = {}
+        ion_by_key: dict[str, Ion] = {}
+        for _course_name, _number, _type_name, _state, keys in _ANNOUNCEMENTS:
+            for k in keys:
+                ion_by_key.setdefault(k, IonFactory.make(k))
+
+        for course_name, number, type_name, state, keys in _ANNOUNCEMENTS:
+            course = courses.get(course_name)
+            analysis_type = types.get(type_name)
+            if course is None or analysis_type is None:
+                raise CommandError(f"Unknown course/type for announcement: {course_name!r} #{number} {type_name!r}")
+            correct_ions = [ion_by_key[k] for k in keys]
+
+            students = [u for u in users.values() if u.is_student and u.course_id == course.id]
+            created: list[AnalysisInstance] = []
+            for student in students:
+                # Reuse an existing (student, course, number) assignment if present
+                # (idempotency); otherwise create a dedicated instance.
+                existing = StudentAssignment.objects.filter(student=student, course=course, number=number).first()
+                if existing is not None:
+                    instance = existing.instance
+                else:
+                    instance = AnalysisInstanceFactory.make(
+                        window=state,
+                        type=analysis_type,
+                        course=course,
+                        number=number,
+                        correct_ions=correct_ions,
+                    )
+                    StudentAssignment.objects.create(student=student, instance=instance, course=course, number=number)
+                instance.correct_ions.set([i.id for i in correct_ions])
+                created.append(instance)
+            result[(course_name, number)] = created
+        return result
+
+    # -- singletons (grading + app settings) ---------------------------------
+    def _seed_singletons(self, courses: dict[str, Course]) -> None:
+        """Create the global grading config, a per-course override, app settings."""
+        GradingConfigFactory()  # the global default (pk=1, course=None)
+
+        # A per-course override on the Biology course to demonstrate per-course
+        # grading (stricter: all-or-nothing, one attempt). The factory pins
+        # pk=1 (the singleton), so a per-course row is written via the model.
+        biology = courses.get("Inorganic Chemistry WS 2026 - Biology")
+        if biology is not None:
+            GradingConfig.objects.update_or_create(
+                course=biology,
+                defaults={
+                    "grading_mode": "per_analysis",
+                    "points_per_correct_ion": 20,
+                    "max_submissions_per_analysis": 1,
+                    "final_score_strategy": "last",
+                },
+            )
+
+        active_course = None
+        for name, _sem, _track, _active, is_the_active in _COURSES:
+            if is_the_active:
+                active_course = courses.get(name)
+        settings_row = AppSettings.get_instance()
+        settings_row.points_per_analysis = 20
+        settings_row.analyses_per_course = 3
+        settings_row.active_course = active_course
+        settings_row.save()
+
+    # -- pre-seeded submissions ----------------------------------------------
+    def _seed_submissions(
+        self, users: dict[str, User], instances: dict[tuple[str, int], list[AnalysisInstance]]
+    ) -> None:
+        """Grade a handful of submissions through the real submit() logic."""
+        # (student username, course name, number, how the answer relates to the key)
+        # 'correct' -> selects exactly the answer key; 'partial' -> selects a
+        # subset (misses some); 'wrong' -> selects an ion outside the key.
+        plans: list[tuple[str, str, int, str]] = [
+            ("student-anna", "Inorganic Chemistry WS 2026 - Biology", 1, "correct"),
+            ("student-ben", "Inorganic Chemistry WS 2026 - Biology", 1, "partial"),
+            ("student-david", "Inorganic Chemistry WS 2026 - Pharmacy", 1, "correct"),
+            ("student-greta", "Inorganic Chemistry SS 2026 - Materials", 1, "partial"),
+        ]
+        for student_username, course_name, number, kind in plans:
+            student = users.get(student_username)
+            instances_for = instances.get((course_name, number), [])
+            instance = next(
+                (i for i in instances_for if i.assignments.filter(student=student).exists()),
+                None,
+            )
+            if student is None or instance is None:
+                self.stdout.write(
+                    self.style.WARNING(f"  skip submission: no instance for {student_username} #{number}")
+                )
+                continue
+            selected = self._selection_for(instance, kind)
+            # A stable idempotency key per (student, announcement) makes the
+            # command idempotent: re-running returns the original submission.
+            key = f"seed-demo-{student_username}-{number}"
+            try:
+                submission = instance.submit(student, selected, idempotency_key=key)
+            except Exception as exc:
+                self.stdout.write(self.style.WARNING(f"  skip submission {student_username} #{number}: {exc}"))
+                continue
+            self.stdout.write(
+                f"  submission: {student_username} #{number}  score={submission.score}/"
+                f"{submission.ideal_score}  ({kind})"
+            )
+
+    @staticmethod
+    def _selection_for(instance: AnalysisInstance, kind: str) -> list[int]:
+        """Pick the ion ids a demo student would select for a given ``kind``."""
+        correct_ids = list(instance.correct_ions.values_list("id", flat=True))
+        possible_ids = list(instance.type.possible_ions.values_list("id", flat=True))
+        if not correct_ids:
+            return []
+        match kind:
+            case "correct":
+                return correct_ids
+            case "partial":
+                # Select the first half of the answer key (miss the rest).
+                return correct_ids[: max(1, len(correct_ids) // 2)]
+            case "wrong":
+                # Select an ion that is possible but not in the key, plus one correct.
+                wrong = next((i for i in possible_ids if i not in set(correct_ids)), None)
+                return [correct_ids[0]] if wrong is None else [wrong, correct_ids[0]]
+            case _:
+                return correct_ids
+
+    # -- summary -------------------------------------------------------------
+    def _print_summary(
+        self,
+        courses: dict[str, Course],
+        users: dict[str, User],
+        instances: dict[tuple[str, int], list[AnalysisInstance]],
+    ) -> None:
+        style = self.style
+        n_instances = sum(len(v) for v in instances.values())
+        self.stdout.write("")
+        self.stdout.write(style.SUCCESS("Demo dataset seeded (staging):"))
+        self.stdout.write(f"  courses:        {len(courses)}")
+        self.stdout.write(f"  users:          {len(users)}  (password: {DEMO_PASSWORD})")
+        self.stdout.write(
+            f"    admin:      {sum(1 for u in users.values() if u.is_admin)}   "
+            f"assistant:    {sum(1 for u in users.values() if u.is_assistant)}   "
+            f"student:      {sum(1 for u in users.values() if u.is_student)}"
+        )
+        self.stdout.write(f"  analysis types: {AnalysisType.objects.count()}")
+        self.stdout.write(f"  instances:      {n_instances}  (one per student per announcement)")
+        self.stdout.write(f"  assignments:    {StudentAssignment.objects.count()}")
+        self.stdout.write(f"  barcodes:       {StudentBarcode.objects.count()}")
+        self.stdout.write(f"  submissions:    {Submission.objects.count()}")
+        self.stdout.write(f"  grading configs:{len(list(GradingConfig.objects.all()))} (global + per-course)")
+        self.stdout.write("")
+        self.stdout.write(style.NOTICE("Announcement windows (relative to now):"))
+        for (course_name, number), group in sorted(instances.items()):
+            sample = group[0] if group else None
+            status = sample.window_status() if sample else "-"
+            self.stdout.write(f"  {course_name} #{number}  [{status:>9}]  ({len(group)} students)")
+        self.stdout.write("")
+        self.stdout.write(style.NOTICE(f"Log in with any demo account and the password '{DEMO_PASSWORD}'."))

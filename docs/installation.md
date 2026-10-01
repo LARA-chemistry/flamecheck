@@ -105,6 +105,41 @@ uv run python examples/verify_demo.py
 See [`examples/README.md`](../examples/README.md) for the full dataset layout,
 the per-student sheet design, and what to try.
 
+### Staging demo: factory-based seeder
+
+For a staging environment you can seed a rich demo dataset directly from the
+factory modules (the same `factory.py` definitions the test-suite uses),
+instead of the fixed JSON files behind `load_examples`. The command builds
+everything programmatically so the demo layout lives in code and is easy to
+tweak:
+
+```bash
+uv run python manage.py seed_demo --reset
+```
+
+It creates:
+
+* the ion / substance reference catalog,
+* **3 courses** (Biology / Pharmacy / Materials), Biology being the *active*
+  course,
+* **12 users** — an admin, two assistants (each linked to a course) and nine
+  students (three per course) — **all sharing the password
+  `FlameCheck32!`**, plus a barcode for every student,
+* **3 analysis types** (each with a possible-ion set) and **analysis
+  instances** fanned out one-per-student per announcement, with time windows
+  spanning the *open*, *too early*, *too late* and *submitted* states,
+* **student → instance assignments** (the per-student sheet design),
+* the singleton `GradingConfig` **and** a per-course override on Biology
+  (all-or-nothing, one attempt) to demonstrate per-course grading,
+* the singleton `AppSettings` (active course), and
+* a handful of pre-seeded submissions graded through the real `submit()`
+  business logic.
+
+The command is **idempotent** — re-running it refreshes the demo rows without
+duplicating them. `--reset` first wipes the seeded users, courses and the
+analyses domain. Log in with any demo account and the password `FlameCheck32!`
+(e.g. `admin`, `assistant.bio` or `student-anna`).
+
 ## 6. Run the development server
 
 ```bash

@@ -78,7 +78,7 @@ flamecheck/
 │       └── src/analyses/
 │           ├── models.py       # Domain logic: window status, atomic submit, scoring
 │           ├── api/{student.py, assistant.py, admin.py, schemas.py}
-│           └── management/commands/load_examples.py
+│           └── management/commands/{load_examples,seed_demo}.py
 ├── frontend/                   # Vite + Vue 3 app (independent package.json)
 │   ├── package.json
 │   ├── vite.config.js          # Dev proxy /api → :8000; build uses --base /static/
@@ -621,6 +621,7 @@ WhiteNoise maps `dist/assets/*` → `/static/assets/*` and `dist/favicon.svg` �
 |---------|---------|--------|
 | `import_catalog` | substances | Loads `ions.json` (22 ions) + `substances.json` (35 substances) idempotently (`get_or_create` by `(symbol, kind)` / `name`) |
 | `load_examples` | analyses | Loads the `examples/datasets/` demo environment (courses, users, types, per-student instances, assignments, singletons, seeded submissions); idempotent, `--reset` to wipe first |
+| `seed_demo` | analyses | Staging seeder that builds the demo dataset from the `factory.py` modules (catalog, 3 courses, 12 users sharing the `FlameCheck32!` password, types, per-student instances across open/too-early/too-late windows, assignments, global + per-course grading configs, app settings, seeded submissions); idempotent, `--reset` to wipe first |
 | `init_barcode` | users | Creates a test barcode `FC-<id>-<uuid8>` (`--reset` to regenerate) |
 | `init_admin` | users | Creates an admin user |
 | `init_django` | users | Legacy bootstrap (references `LOCAL_APPS`/`FIXTURES`) |
