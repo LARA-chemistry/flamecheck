@@ -41,6 +41,7 @@ const navItems = [
   { to: 'admin-settings', label: 'Settings' },
   { to: 'admin-courses', label: 'Courses' },
   { to: 'admin-types', label: 'Analysis Types' },
+  { to: 'admin-substances', label: 'Substances' },
   { to: 'admin-assignments', label: 'Assignments' },
 ]
 

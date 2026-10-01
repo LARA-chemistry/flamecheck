@@ -7,12 +7,30 @@ need them to render their analysis). Mutating endpoints are admin-only.
 
 from __future__ import annotations
 
-from ninja import Router
+import csv
+import io
+import logging
+
+from django.http import HttpResponse
+from ninja import Router, UploadedFile
 from ninja.errors import AuthenticationError, HttpError, ValidationError
-from substances.api.schemas import IonIn, IonOut, SubstanceIn, SubstanceOut, ion_to_schema, substance_to_schema
+from substances.api.schemas import (
+    ImportCsvOut,
+    IonIn,
+    IonOut,
+    SubstanceIn,
+    SubstanceOut,
+    ion_to_schema,
+    substance_to_schema,
+)
 from substances.models import Ion, Substance
 
+logger = logging.getLogger("flamecheck.audit")
+
 router = Router(tags=["substances"])
+
+# Header row for the CSV import format (also used for the downloadable template).
+CSV_HEADER = ["name", "synonyms", "formula", "ions", "pubchem_id", "wikipedia_link"]
 
 
 def _require_admin(request) -> None:
@@ -45,6 +63,119 @@ def list_substances(request, ion_id: int | None = None):
     if ion_id is not None:
         qs = Substance.objects.with_ion(ion_id).prefetch_related("ions")
     return [substance_to_schema(s) for s in qs]
+
+
+# NOTE: the literal ``/substances/import-*`` routes must be registered before the
+# ``/substances/{substance_id}`` routes, otherwise the parameterized route shadows them.
+@router.get("/substances/import-template", response=None, operation_id="substance_import_template")
+def substance_import_template(request):
+    """Return a sample CSV showing the expected import format (admin only)."""
+    _require_admin(request)
+    # Multi-value cells (synonyms, ions) are semicolon-separated so they do not
+    # need CSV quoting; commas inside such a cell must be wrapped in quotes.
+    sample = "\n".join(
+        [
+            ",".join(CSV_HEADER),
+            "Sodium chloride,Table salt,NaCl,Na+;Cl-,238914022,https://en.wikipedia.org/wiki/Sodium_chloride",
+            "Potassium sulfate,,K2SO4,K+;SO4^2-,,,",
+        ]
+    )
+    return _csv_response(sample)
+
+
+@router.post("/substances/import-csv", response=ImportCsvOut)
+def import_substances_csv(request, file: UploadedFile):
+    """
+    Import substances from an uploaded CSV file (admin only).
+
+    Expected columns (first row is a header): ``name`` (required), ``synonyms``,
+    ``formula``, ``ions`` (comma/semicolon-separated ion symbols), ``pubchem_id``,
+    ``wikipedia_link``. Substances are matched by name; a matching row updates the
+    existing substance, otherwise a new one is created. Ion symbols are resolved
+    against existing ions; symbols that are not found are collected in
+    ``missing_ions`` unless the ``create_missing_ions`` form field is set to
+    ``true``, in which case bare ions (kind inferred from the charge sign) are
+    created.
+    """
+    _require_admin(request)
+    # ``create_missing_ions`` arrives as a multipart form field (or query param);
+    # accept the common truthy spellings.
+    raw_flag = request.POST.get("create_missing_ions") or request.GET.get("create_missing_ions") or ""
+    create_missing_ions = str(raw_flag).strip().lower() in {"1", "true", "yes", "on"}
+    raw = file.read()
+    if not raw:
+        raise ValidationError({"file": ["The uploaded file is empty."]})
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValidationError({"file": [f"File is not valid UTF-8: {exc}"]}) from exc
+
+    reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames is None or "name" not in [f.strip() for f in reader.fieldnames]:
+        raise ValidationError({"file": ["CSV must have a header row with a 'name' column."]})
+
+    created = updated = skipped = 0
+    missing_ions: list[str] = []
+    errors: list[str] = []
+    seen_missing: set[str] = set()
+
+    for line_no, row in enumerate(reader, start=2):
+        name = (row.get("name") or "").strip()
+        if not name:
+            skipped += 1
+            errors.append(f"Line {line_no}: missing 'name' - skipped.")
+            continue
+        try:
+            ion_ids: list[int] = []
+            for symbol in _split_list(row.get("ions")):
+                ion = Ion.objects.filter(symbol=symbol).first()
+                if ion is None:
+                    if create_missing_ions:
+                        ion = _create_ion_from_symbol(symbol)
+                    else:
+                        if symbol not in seen_missing:
+                            seen_missing.add(symbol)
+                            missing_ions.append(symbol)
+                if ion is not None:
+                    ion_ids.append(ion.id)
+            substance = Substance.objects.filter(name=name).first()
+            fields = {
+                "synonyms": _split_list(row.get("synonyms")),
+                "formula": (row.get("formula") or "").strip(),
+                "pubchem_id": (row.get("pubchem_id") or "").strip(),
+                "wikipedia_link": (row.get("wikipedia_link") or "").strip(),
+            }
+            if substance is None:
+                substance = Substance.objects.create(name=name, **fields)
+                if ion_ids:
+                    substance.ions.set(ion_ids)
+                created += 1
+            else:
+                for field, value in fields.items():
+                    setattr(substance, field, value)
+                substance.save()
+                substance.ions.set(ion_ids)
+                updated += 1
+        except Exception as exc:
+            errors.append(f"Line {line_no} ({name}): {exc}")
+
+    total_rows = created + updated + skipped
+    logger.info(
+        "Admin %s imported substances CSV: %d created, %d updated, %d skipped, %d missing ions",
+        request.user.username,
+        created,
+        updated,
+        skipped,
+        len(missing_ions),
+    )
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "total_rows": total_rows,
+        "missing_ions": sorted(missing_ions),
+        "errors": errors[:50],
+    }
 
 
 @router.get("/substances/{substance_id}", response=SubstanceOut)
@@ -133,3 +264,35 @@ def delete_substance(request, substance_id: int):
     """Delete a substance (admin only)."""
     _require_admin(request)
     Substance.objects.get(pk=substance_id).delete()
+
+
+# ---- CSV import -----------------------------------------------------------------
+def _split_list(value: str | None) -> list[str]:
+    """Split a delimited CSV cell (comma or semicolon) into a clean list."""
+    if not value:
+        return []
+    parts = value.replace(";", ",").split(",")
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _create_ion_from_symbol(symbol: str) -> Ion:
+    """Create a bare ion from a symbol string (kind inferred from the charge sign)."""
+    charge = 0
+    if symbol.endswith("+"):
+        charge = 1
+    elif symbol.endswith("-"):
+        charge = -1
+    kind = Ion.Kind.ANION if charge < 0 else Ion.Kind.CATION
+    ion, _created = Ion.objects.get_or_create(
+        symbol=symbol,
+        kind=kind,
+        defaults={"name": symbol, "charge": abs(charge) or 0, "group": ""},
+    )
+    return ion
+
+
+def _csv_response(body: str) -> HttpResponse:
+    """Build a ``text/csv`` response for the downloadable import template."""
+    response = HttpResponse(body, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="substances_import_template.csv"'
+    return response

@@ -51,6 +51,17 @@ class SubstanceIn(Schema):
     wikipedia_link: str | None = None
 
 
+class ImportCsvOut(Schema):
+    """Summary of a CSV import run (admin)."""
+
+    created: int
+    updated: int
+    skipped: int
+    total_rows: int
+    missing_ions: list[str]
+    errors: list[str]
+
+
 def ion_to_schema(ion: Any) -> dict:
     """Convert an :class:`~substances.models.Ion` to its schema dict."""
     return {

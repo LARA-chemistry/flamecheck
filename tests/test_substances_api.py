@@ -2,7 +2,7 @@
 
 import pytest
 from substances.factory import IonFactory, SubstanceFactory
-from substances.models import Ion
+from substances.models import Ion, Substance
 
 pytestmark = pytest.mark.django_db
 
@@ -89,3 +89,135 @@ class TestAdminMutations:
             resp = client.delete(f"/api/v1/ions/{cation.id}", **auth_headers(admin_user))
             assert resp.status_code == 400
             assert Ion.objects.filter(pk=cation.id).exists()
+
+
+class TestCsvImport:
+    """Tests for the admin-only CSV import endpoint."""
+
+    @staticmethod
+    def _csv_upload(csv_text: str):
+        """Build a multipart file upload payload from CSV text."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile("substances.csv", csv_text.encode("utf-8"), content_type="text/csv")
+
+    def test_requires_auth(self, client):
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload("name,formula\nX,Y")},
+        )
+        assert resp.status_code == 401
+
+    def test_forbidden_for_non_admin(self, client, student, auth_headers):
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload("name,formula\nX,Y")},
+            **auth_headers(student),
+        )
+        assert resp.status_code == 403
+
+    def test_import_creates_and_updates(self, client, admin_user, populated, auth_headers):
+        cation, anion, existing = populated
+        # Multi-value cells (synonyms/ions) are semicolon-separated to avoid CSV
+        # quoting issues.
+        csv_text = (
+            "name,synonyms,formula,ions,pubchem_id,wikipedia_link\n"
+            f"Fresh salt,Allosalt,KI,{cation.symbol};{anion.symbol},,,\n"
+            f"{existing.name},Updated alias,KI,{cation.symbol};{anion.symbol},123,https://en.wiki/I\n"
+        )
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload(csv_text)},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200, resp.content
+        data = resp.json()
+        assert data["created"] == 1
+        assert data["updated"] == 1
+        fresh = Substance.objects.get(name="Fresh salt")
+        assert fresh.formula == "KI"
+        assert set(fresh.ions.values_list("symbol", flat=True)) == {cation.symbol, anion.symbol}
+        # The pre-existing substance was updated, not duplicated.
+        assert Substance.objects.filter(name=existing.name).count() == 1
+        updated = Substance.objects.get(pk=existing.id)
+        assert updated.synonyms == ["Updated alias"]
+        assert set(updated.ions.values_list("symbol", flat=True)) == {cation.symbol, anion.symbol}
+
+    def test_missing_ions_collected(self, client, admin_user, auth_headers):
+        csv_text = "name,formula,ions\nMystery salt,??,Zz+;Qq-\n"
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload(csv_text)},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data["missing_ions"]) == {"Zz+", "Qq-"}
+        assert data["created"] == 1
+        # No ions were auto-created.
+        assert not Ion.objects.filter(symbol="Zz+").exists()
+
+    def test_missing_ions_quoted_commas(self, client, admin_user, auth_headers):
+        # A properly quoted cell may use commas as the intra-cell delimiter.
+        csv_text = 'name,formula,ions\nQuoted salt,??,"Zz+,Qq-"\n'
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload(csv_text)},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data["missing_ions"]) == {"Zz+", "Qq-"}
+
+    def test_create_missing_ions(self, client, admin_user, auth_headers):
+        csv_text = "name,formula,ions\nMystery salt,??,Zz+;Qq-\n"
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload(csv_text), "create_missing_ions": "true"},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["missing_ions"] == []
+        assert Ion.objects.get(symbol="Zz+").kind == Ion.Kind.CATION
+        assert Ion.objects.get(symbol="Qq-").kind == Ion.Kind.ANION
+
+    def test_rejects_empty_file(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload("")},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+
+    def test_rejects_missing_name_column(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload("formula,name_missing\nNaCl,x")},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+
+    def test_rows_without_name_are_skipped(self, client, admin_user, populated, auth_headers):
+        cation, _, _ = populated
+        csv_text = f"name,ions\n,cation.symbol\n\nGood salt,{cation.symbol}\n"
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload(csv_text)},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 1
+        assert data["skipped"] >= 1
+        assert any("name" in e for e in data["errors"])
+
+    def test_template_download(self, client, admin_user, auth_headers):
+        resp = client.get("/api/v1/substances/import-template", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert resp["Content-Type"] == "text/csv"
+        assert resp.content.decode().startswith("name,synonyms,formula,ions,pubchem_id,wikipedia_link")
+
+    def test_template_forbidden_for_student(self, client, student, auth_headers):
+        resp = client.get("/api/v1/substances/import-template", **auth_headers(student))
+        assert resp.status_code == 403
