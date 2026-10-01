@@ -51,6 +51,48 @@
       </template>
     </n-modal>
 
+    <!-- Per-course grading settings -->
+    <n-modal v-model:show="grading.show" preset="card" :title="`Grading — ${grading.courseName}`" style="width: 500px; max-width: 94vw">
+      <n-text depth="3" style="font-size: 13px; display:block; margin-bottom: 12px">
+        Overrides the default grading configuration for this course only.
+      </n-text>
+      <n-form label-placement="left" label-width="200">
+        <n-form-item label="Points per correct ion">
+          <n-input-number v-model:value="grading.form.points_per_correct_ion" :min="0" />
+        </n-form-item>
+        <n-form-item label="Penalty 2nd submission">
+          <n-input-number v-model:value="grading.form.penalty_second_submission" :min="0" />
+        </n-form-item>
+        <n-form-item label="Penalty 3rd submission">
+          <n-input-number v-model:value="grading.form.penalty_third_submission" :min="0" />
+        </n-form-item>
+        <n-form-item label="False positive deduction">
+          <n-input-number v-model:value="grading.form.false_positive_deduction" :min="0" />
+        </n-form-item>
+        <n-form-item label="Grading mode">
+          <n-select
+            v-model:value="grading.form.grading_mode"
+            :options="[{ label: 'Per Ion', value: 'per_ion' }, { label: 'Per Analysis', value: 'per_analysis' }]"
+          />
+        </n-form-item>
+        <n-form-item label="Max submissions per analysis">
+          <n-input-number v-model:value="grading.form.max_submissions_per_analysis" :min="1" />
+        </n-form-item>
+        <n-form-item label="Final score strategy">
+          <n-select
+            v-model:value="grading.form.final_score_strategy"
+            :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
+          />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="grading.show = false">Cancel</n-button>
+          <n-button type="primary" :loading="grading.saving" @click="saveGrading">Save Course Grading</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <n-alert v-if="message" :type="msgType">{{ message }}</n-alert>
   </n-space>
 </template>
@@ -59,8 +101,8 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { api } from '../api/client'
 import {
-  NSpace, NButton, NInput, NDataTable, NCard, NForm, NFormItem, NModal,
-  NSwitch, NTag, NEmpty, NAlert,
+  NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
+  NModal, NSwitch, NTag, NEmpty, NAlert,
 } from 'naive-ui'
 
 const message = ref('')
@@ -77,6 +119,23 @@ const modal = ref({
   editing: false,
   saving: false,
   form: { id: null, name: '', semester: '', track: '', is_active: true },
+})
+
+// Per-course grading settings (overrides the global default for one course).
+const grading = ref({
+  show: false,
+  saving: false,
+  courseId: null,
+  courseName: '',
+  form: {
+    points_per_correct_ion: 10,
+    penalty_second_submission: 2,
+    penalty_third_submission: 4,
+    false_positive_deduction: 0,
+    grading_mode: 'per_ion',
+    max_submissions_per_analysis: 3,
+    final_score_strategy: 'best',
+  },
 })
 
 const courseStudents = computed(() =>
@@ -99,6 +158,7 @@ const courseCols = [
       h('div', { style: 'display:flex;gap:6px' }, [
         h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => openEdit(row) }, () => 'Edit'),
         h(NButton, { size: 'tiny', secondary: true, onClick: () => selectCourse(row) }, () => 'Students'),
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openGrading(row) }, () => 'Grading'),
       ]),
   },
 ]
@@ -196,6 +256,51 @@ async function detachStudent(s) {
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
+  }
+}
+
+// ---- per-course grading settings ---------------------------------------------
+async function openGrading(row) {
+  // Mutate fields (rather than reassigning the ref) so the open <n-modal>'s
+  // v-model:show binding stays reactive.
+  grading.value.show = true
+  grading.value.saving = false
+  grading.value.courseId = row.id
+  grading.value.courseName = row.name
+  grading.value.form = {
+    points_per_correct_ion: 10,
+    penalty_second_submission: 2,
+    penalty_third_submission: 4,
+    false_positive_deduction: 0,
+    grading_mode: 'per_ion',
+    max_submissions_per_analysis: 3,
+    final_score_strategy: 'best',
+  }
+  try {
+    // The endpoint returns the course's own config or the global default, so the
+    // form is always populated with usable starting values.
+    grading.value.form = await api.get(`/admin/courses/${row.id}/grading-config`)
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  }
+}
+
+async function saveGrading() {
+  grading.value.saving = true
+  try {
+    grading.value.form = await api.put(
+      `/admin/courses/${grading.value.courseId}/grading-config`,
+      grading.value.form,
+    )
+    message.value = `Grading saved for ${grading.value.courseName}.`
+    msgType.value = 'success'
+    grading.value.show = false
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    grading.value.saving = false
   }
 }
 

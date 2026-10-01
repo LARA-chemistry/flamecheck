@@ -69,23 +69,58 @@ class GradingConfig(models.Model):
         default="best",
         help_text=_("How the final score is derived when multiple submissions exist."),
     )
+    course = models.ForeignKey(
+        "config.Course",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="grading_configs",
+        help_text=_(
+            "Course this grading configuration belongs to. Null is the global "
+            "default used by any course without its own configuration."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Grading configuration")
         verbose_name_plural = _("Grading configurations")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course"],
+                condition=models.Q(course__isnull=False),
+                name="unique_grading_config_per_course",
+            ),
+        ]
 
     def __str__(self) -> str:
+        scope = f" ({self.course.name})" if self.course_id else ""
         return (
-            f"Grading ({self.grading_mode}, "
+            f"Grading{scope} ({self.grading_mode}, "
             f"{self.points_per_correct_ion} pts/ion, "
             f"max {self.max_submissions_per_analysis})"
         )
 
     @classmethod
     def get_instance(cls) -> "GradingConfig":
-        """Return (creating if necessary) the singleton grading configuration."""
-        instance, _ = cls.objects.get_or_create(pk=1)
+        """Return (creating if necessary) the global (default) grading configuration."""
+        instance = cls.objects.filter(course__isnull=True).order_by("id").first()
+        if instance is None:
+            instance = cls.objects.create(course=None)
         return instance
+
+    @classmethod
+    def get_for_course(cls, course) -> "GradingConfig":
+        """
+        Return the grading configuration that applies to ``course``.
+
+        Returns the course's own configuration if one exists, otherwise the
+        global default. The global default is created on demand.
+        """
+        if course is not None:
+            own = cls.objects.filter(course=course).first()
+            if own is not None:
+                return own
+        return cls.get_instance()
 
     def ideal_score(self, correct_ion_count: int) -> int:
         """Compute the ideal (maximum) score for an analysis with ``correct_ion_count`` ions."""

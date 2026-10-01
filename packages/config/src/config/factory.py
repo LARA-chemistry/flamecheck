@@ -46,6 +46,7 @@ class GradingConfigFactory(DjangoModelFactory):
         django_get_or_create = ("pk",)
 
     pk = 1
+    course = None  # the global default; pass course=<Course> for a per-course config
     points_per_correct_ion = 10
     penalty_second_submission = 2
     penalty_third_submission = 4

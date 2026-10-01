@@ -423,9 +423,17 @@ def get_grading_config(request):
 
 @router.put("/grading-config", response=GradingConfigOut)
 def update_grading_config(request, payload: GradingConfigOut):
-    """Update the grading configuration (admin)."""
+    """Update the global (default) grading configuration (admin)."""
     _admin_user(request)
     gc = GradingConfig.get_instance()
+    _apply_grading_payload(gc, payload)
+    gc.save()
+    logger.info("Admin %s updated global grading config", request.user.username)
+    return _grading_config_payload(gc)
+
+
+def _apply_grading_payload(gc: GradingConfig, payload: GradingConfigOut) -> None:
+    """Copy the seven grading fields from ``payload`` onto ``gc`` (no save)."""
     gc.points_per_correct_ion = payload.points_per_correct_ion
     gc.penalty_second_submission = payload.penalty_second_submission
     gc.penalty_third_submission = payload.penalty_third_submission
@@ -433,8 +441,10 @@ def update_grading_config(request, payload: GradingConfigOut):
     gc.grading_mode = payload.grading_mode
     gc.max_submissions_per_analysis = payload.max_submissions_per_analysis
     gc.final_score_strategy = payload.final_score_strategy
-    gc.save()
-    logger.info("Admin %s updated grading config", request.user.username)
+
+
+def _grading_config_payload(gc: GradingConfig) -> dict:
+    """Serialize a :class:`GradingConfig` into the :class:`GradingConfigOut` shape."""
     return {
         "points_per_correct_ion": gc.points_per_correct_ion,
         "penalty_second_submission": gc.penalty_second_submission,
@@ -444,6 +454,38 @@ def update_grading_config(request, payload: GradingConfigOut):
         "max_submissions_per_analysis": gc.max_submissions_per_analysis,
         "final_score_strategy": gc.final_score_strategy,
     }
+
+
+# ---- per-course grading config ----------------------------------------------------
+@router.get("/courses/{course_id}/grading-config", response=GradingConfigOut)
+def get_course_grading_config(request, course_id: int):
+    """
+    Read the grading configuration that applies to a course.
+
+    Returns the course's own configuration if it has one, otherwise the global
+    default (so the form is always populated with usable starting values).
+    """
+    if not getattr(request.user, "is_authenticated", False):
+        raise AuthenticationError(401, "Authentication required.")
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    gc = GradingConfig.get_for_course(course)
+    return _grading_config_payload(gc)
+
+
+@router.put("/courses/{course_id}/grading-config", response=GradingConfigOut)
+def update_course_grading_config(request, course_id: int, payload: GradingConfigOut):
+    """Create or update a course's own grading configuration (admin)."""
+    _admin_user(request)
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    gc, _ = GradingConfig.objects.get_or_create(course=course)
+    _apply_grading_payload(gc, payload)
+    gc.save()
+    logger.info("Admin %s updated grading config for course %s", request.user.username, course.name)
+    return _grading_config_payload(gc)
 
 
 @router.get("/app-settings", response=AppSettingsOut)

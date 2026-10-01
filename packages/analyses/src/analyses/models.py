@@ -135,23 +135,32 @@ class AnalysisInstance(models.Model):
         """Number of submissions made for this instance."""
         return self.submissions.count()
 
+    def grading_config(self) -> GradingConfig:
+        """
+        The grading configuration that applies to this instance.
+
+        Uses the course's own configuration when the instance belongs to a
+        course that has one, otherwise the global default.
+        """
+        return GradingConfig.get_for_course(self.course)
+
     def submission_limit(self) -> int:
-        """Maximum number of submissions allowed (from grading config)."""
-        return int(GradingConfig.get_instance().max_submissions_per_analysis)
+        """Maximum number of submissions allowed (from the applicable grading config)."""
+        return int(self.grading_config().max_submissions_per_analysis)
 
     def score(self) -> int | None:
         """Final score for this instance, or None if no submissions yet."""
         submissions = list(self.submissions.order_by("submitted_at"))
         if not submissions:
             return None
-        grading = GradingConfig.get_instance()
+        grading = self.grading_config()
         if grading.final_score_strategy == "last":
             return submissions[-1].score
         return max(s.score for s in submissions)
 
     def ideal_score(self) -> int:
         """Maximum achievable score for this instance."""
-        return GradingConfig.get_instance().ideal_score(self.correct_ions.count())
+        return self.grading_config().ideal_score(self.correct_ions.count())
 
     # -- submission (atomic, idempotent, rate-safe) -------------------------
     def submit(
@@ -233,7 +242,7 @@ class AnalysisInstance(models.Model):
             submission_number = self.submissions.count() + 1
             correct_ids = set(self.correct_ions.values_list("id", flat=True))
             selected_set = set(selected_ion_ids)
-            grading = GradingConfig.get_instance()
+            grading = self.grading_config()
             result = grading.score_submission(
                 correct_ion_ids=correct_ids,
                 selected_ion_ids=selected_set,

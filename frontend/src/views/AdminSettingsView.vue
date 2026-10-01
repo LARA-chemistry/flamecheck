@@ -23,7 +23,14 @@
       </n-form>
     </n-card>
 
-    <n-card title="Grading configuration" size="small" :bordered="false">
+    <n-card size="small" :bordered="false">
+      <div class="grading-card-head">
+        <h3 class="grading-card-title">Default grading configuration</h3>
+        <span class="grading-card-hint">
+          Used by any course that does not have its own settings.
+          Override per course in <strong>Courses</strong>.
+        </span>
+      </div>
       <n-form label-placement="left" label-width="220">
         <n-form-item label="Points per correct ion">
           <n-input-number v-model:value="grading.points_per_correct_ion" :min="0" />
@@ -150,3 +157,19 @@ onMounted(() => {
   loadGrading()
 })
 </script>
+
+<style scoped>
+.grading-card-head {
+  margin-bottom: var(--fc-space-sm);
+}
+.grading-card-title {
+  font-size: var(--fc-fs-md);
+  font-weight: 700;
+  color: var(--fc-ink);
+  margin: 0 0 4px;
+}
+.grading-card-hint {
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-text-soft);
+}
+</style>
