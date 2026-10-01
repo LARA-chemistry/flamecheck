@@ -22,12 +22,35 @@
         <n-form-item label="Password" path="password">
           <n-input
             v-model:value="form.password"
-            type="password"
-            show-password
+            :type="showPassword ? 'text' : 'password'"
             size="large"
             placeholder="Enter password"
             @keyup.enter="handleLogin"
-          />
+          >
+            <template #suffix>
+              <button
+                type="button"
+                class="pw-toggle"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                :aria-pressed="String(showPassword)"
+                title="Show / hide password"
+                tabindex="-1"
+                @click="showPassword = !showPassword"
+              >
+                <!-- Eye (password hidden) -->
+                <svg v-if="!showPassword" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+                  <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                </svg>
+                <!-- Eye with slash (password visible) -->
+                <svg v-else viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M10.6 5.1A9.7 9.7 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.9 8.2 2 12 2 12s3.5 7 10 7a9.5 9.5 0 0 0 4.2-1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                </svg>
+              </button>
+            </template>
+          </n-input>
         </n-form-item>
         <n-button type="primary" size="large" block :loading="loading" class="login-submit" @click="handleLogin">
           Sign In
@@ -53,6 +76,7 @@ const loading = ref(false)
 const error = ref('')
 
 const form = ref({ username: '', password: '' })
+const showPassword = ref(false)
 const rules = {
   username: { required: true, message: 'Username is required', trigger: 'blur' },
   password: { required: true, message: 'Password is required', trigger: 'blur' },
@@ -182,5 +206,26 @@ async function handleLogin() {
 
 .login-error {
   margin-top: var(--fc-space-sm);
+}
+
+/* Password show/hide eye toggle (input suffix). */
+.pw-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--fc-muted);
+  cursor: pointer;
+  padding: 2px;
+  margin: 0;
+  border-radius: 6px;
+  line-height: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.pw-toggle:hover,
+.pw-toggle:focus-visible {
+  color: var(--fc-flame-2);
+  outline: none;
 }
 </style>
