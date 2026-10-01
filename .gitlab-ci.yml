@@ -160,8 +160,8 @@ test:
         coverage_format: cobertura
         path: coverage.xml
   extends:
-    - .run_on_all_branches
-    # - .run_on_manual
+    #- .run_on_all_branches
+    - .run_on_manual
     - .parallel_python_jobs
 
 # Jobs: ======================================== Build ========================================
