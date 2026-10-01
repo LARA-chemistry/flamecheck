@@ -23,14 +23,16 @@
         <div
           v-for="a in analyses"
           :key="a.id"
-          class="fc-card fc-card--interactive"
+          class="fc-card"
+          :class="isActive(a) ? 'fc-card--interactive' : 'fc-card--inactive'"
           role="button"
-          tabindex="0"
+          :tabindex="isActive(a) ? 0 : -1"
           :aria-label="`Open ${a.type} number ${a.number}`"
+          :aria-disabled="String(!isActive(a))"
           @click="openAnalysis(a)"
           @keyup.enter="openAnalysis(a)"
         >
-          <span class="fc-card__accent"></span>
+          <span class="fc-card__accent" :class="{ 'fc-card__accent--muted': !isActive(a) }"></span>
           <div class="analysis-card">
             <div class="analysis-card__top">
               <span class="analysis-card__num">#{{ a.number }}</span>
@@ -91,8 +93,13 @@ function windowLabel(status) {
 function initial(u) {
   return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
 }
+// An analysis is actionable only while its window is open or already submitted.
+// too_early / too_late analyses are shown greyed-out and are not clickable.
+function isActive(a) {
+  return a.window_status === 'open' || a.window_status === 'submitted'
+}
 function openAnalysis(a) {
-  if (a.window_status === 'open' || a.window_status === 'submitted') {
+  if (isActive(a)) {
     router.push(`/analysis/${a.id}`)
   }
 }
@@ -222,5 +229,31 @@ onMounted(load)
 
 .analysis-card__action {
   margin-top: var(--fc-space-xs);
+}
+
+/* Inactive (not yet open / closed) analyses: greyed out and not interactive. */
+.fc-card--inactive {
+  cursor: default;
+  opacity: 0.62;
+  filter: grayscale(0.55);
+  box-shadow: var(--fc-shadow-sm);
+}
+.fc-card--inactive:hover,
+.fc-card--inactive:focus-within {
+  transform: none;
+  box-shadow: var(--fc-shadow-sm);
+}
+.fc-card--inactive .analysis-card__num,
+.fc-card--inactive .analysis-card__title {
+  color: var(--fc-muted);
+}
+.fc-card--inactive .analysis-card__stats {
+  background: rgba(127, 127, 127, 0.12);
+}
+.fc-card--inactive .stat__value {
+  color: var(--fc-text-soft);
+}
+.fc-card__accent--muted {
+  background: var(--fc-border) !important;
 }
 </style>
