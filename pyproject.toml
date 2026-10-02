@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "flamecheck"
-version = "0.0.0"
+version = "0.0.1"
 description = "A qualitative analysis submission system for students in chemistry."
 readme = "README.md"
 license = { text = "GNU General Public License v3" }
