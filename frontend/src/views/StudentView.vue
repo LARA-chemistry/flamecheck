@@ -491,15 +491,38 @@ onMounted(load)
    grey "rest" overlay covers everything right of the current progress, so the
    visible part always sits at the correct position on the 0..max scale. */
 /* The footer stacks two rows: the progress bar (with the total/max on the
-   right) on top, and the course-points summary bar below it. */
+   right) on top, and the course-points summary bar below it. On large screens
+   the page is a min-height:100dvh flex column (see .fc-page rule below) so the
+   footer is pushed to the viewport bottom when the content is short. */
 .progress-dock {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: var(--fc-space-sm);
-  margin-top: calc(var(--fc-space-lg) + 8px);
+  margin-top: auto;
   padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--fc-border);
+}
+
+/* On large screens, pin the footer to the bottom of the viewport. The page
+   becomes a min-height:100dvh flex column; the content area grows to absorb the
+   spare space, and the footer (flex-grow:0) stays at the very bottom. Falls back
+   gracefully (in-flow) if 100dvh is unsupported. */
+@media (min-width: 900px) {
+  .fc-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 60vh;
+    min-height: 100dvh;
+    box-sizing: border-box;
+    /* The footer's own padding provides the bottom breathing room, so drop the
+       page's bottom padding to let the footer flush to the viewport bottom. */
+    padding-bottom: 0;
+  }
+
+  .progress-dock {
+    flex: 0 0 auto;
+  }
 }
 
 /* Top row of the footer: the progress bar (fills) with the total/max points
@@ -558,6 +581,8 @@ onMounted(load)
 @media (max-width: 720px) {
   .progress-dock {
     gap: var(--fc-space-sm);
+    /* Keep the footer directly below the content on mobile (don't pin to the
+       bottom of a long scroll page). */
     margin-top: calc(var(--fc-space-md) + 6px);
     padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
   }
