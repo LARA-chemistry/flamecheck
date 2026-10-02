@@ -16,7 +16,7 @@
         <n-grid :cols="responsiveCols" :x-gap="20" :y-gap="20" v-if="!result">
           <n-gi>
             <n-card title="Cations" size="small">
-              <n-space vertical size="medium">
+              <div class="ion-grid">
                 <n-checkbox-group v-model:value="selectedCations">
                   <n-checkbox
                     v-for="ion in detail.cations"
@@ -26,13 +26,13 @@
                     class="ion-check"
                   />
                 </n-checkbox-group>
-                <n-empty v-if="detail.cations.length === 0" description="No cations" size="small" />
-              </n-space>
+              </div>
+              <n-empty v-if="detail.cations.length === 0" description="No cations" size="small" />
             </n-card>
           </n-gi>
           <n-gi>
             <n-card title="Anions" size="small">
-              <n-space vertical size="medium">
+              <div class="ion-grid">
                 <n-checkbox-group v-model:value="selectedAnions">
                   <n-checkbox
                     v-for="ion in detail.anions"
@@ -42,8 +42,8 @@
                     class="ion-check"
                   />
                 </n-checkbox-group>
-                <n-empty v-if="detail.anions.length === 0" description="No anions" size="small" />
-              </n-space>
+              </div>
+              <n-empty v-if="detail.anions.length === 0" description="No anions" size="small" />
             </n-card>
           </n-gi>
         </n-grid>
@@ -279,6 +279,28 @@ onMounted(load)
 
 .ion-check {
   font-size: var(--fc-fs-base);
+}
+
+/* Ordered grid layout for the ion selection: each ion sits in its own cell so
+   the symbols line up in aligned columns and every row has the same width.
+   Two columns on wider screens, one on narrow phones. */
+.ion-grid :deep(.n-checkbox-group) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--fc-space-xs) var(--fc-space-md);
+  row-gap: 12px;
+}
+
+.ion-grid :deep(.n-checkbox) {
+  width: 100%;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+@media (max-width: 619px) {
+  .ion-grid :deep(.n-checkbox-group) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .submit-bar {
