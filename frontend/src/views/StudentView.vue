@@ -4,7 +4,9 @@
     <header class="fc-header landing-header">
       <div class="landing-brand">
         <img class="landing-logo" :src="logo" alt="FlameCheck logo" />
-        <div>
+        <!-- Mobile only: the course name sits right next to the (minimised) logo. -->
+        <span v-if="user?.course_name" class="landing-course-inline">{{ user.course_name }}</span>
+        <div class="landing-titles">
           <h1 class="fc-title fc-title--hero">FlameCheck</h1>
           <p class="landing-subtitle">Your flame test analyses</p>
         </div>
@@ -176,6 +178,12 @@ onMounted(load)
   margin-top: 2px;
 }
 
+/* The course name shown next to the logo — only on small screens (mobile).
+   Hidden on desktop, where the course name lives at the top of the page. */
+.landing-course-inline {
+  display: none;
+}
+
 /* Course name sits at the very top of the page, above the brand — plain bold
    text, no frame or background, at the (former) course-tag size. */
 .page-course {
@@ -186,6 +194,52 @@ onMounted(load)
   color: var(--fc-ink);
   background: none;
   border: none;
+}
+
+/* --- Mobile: compact header ----------------------------------------------
+   Shrink the logo to the top-left corner, drop the "FlameCheck" hero title
+   and subtitle, and show the course name next to the logo instead. */
+@media (max-width: 720px) {
+  .page-course {
+    display: none;
+  }
+
+  .landing-header {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: var(--fc-space-xs);
+    margin-bottom: var(--fc-space-sm);
+  }
+
+  .landing-brand {
+    align-items: center;
+    gap: var(--fc-space-xs);
+    min-width: 0;
+  }
+
+  .landing-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .landing-titles {
+    display: none;
+  }
+
+  .landing-course-inline {
+    display: block;
+    font-size: var(--fc-fs-sm);
+    font-weight: 700;
+    color: var(--fc-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .landing-actions {
+    margin-left: auto;
+  }
 }
 
 .landing-actions {
