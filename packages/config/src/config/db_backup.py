@@ -22,7 +22,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db import connections
+from django.db import OperationalError, connections
 from django.utils import timezone
 
 from config.models import AppSettings
@@ -395,7 +395,19 @@ def run_if_due() -> dict | None:
         dict | None: The new backup summary, or None when nothing was due.
 
     """
-    s = AppSettings.get_instance()
+    try:
+        s = AppSettings.get_instance()
+    except OperationalError as exc:
+        # The schema is out of date (e.g. a stale SQLite volume whose
+        # config_appsettings table predates the backup_* columns, so
+        # `migrate` finds nothing to apply). This is not a backup failure;
+        # report it once as a warning rather than spammed every poll.
+        logger.warning(
+            "Scheduled backup skipped: AppSettings schema is out of date (%s). "
+            "Run `manage.py migrate` (recreate the database volume if needed).",
+            exc,
+        )
+        return None
     if not s.backup_enabled:
         return None
     interval = timedelta(minutes=max(1, s.backup_interval_minutes))

@@ -36,6 +36,12 @@ wheels = [
 name = "analyses"
 version = "0.0.0"
 source = { editable = "packages/analyses" }
+dependencies = [
+    { name = "factory-boy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "factory-boy", specifier = ">=3.3.3" }]
 
 [[package]]
 name = "annotated-types"
@@ -247,6 +253,12 @@ wheels = [
 name = "config"
 version = "0.0.0"
 source = { editable = "packages/config" }
+dependencies = [
+    { name = "factory-boy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "factory-boy", specifier = ">=3.3.3" }]
 
 [[package]]
 name = "coverage"
@@ -1276,6 +1288,12 @@ wheels = [
 name = "users"
 version = "0.0.0"
 source = { editable = "packages/users" }
+dependencies = [
+    { name = "factory-boy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "factory-boy", specifier = ">=3.3.3" }]
 
 [[package]]
 name = "uvicorn"

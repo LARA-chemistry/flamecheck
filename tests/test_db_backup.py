@@ -162,6 +162,21 @@ class TestRunIfDue:
         s.save()
         assert run_if_due() is not None
 
+    def test_out_of_date_schema_returns_none_without_raising(self, backup_dir, monkeypatch, caplog):
+        # Simulates a stale database whose config_appsettings table predates the
+        # backup_* columns (migrate finds nothing to apply): reading the
+        # singleton raises OperationalError. run_if_due() must swallow it and
+        # return None (with a warning) instead of raising into the scheduler.
+        from django.db import OperationalError
+
+        def _raise(*args, **kwargs):
+            raise OperationalError("no such column: config_appsettings.backup_enabled")
+
+        monkeypatch.setattr(AppSettings.objects, "get_or_create_instance", _raise)
+        with caplog.at_level("WARNING", logger="flamecheck.backup"):
+            assert run_if_due() is None
+        assert any("out of date" in rec.getMessage() for rec in caplog.records)
+
 
 class TestGetStatus:
     def test_shape_and_backups(self, backup_dir, student):

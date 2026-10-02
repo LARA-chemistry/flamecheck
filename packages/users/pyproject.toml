@@ -9,7 +9,13 @@ authors = [
 ]
 
 requires-python = "==3.13.*"
-dependencies = []
+# factory-boy is a runtime dependency (not just dev) because this package ships
+# `users/factory.py`, imported by the `seed_demo` command at container boot.
+# The production image is built with `uv sync --no-dev`, so it must be a real
+# dependency here or `seed_demo` crashes with "No module named 'factory'".
+dependencies = [
+  "factory-boy>=3.3.3",
+]
 
 [build-system]
 requires = ["uv_build>=0.7.13,<0.8.0"]
