@@ -24,7 +24,7 @@ assignments and the global grading configuration.
 | REST API         | **django-ninja** 1.x | OpenAPI docs, schema validation, typed routers |
 | Auth (API)       | **PyJWT** (HS256) | Bearer tokens; `token_version` claim for revocation |
 | Auth (web)       | django-allauth | Username + email login methods (SSO-ready) |
-| Frontend         | **Vite 7 + Vue 3** | Composition API, SFCs |
+| Frontend         | **Vite 8 + Vue 3** | Composition API, SFCs |
 | State            | **Pinia** | One auth store |
 | Routing (SPA)    | Vue Router | Role-guarded routes |
 | UI kit           | **Naive UI** | Components (cards, tables, tabs, forms) |

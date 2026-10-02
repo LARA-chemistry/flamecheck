@@ -68,7 +68,7 @@ diagrams — see the
 |--------------|------------|
 | Backend      | Django 6 + **django-ninja** REST API |
 | Auth         | **PyJWT** (HS256, `token_version` revocation) + django-allauth (SSO-ready) |
-| Frontend     | **Vite 6 · Vue 3 · Pinia · Vue Router · Naive UI** |
+| Frontend     | **Vite 8 · Vue 3 · Pinia · Vue Router · Naive UI** |
 | Barcode scan | **@zxing/browser** (webcam + manual/USB fallback) |
 | Database     | **SQLite by default**; PostgreSQL optional (set `DATABASE_URL`) |
 | Tooling      | **uv** workspace, ruff, pytest, WhiteNoise, Gunicorn |
@@ -90,7 +90,7 @@ flamecheck/
 │   ├── substances/        #   Ion + Substance catalog (+ JSON seed data)
 │   ├── config/            #   Course, GradingConfig, AppSettings
 │   └── analyses/          #   AnalysisType/Instance/Submission + scoring
-├── frontend/              # Vite 6 + Vue 3 SPA
+├── frontend/              # Vite 8 + Vue 3 SPA
 ├── tests/                 # pytest suite
 ├── docker/                # Dockerfiles + entrypoints (+ a dev-full compose)
 └── docs/                  # Sphinx docs (development/ has spec + architecture)
