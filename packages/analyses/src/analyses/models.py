@@ -35,6 +35,19 @@ class AnalysisType(models.Model):
         related_name="analysis_types",
         help_text=_("Ions that *can* occur in this analysis type (shown to students)."),
     )
+    # Default submission window for new instances of this type. Instances can
+    # override it per session; this is just the starting value the admin sets
+    # when defining the type.
+    default_window_start = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Default earliest time a submission is accepted (inherited by new sessions)."),
+    )
+    default_window_end = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Default latest time a submission is accepted (inherited by new sessions)."),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

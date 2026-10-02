@@ -144,6 +144,9 @@ class AnalysisTypeIn(Schema):
     name: str
     description: str | None = None
     ion_ids: list[int] | None = None
+    # Default submission window inherited by new sessions of this type.
+    default_window_start: str | None = None
+    default_window_end: str | None = None
 
 
 class AnalysisInstanceIn(Schema):

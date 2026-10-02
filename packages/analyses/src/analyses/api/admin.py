@@ -164,6 +164,9 @@ def list_analysis_types(request):
             "name": t.name,
             "description": t.description,
             "ions": [ion_to_schema(i) for i in t.possible_ions.all()],
+            "default_window_start": t.default_window_start.isoformat() if t.default_window_start else None,
+            "default_window_end": t.default_window_end.isoformat() if t.default_window_end else None,
+            "session_count": t.instances.count(),
         }
         for t in types
     ]
@@ -176,6 +179,11 @@ def create_analysis_type(request, payload: AnalysisTypeIn):
     t = AnalysisType.objects.create(name=payload.name, description=payload.description or "")
     if payload.ion_ids:
         t.possible_ions.set(payload.ion_ids)
+    if payload.default_window_start:
+        t.default_window_start = _parse_dt(payload.default_window_start)
+    if payload.default_window_end:
+        t.default_window_end = _parse_dt(payload.default_window_end)
+    t.save()
     logger.info("Admin %s created analysis type %s", request.user.username, t.name)
     return {"id": t.id, "name": t.name}
 
@@ -187,6 +195,15 @@ def update_analysis_type(request, type_id: int, payload: AnalysisTypeIn):
     t = AnalysisType.objects.get(pk=type_id)
     t.name = payload.name
     t.description = payload.description if payload.description is not None else t.description
+    # Default window: a provided value replaces it, an empty value clears it.
+    if payload.default_window_start:
+        t.default_window_start = _parse_dt(payload.default_window_start)
+    elif payload.default_window_start is None:
+        t.default_window_start = None
+    if payload.default_window_end:
+        t.default_window_end = _parse_dt(payload.default_window_end)
+    elif payload.default_window_end is None:
+        t.default_window_end = None
     t.save()
     if payload.ion_ids is not None:
         t.possible_ions.set(payload.ion_ids)
@@ -207,18 +224,22 @@ def delete_analysis_type(request, type_id: int):
 
 # ---- analysis instances ---------------------------------------------------------
 @router.get("/analysis-instances", response=list[dict])
-def list_analysis_instances(request, course_id: int | None = None):
-    """List analysis instances (admin), optionally filtered by course."""
+def list_analysis_instances(request, course_id: int | None = None, type_id: int | None = None):
+    """List analysis instances (admin), optionally filtered by course and/or type."""
     _admin_user(request)
     qs = AnalysisInstance.objects.all().prefetch_related("correct_ions", "type", "assignments__student")
     if course_id is not None:
         qs = qs.filter(course_id=course_id)
+    if type_id is not None:
+        qs = qs.filter(type_id=type_id)
     return [
         {
             "id": i.id,
+            "type_id": i.type_id,
             "type": i.type.name,
             "number": i.number,
             "course": i.course.name if i.course else None,
+            "course_id": i.course_id,
             "window_start": i.window_start.isoformat(),
             "window_end": i.window_end.isoformat(),
             "correct_ions": [ion_to_schema(x) for x in i.correct_ions.all()],
@@ -230,14 +251,31 @@ def list_analysis_instances(request, course_id: int | None = None):
 
 @router.post("/analysis-instances", response=dict)
 def create_analysis_instance(request, payload: AnalysisInstanceIn):
-    """Create an analysis instance (admin)."""
+    """
+    Create an analysis instance (admin).
+
+    The window may be omitted; in that case the analysis type's default window
+    is inherited so a session created from a freshly defined type has a usable
+    window out of the box.
+    """
     _admin_user(request)
-    try:
-        start = _parse_dt(payload.window_start)
-        end = _parse_dt(payload.window_end)
-    except ValueError as exc:
-        raise HttpError(400, f"Invalid datetime: {exc}") from exc
     t = AnalysisType.objects.get(pk=payload.type_id)
+    # Resolve the window: explicit values win, otherwise fall back to the
+    # type's default window. At least one bound must end up set.
+    if payload.window_start:
+        start = _parse_dt(payload.window_start)
+    elif t.default_window_start:
+        start = t.default_window_start
+    else:
+        raise HttpError(400, "window_start is required (set it or a type default).")
+    if payload.window_end:
+        end = _parse_dt(payload.window_end)
+    elif t.default_window_end:
+        end = t.default_window_end
+    else:
+        raise HttpError(400, "window_end is required (set it or a type default).")
+    if end <= start:
+        raise HttpError(400, "window_end must be after window_start.")
     course = Course.objects.filter(pk=payload.course_id).first() if payload.course_id else None
     inst = AnalysisInstance.objects.create(
         type=t,
