@@ -94,10 +94,10 @@
       </div>
     </n-spin>
 
-    <!-- Fixed course-progress dock at the bottom of the view: a red-yellow-green
+    <!-- Course-progress footer at the bottom of the page: a red-yellow-green
          bar (progress towards the max points, with a tick at the passing line)
          and the total/max points on the right, red until the course is passed. -->
-    <div v-if="summary && summary.ideal_score > 0" class="progress-dock">
+    <footer v-if="summary && summary.ideal_score > 0" class="progress-dock">
       <div
         class="progress-dock__bar"
         role="progressbar"
@@ -117,7 +117,7 @@
       <span class="progress-dock__points" :class="{ 'progress-dock__points--passed': summary.passed }">
         {{ summary.total_score }} / {{ summary.ideal_score }}
       </span>
-    </div>
+    </footer>
   </div>
 </template>
 
@@ -486,27 +486,17 @@ onMounted(load)
   background: var(--fc-border) !important;
 }
 
-/* --- Course progress dock (fixed at the bottom of the view) --------------
+/* --- Course progress footer (in-flow at the bottom of the page) ----------
    The bar's background is a full-width red -> yellow -> green gradient; the
    grey "rest" overlay covers everything right of the current progress, so the
    visible part always sits at the correct position on the 0..max scale. */
-.fc-page {
-  padding-bottom: 76px;
-}
-
 .progress-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
   display: flex;
   align-items: center;
   gap: var(--fc-space-md);
-  padding: 12px var(--fc-space-lg) calc(12px + env(safe-area-inset-bottom, 0px));
-  background: var(--fc-surface);
+  margin-top: calc(var(--fc-space-lg) + 8px);
+  padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--fc-border);
-  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.08);
 }
 
 .progress-dock__bar {
@@ -554,13 +544,10 @@ onMounted(load)
 }
 
 @media (max-width: 720px) {
-  .fc-page {
-    padding-bottom: 64px;
-  }
-
   .progress-dock {
     gap: var(--fc-space-sm);
-    padding: 10px var(--fc-space-sm) calc(10px + env(safe-area-inset-bottom, 0px));
+    margin-top: calc(var(--fc-space-md) + 6px);
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .progress-dock__bar {
