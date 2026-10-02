@@ -21,19 +21,40 @@
                 <n-statistic label="Pending" :value="c.stats.pending" />
                 <n-statistic label="Avg Score" :value="c.stats.average_score ?? '—'" />
               </n-space>
-              <n-data-table :columns="cols" :data="c.students" size="small" :max-height="400" :row-props="rowProps" />
-              <n-space align="center">
+
+              <!-- View switcher: Students (roster) vs. Substance (overview),
+                   placed above the table. -->
+              <n-radio-group
+                :value="viewOf(c)"
+                size="small"
+                name="course-view"
+                @update:value="(v) => switchCourseView(c, v)"
+              >
+                <n-radio-button value="students">
+                  <n-icon :component="StudentsIcon" :size="15" :depth="viewOf(c) === 'students' ? 3 : 0" />
+                  Students
+                </n-radio-button>
+                <n-radio-button value="substance">
+                  <n-icon :component="SubstanceIcon" :size="15" :depth="viewOf(c) === 'substance' ? 3 : 0" />
+                  Substance
+                </n-radio-button>
+              </n-radio-group>
+
+              <!-- Students view: the course roster. -->
+              <n-data-table
+                v-if="viewOf(c) !== 'substance'"
+                :columns="cols"
+                :data="c.students"
+                size="small"
+                :max-height="400"
+                :row-props="rowProps"
+              />
+              <n-space v-if="viewOf(c) !== 'substance'" align="center">
                 <n-button size="small" @click="downloadCsv(c.id)">Download CSV</n-button>
-                <n-button
-                  size="small"
-                  :loading="overviewLoading[c.id]"
-                  @click="toggleOverview(c)"
-                >
-                  {{ overview[c.id] ? 'Hide Substance Overview' : 'Substance Overview' }}
-                </n-button>
               </n-space>
 
-              <div v-if="overview[c.id]">
+              <!-- Substance view: samples per analysis + overview tables. -->
+              <div v-if="viewOf(c) === 'substance'">
                 <n-space align="center" style="margin-bottom: 8px">
                   <span class="muted">Samples per analysis</span>
                   <n-input-number
@@ -179,6 +200,7 @@ import { api } from '../api/client'
 import {
   NCard, NSpin, NEmpty, NCollapse, NCollapseItem, NSpace, NButton,
   NDataTable, NStatistic, NInputNumber, NModal, NTag, NProgress,
+  NRadioGroup, NRadioButton, NIcon,
 } from 'naive-ui'
 import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
@@ -192,6 +214,49 @@ const loading = ref(true)
 const courses = ref([])
 const overview = ref({})
 const overviewLoading = ref({})
+
+// Per-course active view: 'students' (default) or 'substance'.
+const courseView = ref({})
+function viewOf(course) {
+  return courseView.value[course.id] || 'students'
+}
+
+// Switch a course's view; lazy-init the substance-overview state so the panel
+// can render (and trigger its load) the first time the Substance tab is used.
+function switchCourseView(course, view) {
+  courseView.value[course.id] = view
+  if (view === 'substance' && !overview.value[course.id]) {
+    overview.value[course.id] = { samples: null, data: null }
+    loadOverview(course)
+  }
+}
+
+// Inline SVG icon components (no icon library in this app).
+const StudentsIcon = {
+  render: () =>
+    h(
+      'svg',
+      { viewBox: '0 0 24 24', width: '1em', height: '1em', 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+      [
+        h('path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }),
+        h('circle', { cx: '9', cy: '7', r: '4' }),
+        h('path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }),
+        h('path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }),
+      ],
+    ),
+}
+const SubstanceIcon = {
+  render: () =>
+    h(
+      'svg',
+      { viewBox: '0 0 24 24', width: '1em', height: '1em', 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+      [
+        h('path', { d: 'M9 3h6' }),
+        h('path', { d: 'M10 3v6.34L5.5 17.5A2 2 0 0 0 7.3 20.5h9.4a2 2 0 0 0 1.8-3L14 9.34V3' }),
+        h('path', { d: 'M7 14h10' }),
+      ],
+    ),
+}
 
 const studentModal = ref({ show: false, loading: false, student: null, detail: null })
 
@@ -361,16 +426,6 @@ async function load() {
 
 function downloadCsv(courseId) {
   window.open(`/api/v1/assistant/courses/${courseId}/export/csv`, '_blank')
-}
-
-function toggleOverview(course) {
-  const key = course.id
-  if (overview.value[key]) {
-    overview.value[key] = null
-    return
-  }
-  overview.value[key] = { samples: null, data: null }
-  loadOverview(course)
 }
 
 async function loadOverview(course) {
