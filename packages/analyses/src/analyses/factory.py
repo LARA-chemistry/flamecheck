@@ -25,16 +25,30 @@ from .models import AnalysisInstance, AnalysisType, Submission
 _OPEN_DELTA = timedelta(hours=1)
 
 
-def _window(state: str) -> tuple:
-    """Return ``(window_start, window_end)`` for a window in ``state`` vs "now"."""
+def _window(state: str, day_offset: int = 0) -> tuple:
+    """
+    Return ``(window_start, window_end)`` for a window in ``state`` vs "now".
+
+    Args:
+        state: One of ``'open'``, ``'too_early'`` or ``'too_late'``.
+        day_offset: Number of days to shift the whole window by, so demo data
+            can span several days (and cross a weekend / week boundary). The
+            state is still resolved relative to "now", then shifted.
+
+    """
     now = timezone.now().replace(microsecond=0)
     if state == "open":
-        return now - _OPEN_DELTA, now + _OPEN_DELTA
-    if state == "too_early":
-        return now + _OPEN_DELTA, now + timedelta(hours=2)
-    if state == "too_late":
-        return now - timedelta(hours=2), now - _OPEN_DELTA
-    raise ValueError(f"Unknown window state: {state!r}")
+        start, end = now - _OPEN_DELTA, now + _OPEN_DELTA
+    elif state == "too_early":
+        start, end = now + _OPEN_DELTA, now + timedelta(hours=2)
+    elif state == "too_late":
+        start, end = now - timedelta(hours=2), now - _OPEN_DELTA
+    else:
+        raise ValueError(f"Unknown window state: {state!r}")
+    if day_offset:
+        shift = timedelta(days=day_offset)
+        start, end = start + shift, end + shift
+    return start, end
 
 
 class AnalysisTypeFactory(DjangoModelFactory):
@@ -82,19 +96,20 @@ class AnalysisInstanceFactory(DjangoModelFactory):
     created_at = Faker("date_time_this_year", before_now=True)
 
     @classmethod
-    def make(cls, window: str = "open", **overrides) -> AnalysisInstance:
+    def make(cls, window: str = "open", day_offset: int = 0, **overrides) -> AnalysisInstance:
         """
         Build an instance whose window is in a given state relative to "now".
 
         Args:
             window: One of ``'open'`` (default), ``'too_early'`` or ``'too_late'``.
+            day_offset: Shift the window by this many days (see :func:`_window`).
             **overrides: Any other field overrides.
 
         Returns:
             AnalysisInstance: The created instance.
 
         """
-        start, end = _window(window)
+        start, end = _window(window, day_offset)
         return cls.create(window_start=start, window_end=end, **overrides)
 
     @post_generation

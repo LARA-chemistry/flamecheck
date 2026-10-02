@@ -125,43 +125,71 @@
       </template>
     </n-modal>
 
-    <!-- Window calendar (Gantt) for the course's analyses -->
-    <n-modal v-model:show="calendar.show" preset="card" :title="`Window calendar — ${calendar.courseName}`" style="width: 900px; max-width: 96vw">
+    <!-- Window calendar (week view) for the course's analyses -->
+    <n-modal v-model:show="calendar.show" preset="card" :title="`Window calendar — ${calendar.courseName}`" style="width: 96vw; max-width: 1040px">
       <n-space vertical size="medium">
         <n-text depth="3" style="font-size: 13px">
-          Each bar is an analysis (announcement) and spans its submission window, plotted on a
-          shared time axis. <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
+          Each bar is an analysis (announcement) spanning its submission window, laid out by day.
+          <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
+          <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
           <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
           <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
         </n-text>
 
         <n-spin :show="calendar.loading">
           <n-empty v-if="!calendar.loading && calendarInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
-          <div v-else class="gantt">
-            <!-- time axis -->
-            <div class="gantt__axis">
-              <div class="gantt__axis-labels">
-                <span v-for="t in calendarTicks" :key="t.left" class="gantt__tick" :style="{ left: t.left + '%' }">
-                  {{ t.label }}
-                </span>
+          <div v-else class="weekcal">
+            <!-- column header: one cell per day (weekend days tinted) -->
+            <div class="weekcal__head">
+              <div class="weekcal__corner">Analysis</div>
+              <div class="weekcal__head-days">
+                <div
+                  v-for="d in calendarDays"
+                  :key="d.dateKey"
+                  class="weekcal__day"
+                  :class="{ 'weekcal__day--weekend': d.isWeekend }"
+                  :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
+                >
+                  <span class="weekcal__day-dow">{{ d.dowLabel }}</span>
+                  <span class="weekcal__day-date">{{ d.dayNum }}</span>
+                </div>
               </div>
             </div>
 
-            <!-- one row per analysis -->
-            <div v-for="inst in calendarInstances" :key="inst.id" class="gantt__row">
-              <div class="gantt__row-label" :title="inst.type">
-                <span class="gantt__num">#{{ inst.number }}</span>
-                <span class="gantt__type">{{ inst.type }}</span>
-              </div>
-              <div class="gantt__track">
-                <div class="gantt__grid" aria-hidden="true"></div>
+            <!-- body: day grid + one row per analysis -->
+            <div class="weekcal__body">
+              <div class="weekcal__grid-layer" aria-hidden="true">
+                <!-- weekend column tints (full height) -->
                 <div
-                  class="gantt__bar"
-                  :class="`gantt__bar--${windowStatus(inst)}`"
-                  :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
-                  :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
-                >
-                  <span class="gantt__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
+                  v-for="d in calendarWeekendDays"
+                  :key="'wk-' + d.dateKey"
+                  class="weekcal__weekend"
+                  :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
+                ></div>
+                <!-- day boundary lines (thin) and week boundaries (thick, after Sundays) -->
+                <div
+                  v-for="d in calendarDays"
+                  :key="'ln-' + d.dateKey"
+                  class="weekcal__vline"
+                  :class="{ 'weekcal__vline--week': d.isSunday }"
+                  :style="{ left: d.leftPct + '%' }"
+                ></div>
+              </div>
+
+              <div v-for="inst in calendarInstances" :key="inst.id" class="weekcal__row">
+                <div class="weekcal__row-label" :title="inst.type">
+                  <span class="weekcal__num">#{{ inst.number }}</span>
+                  <span class="weekcal__type">{{ inst.type }}</span>
+                </div>
+                <div class="weekcal__track">
+                  <div
+                    class="weekcal__bar"
+                    :class="`weekcal__bar--${windowStatus(inst)}`"
+                    :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
+                    :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
+                  >
+                    <span class="weekcal__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -263,8 +291,8 @@ const alreadyInCourseCount = computed(
   () => students.value.filter((s) => s.course_id === assign.value.courseId).length,
 )
 
-// ---- window calendar (Gantt) -------------------------------------------------
-// Sort the course's analyses by their window start so the timeline reads in
+// ---- window calendar (week view) ---------------------------------------------
+// Sort the course's analyses by their window start so the rows read in
 // chronological order.
 const calendarInstances = computed(() =>
   [...calendar.value.instances].sort(
@@ -272,20 +300,56 @@ const calendarInstances = computed(() =>
   ),
 )
 
-// The shared time axis: from the earliest window start to the latest window end,
-// padded a little on each side so bars do not touch the edges.
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// Start of a given day (local 00:00:00).
+function startOfDay(d) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+// The week-view time axis: whole days from the earliest window's day to the
+// latest window's day (inclusive), so every day is a full column.
 const calendarRange = computed(() => {
   const list = calendarInstances.value
   if (list.length === 0) return null
-  const starts = list.map((i) => new Date(i.window_start).getTime())
-  const ends = list.map((i) => new Date(i.window_end).getTime())
-  let min = Math.min(...starts)
-  let max = Math.max(...ends)
-  const pad = Math.max((max - min) * 0.05, 30 * 60 * 1000) // at least 30 min of padding
-  return { min: min - pad, max: max + pad, span: Math.max(max - min, 1) }
+  const starts = list.map((i) => startOfDay(new Date(i.window_start)).getTime())
+  const ends = list.map((i) => startOfDay(new Date(i.window_end)).getTime())
+  const min = Math.min(...starts)
+  const max = Math.max(...ends)
+  const minEnd = max + DAY_MS // exclusive end (start of the day after the last)
+  return { min, max, end: minEnd, span: Math.max(minEnd - min, 1) }
 })
 
-// Map an instance to its bar's left/width (in %) on the shared axis.
+// One entry per day in the range: its position/width (%), day-of-week label,
+// whether it is a weekend day, and whether it is a Sunday (week boundary).
+const calendarDays = computed(() => {
+  const r = calendarRange.value
+  if (!r) return []
+  const days = []
+  for (let t = r.min; t <= r.max; t += DAY_MS) {
+    const d = new Date(t)
+    const dow = d.getDay() // 0 = Sunday … 6 = Saturday
+    days.push({
+      dateKey: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
+      dow,
+      dowLabel: DOW[dow],
+      dayNum: d.getDate(),
+      isWeekend: dow === 0 || dow === 6,
+      isSunday: dow === 0,
+      leftPct: ((t - r.min) / r.span) * 100,
+      widthPct: (DAY_MS / r.span) * 100,
+    })
+  }
+  return days
+})
+
+// Weekend days only (for the full-height column tints).
+const calendarWeekendDays = computed(() => calendarDays.value.filter((d) => d.isWeekend))
+
+// Map an instance's window to its bar's left/width (%) on the day-based axis.
 function barPosition(inst) {
   const r = calendarRange.value
   if (!r) return { left: 0, width: 0 }
@@ -295,23 +359,6 @@ function barPosition(inst) {
   const width = ((end - start) / r.span) * 100
   return { left: Math.max(0, left), width: Math.max(0.5, Math.min(100 - left, width)) }
 }
-
-// A handful of axis tick labels spread across the range.
-const calendarTicks = computed(() => {
-  const r = calendarRange.value
-  if (!r) return []
-  const count = 5
-  const ticks = []
-  for (let i = 0; i < count; i++) {
-    const t = r.min + (r.span * i) / (count - 1)
-    const d = new Date(t)
-    ticks.push({
-      left: (i / (count - 1)) * 100,
-      label: `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
-    })
-  }
-  return ticks
-})
 
 // Window status for coloring (open / too early / too late) relative to now.
 function windowStatus(inst) {
@@ -590,7 +637,7 @@ onMounted(() => {
   flex: 1;
 }
 
-/* ---- window calendar (Gantt) ------------------------------------------ */
+/* ---- window calendar (week view) -------------------------------------- */
 .cal-legend {
   display: inline-flex;
   align-items: center;
@@ -603,84 +650,147 @@ onMounted(() => {
   height: 10px;
   border-radius: 50%;
 }
+.cal-legend__swatch {
+  display: inline-block;
+  width: 12px;
+  height: 10px;
+  border-radius: 2px;
+}
+.cal-legend__swatch--weekend { background: var(--wk-weekend, #eef2fb); border: 1px solid var(--fc-border); }
 .cal-legend__dot--open { background: #18a058; }
 .cal-legend__dot--early { background: #f0a020; }
 .cal-legend__dot--late { background: #d03050; }
 
-.gantt {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 0;
-}
-.gantt__axis {
-  display: flex;
-  align-items: center;
-  height: 18px;
-}
-.gantt__axis-labels {
-  position: relative;
-  flex: 1;
-  margin-left: 180px; /* align with the track (label column width) */
-  height: 100%;
-}
-.gantt__tick {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  font-size: 11px;
-  color: var(--fc-muted);
-  white-space: nowrap;
+.weekcal {
+  font-size: 12px;
+  --wk-label-w: 168px;
+  --wk-weekend: #eef2fb;       /* weekend column tint */
+  --wk-weekend-ink: #5b6b8c;   /* weekend header text */
+  --wk-line: var(--fc-border); /* day boundary */
+  --wk-week-line: #b7c0d8;     /* thicker week boundary (after Sundays) */
 }
 
-.gantt__row {
+/* column header */
+.weekcal__head {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 2px solid var(--wk-week-line);
+}
+.weekcal__corner {
+  width: var(--wk-label-w);
+  flex: 0 0 var(--wk-label-w);
   display: flex;
   align-items: center;
-  gap: 0;
-  height: 30px;
+  padding: 6px 10px;
+  font-weight: 700;
+  color: var(--fc-text-soft);
+  border-right: 1px solid var(--fc-border);
 }
-.gantt__row-label {
-  width: 180px;
-  flex: 0 0 180px;
+.weekcal__head-days {
+  position: relative;
+  flex: 1;
+  height: 40px;
+}
+.weekcal__day {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-left: 1px solid var(--wk-line);
+  overflow: hidden;
+}
+.weekcal__day--weekend {
+  background: var(--wk-weekend);
+}
+.weekcal__day--weekend .weekcal__day-dow {
+  color: var(--wk-weekend-ink);
+}
+.weekcal__day-dow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fc-text-soft);
+}
+.weekcal__day-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fc-ink);
+}
+
+/* body: shared grid layer + rows */
+.weekcal__body {
+  position: relative;
+}
+.weekcal__grid-layer {
+  position: absolute;
+  inset: 0;
+  margin-left: var(--wk-label-w);
+  pointer-events: none;
+}
+.weekcal__weekend {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--wk-weekend);
+}
+.weekcal__vline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--wk-line);
+}
+.weekcal__vline--week {
+  width: 2px;
+  background: var(--wk-week-line);
+}
+
+.weekcal__row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  border-bottom: 1px solid var(--fc-border);
+}
+.weekcal__row:last-child {
+  border-bottom: none;
+}
+.weekcal__row-label {
+  width: var(--wk-label-w);
+  flex: 0 0 var(--wk-label-w);
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-right: 10px;
+  padding: 0 10px;
   border-right: 1px solid var(--fc-border);
   overflow: hidden;
+  background: var(--fc-surface);
+  z-index: 1;
 }
-.gantt__num {
+.weekcal__num {
   font-weight: 700;
   color: var(--fc-flame-2, #ff8a00);
 }
-.gantt__type {
+.weekcal__type {
   font-size: 12px;
   color: var(--fc-text-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.gantt__track {
+.weekcal__track {
   position: relative;
   flex: 1;
-  height: 100%;
+  z-index: 0;
 }
-/* faint vertical grid lines at the tick positions */
-.gantt__grid {
+.weekcal__bar {
   position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--fc-border) 0,
-    var(--fc-border) 1px,
-    transparent 1px,
-    transparent 25%
-  );
-  opacity: 0.5;
-}
-.gantt__bar {
-  position: absolute;
-  top: 5px;
+  top: 7px;
   height: 20px;
   border-radius: 4px;
   display: flex;
@@ -689,11 +799,12 @@ onMounted(() => {
   box-sizing: border-box;
   overflow: hidden;
   white-space: nowrap;
+  box-shadow: var(--fc-shadow-sm);
 }
-.gantt__bar--open { background: rgba(24, 160, 88, 0.85); color: #fff; }
-.gantt__bar--too_early { background: rgba(240, 160, 32, 0.85); color: #fff; }
-.gantt__bar--too_late { background: rgba(208, 48, 80, 0.85); color: #fff; }
-.gantt__bar-text {
+.weekcal__bar--open { background: rgba(24, 160, 88, 0.9); color: #fff; }
+.weekcal__bar--too_early { background: rgba(240, 160, 32, 0.9); color: #fff; }
+.weekcal__bar--too_late { background: rgba(208, 48, 80, 0.9); color: #fff; }
+.weekcal__bar-text {
   font-size: 11px;
   font-weight: 600;
   text-overflow: ellipsis;

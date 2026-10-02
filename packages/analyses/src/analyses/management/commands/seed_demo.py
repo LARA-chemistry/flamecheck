@@ -58,6 +58,7 @@ from users.factory import (
 from users.models import StudentAssignment, StudentBarcode, User
 
 from analyses.factory import AnalysisInstanceFactory, AnalysisTypeFactory
+from analyses.factory import _window as _window_for
 from analyses.models import AnalysisInstance, AnalysisType, Submission
 
 # Uniform demo password for every account the command creates (see the module
@@ -124,16 +125,23 @@ _TYPES: list[tuple[str, str, list[str]]] = [
     ),
 ]
 
-# Announcements: (course_name, number, type_name, window_state, correct ion keys).
-# window_state drives the time window relative to "now" (see
-# :meth:`AnalysisInstanceFactory.make`).
-_ANNOUNCEMENTS: list[tuple[str, int, str, str, list[str]]] = [
+# Announcements: (course_name, number, type_name, window_state, correct ion
+# keys, day_offset). window_state drives the time window relative to "now" and
+# day_offset shifts it by whole days so a course's analyses span several days
+# (crossing a weekend and a week boundary) — see
+# :meth:`AnalysisInstanceFactory.make`.
+#
+# "open" announcements keep day_offset = 0 so their window still straddles
+# "now" (the pre-seeded submissions target announcement #1 and need an open
+# window to be accepted); the late / early ones are spread across days.
+_ANNOUNCEMENTS: list[tuple[str, int, str, str, list[str], int]] = [
     (
         "Inorganic Chemistry WS 2026 - Chemistry",
         1,
         "Cations I & II",
         "open",
         ["ammonium", "calcium", "copper", "barium"],
+        0,
     ),
     (
         "Inorganic Chemistry WS 2026 - Chemistry",
@@ -141,6 +149,7 @@ _ANNOUNCEMENTS: list[tuple[str, int, str, str, list[str]]] = [
         "Anions & halides",
         "too_late",
         ["chloride", "nitrate", "phosphate"],
+        -5,
     ),
     (
         "Inorganic Chemistry WS 2026 - Biology",
@@ -148,24 +157,55 @@ _ANNOUNCEMENTS: list[tuple[str, int, str, str, list[str]]] = [
         "Cations I & II",
         "open",
         ["ammonium", "magnesium", "copper", "iron2"],
+        0,
     ),
-    ("Inorganic Chemistry WS 2026 - Biology", 2, "Anions & halides", "open", ["chloride", "sulfate", "carbonate"]),
+    (
+        "Inorganic Chemistry WS 2026 - Biology",
+        2,
+        "Anions & halides",
+        "open",
+        ["chloride", "sulfate", "carbonate"],
+        0,
+    ),
     (
         "Inorganic Chemistry WS 2026 - Biology",
         3,
         "Mixed cation / anion panel",
         "too_late",
         ["sodium", "potassium", "nitrate"],
+        -6,
     ),
-    ("Inorganic Chemistry WS 2026 - Pharmacy", 1, "Cations I & II", "open", ["calcium", "zinc", "barium", "iron3"]),
-    ("Inorganic Chemistry WS 2026 - Pharmacy", 2, "Anions & halides", "too_early", ["bromide", "sulfite", "phosphate"]),
-    ("Inorganic Chemistry SS 2026 - Materials", 1, "Cations I & II", "open", ["manganese", "aluminium", "iron3"]),
+    (
+        "Inorganic Chemistry WS 2026 - Pharmacy",
+        1,
+        "Cations I & II",
+        "open",
+        ["calcium", "zinc", "barium", "iron3"],
+        0,
+    ),
+    (
+        "Inorganic Chemistry WS 2026 - Pharmacy",
+        2,
+        "Anions & halides",
+        "too_early",
+        ["bromide", "sulfite", "phosphate"],
+        5,
+    ),
+    (
+        "Inorganic Chemistry SS 2026 - Materials",
+        1,
+        "Cations I & II",
+        "open",
+        ["manganese", "aluminium", "iron3"],
+        0,
+    ),
     (
         "Inorganic Chemistry SS 2026 - Materials",
         2,
         "Mixed cation / anion panel",
         "too_late",
         ["potassium", "carbonate", "phosphate", "nitrate"],
+        -4,
     ),
 ]
 
@@ -355,11 +395,11 @@ class Command(BaseCommand):
         """
         result: dict[tuple[str, int], list[AnalysisInstance]] = {}
         ion_by_key: dict[str, Ion] = {}
-        for _course_name, _number, _type_name, _state, keys in _ANNOUNCEMENTS:
+        for _course_name, _number, _type_name, _state, keys, _offset in _ANNOUNCEMENTS:
             for k in keys:
                 ion_by_key.setdefault(k, IonFactory.make(k))
 
-        for course_name, number, type_name, state, keys in _ANNOUNCEMENTS:
+        for course_name, number, type_name, state, keys, day_offset in _ANNOUNCEMENTS:
             course = courses.get(course_name)
             analysis_type = types.get(type_name)
             if course is None or analysis_type is None:
@@ -374,9 +414,14 @@ class Command(BaseCommand):
                 existing = StudentAssignment.objects.filter(student=student, course=course, number=number).first()
                 if existing is not None:
                     instance = existing.instance
+                    # Keep the demo window current (re-seed relative to now) so
+                    # the open / early / late states stay meaningful.
+                    instance.window_start, instance.window_end = _window_for(state, day_offset)
+                    instance.save(update_fields=["window_start", "window_end"])
                 else:
                     instance = AnalysisInstanceFactory.make(
                         window=state,
+                        day_offset=day_offset,
                         type=analysis_type,
                         course=course,
                         number=number,
