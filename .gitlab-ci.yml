@@ -272,7 +272,8 @@ docker-build:
         .
     # buildx --push already pushes all tags, so no separate push commands needed.
   extends:
-    - .run_on_any_branch
+    # - .run_on_any_branch
+    - .run_on_develop_or_main
 
 # Jobs: =================================== Publish to PyPI ================================
 
@@ -285,6 +286,11 @@ release-gitlab:
     - echo "Publishing $PACKAGE_DIR to GitLab Package Registry"
     - cd $PACKAGE_DIR
     - uv publish dist/*
+  # DISABLED: publish to the GitLab Package Registry is turned off for now.
+  # The job-level `rules` overrides the ones inherited from `.run_on_develop_or_main`,
+  # so this job never runs. To re-enable, delete the `when: never` line below.
+  rules:
+    - when: never
   extends:
     # - .run_on_release_tag
     - .run_on_develop_or_main
@@ -304,6 +310,11 @@ release-testpypi:
     - cd $PACKAGE_DIR
     # - uv publish --publish-url "https://test.pypi.org/legacy/" --token "$TEST_PYPI_TOKEN" dist/*
     - uvx twine upload --verbose --repository testpypi ./dist/*
+  # DISABLED: TestPyPI upload is turned off for now. The job-level `rules`
+  # overrides `.run_on_release_tag`, so this job never runs. To re-enable,
+  # delete the `when: never` line below.
+  rules:
+    - when: never
   extends:
     - .run_on_release_tag
     - .parallel_build_package_jobs
@@ -321,10 +332,15 @@ release-pypi:
     - cd $PACKAGE_DIR
     # - uv publish --token "$PYPI_TOKEN" dist/*
     - uvx twine upload ./dist/*
+  # DISABLED: PyPI production upload is turned off for now. `when: never`
+  # unconditionally skips this job (it replaces the branch rules below, which
+  # are kept commented for reference). To re-enable, delete the `when: never`
+  # line and restore the branch rules.
   rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
-    - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - when: never
+    # - if: $CI_COMMIT_BRANCH == "develop"
+    # - if: $CI_COMMIT_BRANCH == "main"
+    # - if: $CI_PIPELINE_SOURCE == "trigger"
   extends:
     - .parallel_build_package_jobs
 

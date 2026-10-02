@@ -2,7 +2,7 @@
   "version": 2,
   "sessionId": "session-a39cdfad-8f78-4afc-b650-4b247fb96d8d",
   "cwd": "/lair/source/projects/science/teaching/inorg_prakticum_submission_system/flamecheck",
-  "updatedAt": 1790885735497,
+  "updatedAt": 1790971143906,
   "checkpoints": [
     {
       "turn": 1,
@@ -713,6 +713,428 @@
       "after": {
         "commit": "0b00a1e2e79c5f826ec1e525113f3ca34e4a5c60",
         "time": 1790885735260
+      }
+    },
+    {
+      "turn": 40,
+      "commit": "b879f6db5ca83ef347f5cc2a84ccfcd268f2e7db",
+      "parent": "0b00a1e2e79c5f826ec1e525113f3ca34e4a5c60",
+      "time": 1790886982488,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "f759aad50555096428287ce3bcb4a8b1a00cc69f",
+        "time": 1790887309178
+      }
+    },
+    {
+      "turn": 41,
+      "commit": "f759aad50555096428287ce3bcb4a8b1a00cc69f",
+      "parent": "f759aad50555096428287ce3bcb4a8b1a00cc69f",
+      "time": 1790916930888,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "7efcb4885d4a4166ed952fbcaa0e73ce22c8f5ed",
+        "time": 1790917218483
+      }
+    },
+    {
+      "turn": 42,
+      "commit": "7efcb4885d4a4166ed952fbcaa0e73ce22c8f5ed",
+      "parent": "7efcb4885d4a4166ed952fbcaa0e73ce22c8f5ed",
+      "time": 1790917218501,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "dfa45c9b108d60472647aaa8ad862197d920a5af",
+        "time": 1790917826819
+      }
+    },
+    {
+      "turn": 43,
+      "commit": "dfa45c9b108d60472647aaa8ad862197d920a5af",
+      "parent": "dfa45c9b108d60472647aaa8ad862197d920a5af",
+      "time": 1790921500777,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 44,
+      "commit": "dfa45c9b108d60472647aaa8ad862197d920a5af",
+      "parent": "dfa45c9b108d60472647aaa8ad862197d920a5af",
+      "time": 1790923153551,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "6bf0797aaea2590838dc69e17fc3c17e50b05c3d",
+        "time": 1790924540767
+      }
+    },
+    {
+      "turn": 45,
+      "commit": "6bf0797aaea2590838dc69e17fc3c17e50b05c3d",
+      "parent": "6bf0797aaea2590838dc69e17fc3c17e50b05c3d",
+      "time": 1790924540777,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "bade2a7cd15ec1bf02277928c31fd70df7bb8978",
+        "time": 1790924855769
+      }
+    },
+    {
+      "turn": 46,
+      "commit": "bade2a7cd15ec1bf02277928c31fd70df7bb8978",
+      "parent": "bade2a7cd15ec1bf02277928c31fd70df7bb8978",
+      "time": 1790924855804,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "c8d1d9f49772ce733bdad8c4c64b7e874e248c2d",
+        "time": 1790925239904
+      }
+    },
+    {
+      "turn": 47,
+      "commit": "c8d1d9f49772ce733bdad8c4c64b7e874e248c2d",
+      "parent": "c8d1d9f49772ce733bdad8c4c64b7e874e248c2d",
+      "time": 1790925675982,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "b5cb58cd0e4264bef8e8975eea3001421a6cbbb3",
+        "time": 1790926749786
+      }
+    },
+    {
+      "turn": 48,
+      "commit": "b5cb58cd0e4264bef8e8975eea3001421a6cbbb3",
+      "parent": "b5cb58cd0e4264bef8e8975eea3001421a6cbbb3",
+      "time": 1790927175920,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "d8dda68de8dc2615c03821ec70fd47cdfe3effc9",
+        "time": 1790927569477
+      }
+    },
+    {
+      "turn": 49,
+      "commit": "d8dda68de8dc2615c03821ec70fd47cdfe3effc9",
+      "parent": "d8dda68de8dc2615c03821ec70fd47cdfe3effc9",
+      "time": 1790935478592,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "e171d1d6e8214d1230abd578f3978a7058509f15",
+        "time": 1790937927767
+      }
+    },
+    {
+      "turn": 50,
+      "commit": "e171d1d6e8214d1230abd578f3978a7058509f15",
+      "parent": "e171d1d6e8214d1230abd578f3978a7058509f15",
+      "time": 1790937927777,
+      "untracked": [
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "4d4e08e38f6f13f4450680a7f58351a3918f6be6",
+        "time": 1790938191988
+      }
+    },
+    {
+      "turn": 51,
+      "commit": "4d4e08e38f6f13f4450680a7f58351a3918f6be6",
+      "parent": "4d4e08e38f6f13f4450680a7f58351a3918f6be6",
+      "time": 1790938191998,
+      "untracked": [
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "42b8a0d8f01b735f1fa645008dc9fd58532fa6ea",
+        "time": 1790939364748
+      }
+    },
+    {
+      "turn": 52,
+      "commit": "42b8a0d8f01b735f1fa645008dc9fd58532fa6ea",
+      "parent": "42b8a0d8f01b735f1fa645008dc9fd58532fa6ea",
+      "time": 1790939364760,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "002d26ed5ff62bc8b44a3dfbd6d6c7d35462e0d7",
+        "time": 1790942809705
+      }
+    },
+    {
+      "turn": 53,
+      "commit": "002d26ed5ff62bc8b44a3dfbd6d6c7d35462e0d7",
+      "parent": "002d26ed5ff62bc8b44a3dfbd6d6c7d35462e0d7",
+      "time": 1790944398961,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "c869436101b0c9585628caac3e6ff17d9e3e36d8",
+        "time": 1790945611769
+      }
+    },
+    {
+      "turn": 54,
+      "commit": "c869436101b0c9585628caac3e6ff17d9e3e36d8",
+      "parent": "c869436101b0c9585628caac3e6ff17d9e3e36d8",
+      "time": 1790947479388,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "5b54bebf6c1c570f2d2842f72fad912abc13e311",
+        "time": 1790947658487
+      }
+    },
+    {
+      "turn": 55,
+      "commit": "5b54bebf6c1c570f2d2842f72fad912abc13e311",
+      "parent": "5b54bebf6c1c570f2d2842f72fad912abc13e311",
+      "time": 1790959099953,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "41e8d1da6fed055627d0d28dd29e0c018ac988c2",
+        "time": 1790965513135
+      }
+    },
+    {
+      "turn": 56,
+      "commit": "41e8d1da6fed055627d0d28dd29e0c018ac988c2",
+      "parent": "41e8d1da6fed055627d0d28dd29e0c018ac988c2",
+      "time": 1790967673776,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false
+    },
+    {
+      "turn": 57,
+      "commit": "41e8d1da6fed055627d0d28dd29e0c018ac988c2",
+      "parent": "41e8d1da6fed055627d0d28dd29e0c018ac988c2",
+      "time": 1790967863769,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "0cb3750206f3396c04e1f61fbd38b2fd4aa7ca4d",
+        "time": 1790967940265
+      }
+    },
+    {
+      "turn": 58,
+      "commit": "45e17650fc96f3762245c8cb3ffc122407efab76",
+      "parent": "0cb3750206f3396c04e1f61fbd38b2fd4aa7ca4d",
+      "time": 1790968466420,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "package-lock.json"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "2fd81c7347a1c84258885dd585c4aaa4fa49c3ec",
+        "time": 1790968638086
+      }
+    },
+    {
+      "turn": 59,
+      "commit": "2fd81c7347a1c84258885dd585c4aaa4fa49c3ec",
+      "parent": "2fd81c7347a1c84258885dd585c4aaa4fa49c3ec",
+      "time": 1790968638096,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/shot.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "3a4a8b83f8f89d43caa1923c5ddec985301a2c83",
+        "time": 1790969065001
+      }
+    },
+    {
+      "turn": 60,
+      "commit": "3a4a8b83f8f89d43caa1923c5ddec985301a2c83",
+      "parent": "3a4a8b83f8f89d43caa1923c5ddec985301a2c83",
+      "time": 1790969355331,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/shot.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "4e4ef45159e20643438df49baa38c3ef417d43ff",
+        "time": 1790969631499
+      }
+    },
+    {
+      "turn": 61,
+      "commit": "4e4ef45159e20643438df49baa38c3ef417d43ff",
+      "parent": "4e4ef45159e20643438df49baa38c3ef417d43ff",
+      "time": 1790969866785,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "0da1623539e993b81ccce6506d97879ada8f4012",
+        "time": 1790970040817
+      }
+    },
+    {
+      "turn": 62,
+      "commit": "0da1623539e993b81ccce6506d97879ada8f4012",
+      "parent": "0da1623539e993b81ccce6506d97879ada8f4012",
+      "time": 1790970180982,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "396e0124ab123dcaf5c6a43ae09097b630164977",
+        "time": 1790970408952
+      }
+    },
+    {
+      "turn": 63,
+      "commit": "396e0124ab123dcaf5c6a43ae09097b630164977",
+      "parent": "396e0124ab123dcaf5c6a43ae09097b630164977",
+      "time": 1790970552861,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "a071039524e824bcaec4561bc74cafbd4bfbd62c",
+        "time": 1790970691226
+      }
+    },
+    {
+      "turn": 64,
+      "commit": "a071039524e824bcaec4561bc74cafbd4bfbd62c",
+      "parent": "a071039524e824bcaec4561bc74cafbd4bfbd62c",
+      "time": 1790970897640,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "cf4fa816af25754afb4c6e42892755e84b4090b9",
+        "time": 1790971143825
       }
     }
   ],
