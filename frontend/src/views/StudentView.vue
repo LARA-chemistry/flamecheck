@@ -93,11 +93,36 @@
         </div>
       </div>
     </n-spin>
+
+    <!-- Fixed course-progress dock at the bottom of the view: a red-yellow-green
+         bar (progress towards the max points, with a tick at the passing line)
+         and the total/max points on the right, red until the course is passed. -->
+    <div v-if="summary && summary.ideal_score > 0" class="progress-dock">
+      <div
+        class="progress-dock__bar"
+        role="progressbar"
+        aria-valuemin="0"
+        :aria-valuenow="summary.total_score"
+        :aria-valuemax="summary.ideal_score"
+        :aria-label="`Course progress: ${summary.total_score} of ${summary.ideal_score} points, ${summary.passing_score} required to pass`"
+      >
+        <div class="progress-dock__rest" :style="{ width: (100 - progressPct) + '%' }"></div>
+        <span
+          v-if="summary.passing_score > 0"
+          class="progress-dock__marker"
+          :style="{ left: passLinePct + '%' }"
+          :title="`${summary.passing_score} points to pass`"
+        ></span>
+      </div>
+      <span class="progress-dock__points" :class="{ 'progress-dock__points--passed': summary.passed }">
+        {{ summary.total_score }} / {{ summary.ideal_score }}
+      </span>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
@@ -111,6 +136,19 @@ const loading = ref(true)
 const analyses = ref([])
 // Course result (total/ideal/passing points + pass status) for the header bar.
 const summary = ref(null)
+
+// Progress-dock geometry: fill = total/max points (capped at 100%), and the
+// tick marks where the passing line sits on the same 0..max scale.
+const progressPct = computed(() => {
+  const s = summary.value
+  if (!s || !s.ideal_score) return 0
+  return Math.min(100, Math.round((s.total_score / s.ideal_score) * 1000) / 10)
+})
+const passLinePct = computed(() => {
+  const s = summary.value
+  if (!s || !s.ideal_score || !s.passing_score) return 0
+  return Math.min(100, Math.round((s.passing_score / s.ideal_score) * 1000) / 10)
+})
 
 function windowTagType(status) {
   const map = { open: 'success', too_early: 'warning', too_late: 'error', submitted: 'info' }
@@ -446,5 +484,91 @@ onMounted(load)
 }
 .fc-card__accent--muted {
   background: var(--fc-border) !important;
+}
+
+/* --- Course progress dock (fixed at the bottom of the view) --------------
+   The bar's background is a full-width red -> yellow -> green gradient; the
+   grey "rest" overlay covers everything right of the current progress, so the
+   visible part always sits at the correct position on the 0..max scale. */
+.fc-page {
+  padding-bottom: 76px;
+}
+
+.progress-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-md);
+  padding: 12px var(--fc-space-lg) calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--fc-surface);
+  border-top: 1px solid var(--fc-border);
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.progress-dock__bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ef4444 0%, #f59e0b 55%, #22c55e 100%);
+}
+
+.progress-dock__rest {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(228, 231, 237);
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Tick marking the passing line on the 0..max scale. */
+.progress-dock__marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  transform: translateX(-1.5px);
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.35);
+}
+
+.progress-dock__points {
+  flex: 0 0 auto;
+  font-size: var(--fc-fs-md);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #dc2626;
+  transition: color 0.4s ease;
+}
+
+.progress-dock__points--passed {
+  color: #16a34a;
+}
+
+@media (max-width: 720px) {
+  .fc-page {
+    padding-bottom: 64px;
+  }
+
+  .progress-dock {
+    gap: var(--fc-space-sm);
+    padding: 10px var(--fc-space-sm) calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .progress-dock__bar {
+    height: 8px;
+  }
+
+  .progress-dock__points {
+    font-size: var(--fc-fs-sm);
+  }
 }
 </style>
