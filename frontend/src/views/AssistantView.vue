@@ -27,7 +27,6 @@
               <n-radio-group
                 :value="viewOf(c)"
                 size="small"
-                name="course-view"
                 @update:value="(v) => switchCourseView(c, v)"
               >
                 <n-radio-button value="students">
@@ -40,61 +39,66 @@
                 </n-radio-button>
               </n-radio-group>
 
-              <!-- Students view: the course roster. -->
-              <n-data-table
-                v-if="viewOf(c) !== 'substance'"
-                :columns="cols"
-                :data="c.students"
-                size="small"
-                :max-height="400"
-                :row-props="rowProps"
-              />
-              <n-space v-if="viewOf(c) !== 'substance'" align="center">
-                <n-button size="small" @click="downloadCsv(c.id)">Download CSV</n-button>
-              </n-space>
-
-              <!-- Substance view: samples per analysis + overview tables. -->
-              <div v-if="viewOf(c) === 'substance'">
-                <n-space align="center" style="margin-bottom: 8px">
-                  <span class="muted">Samples per analysis</span>
-                  <n-input-number
-                    v-model:value="overview[c.id].samples"
-                    size="small"
-                    :min="1"
-                    :show-button="false"
-                    placeholder="one per student (default)"
-                    style="width: 180px"
-                  />
-                  <n-button
-                    size="small"
-                    type="primary"
-                    :loading="overviewLoading[c.id]"
-                    @click="loadOverview(c)"
-                  >
-                    Update
-                  </n-button>
-                </n-space>
-
-                <div v-if="!overview[c.id].data" class="muted">Loading…</div>
-                <template v-else>
+              <!-- View content, keyed by course + active view so Vue swaps the
+                   whole subtree (avoids mis-patching the v-for list). -->
+              <div :key="`${c.id}:${viewOf(c)}`">
+                <!-- Students view: the course roster. -->
+                <template v-if="viewOf(c) !== 'substance'">
                   <n-data-table
-                    :columns="overviewAnalysisCols"
-                    :data="overview[c.id].data.analyses"
+                    :columns="cols"
+                    :data="c.students"
                     size="small"
+                    :max-height="400"
+                    :row-props="rowProps"
                   />
-                  <p class="muted" style="margin: 12px 0 4px">
-                    Substance totals for the whole course
-                  </p>
-                  <n-data-table
-                    :columns="overviewTotalCols"
-                    :data="overview[c.id].data.totals"
-                    size="small"
-                    :max-height="320"
-                  />
-                  <n-space style="margin-top: 12px">
-                    <n-statistic label="Distinct substances" :value="overview[c.id].data.distinct_substances" />
-                    <n-statistic label="Total substance units" :value="overview[c.id].data.total_units" />
+                  <n-space align="center">
+                    <n-button size="small" @click="downloadCsv(c.id)">Download CSV</n-button>
                   </n-space>
+                </template>
+
+                <!-- Substance view: samples per analysis + overview tables. -->
+                <template v-else>
+                  <n-space align="center" style="margin-bottom: 8px">
+                    <span class="muted">Samples per analysis</span>
+                    <n-input-number
+                      v-model:value="overview[c.id].samples"
+                      size="small"
+                      :min="1"
+                      :show-button="false"
+                      placeholder="one per student (default)"
+                      style="width: 180px"
+                    />
+                    <n-button
+                      size="small"
+                      type="primary"
+                      :loading="overviewLoading[c.id]"
+                      @click="loadOverview(c)"
+                    >
+                      Update
+                    </n-button>
+                  </n-space>
+
+                  <div v-if="!overview[c.id].data" class="muted">Loading…</div>
+                  <template v-else>
+                    <n-data-table
+                      :columns="overviewAnalysisCols"
+                      :data="overview[c.id].data.analyses"
+                      size="small"
+                    />
+                    <p class="muted" style="margin: 12px 0 4px">
+                      Substance totals for the whole course
+                    </p>
+                    <n-data-table
+                      :columns="overviewTotalCols"
+                      :data="overview[c.id].data.totals"
+                      size="small"
+                      :max-height="320"
+                    />
+                    <n-space style="margin-top: 12px">
+                      <n-statistic label="Distinct substances" :value="overview[c.id].data.distinct_substances" />
+                      <n-statistic label="Total substance units" :value="overview[c.id].data.total_units" />
+                    </n-space>
+                  </template>
                 </template>
               </div>
             </n-space>
