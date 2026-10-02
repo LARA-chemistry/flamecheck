@@ -16,6 +16,10 @@ variables:
   # sync with the NODE_VERSION ARG in docker/Dockerfile so the CI build matches
   # the production image build.
   NODE_VERSION: "22"
+  # npm version used to install the frontend. Must match the npm that generated
+  # frontend/package-lock.json, otherwise `npm ci` can drop rolldown's native
+  # (optional) bindings and `vite build` fails (npm/cli#4828).
+  NPM_VERSION: "11.19.0"
   BASE_LAYER: "trixie"
   LARA_VERSION: "0.2.108"
   UV_PUBLISH_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
@@ -171,6 +175,10 @@ test:
       ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/node" /usr/local/bin/node
       ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/npm" /usr/local/bin/npm
       ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/npx" /usr/local/bin/npx
+      # The frontend lockfile was generated with npm 11; align the CI npm so
+      # `npm ci` installs rolldown's native bindings consistently (older npm
+      # versions mishandle optional deps and can drop the platform binding).
+      npm install -g "npm@${NPM_VERSION}"
       node --version
       npm --version
     # Build the Vue/Vite frontend into frontend/dist. This is REQUIRED for the
@@ -182,6 +190,18 @@ test:
     # production Docker image builds the frontend the same way, so building it
     # here keeps the test environment faithful to production.
     - npm --prefix frontend ci --no-audit --no-fund
+    # Guard against the npm optional-deps bug (npm/cli#4828): if `npm ci`
+    # dropped rolldown's native binding, do a clean reinstall before building.
+    - |
+      set -e
+      # npm/cli#4828: `npm ci` can drop rolldown's platform binding (an optional
+      # dep), which makes `vite build` crash with "Cannot find native binding".
+      # If the linux x64 binding is absent, do a clean reinstall before building.
+      if ! find frontend/node_modules/@rolldown -name "rolldown-binding.linux-x64-*.node" 2>/dev/null | grep -q .; then
+        echo "rolldown native binding missing; reinstalling frontend deps cleanly"
+        rm -rf frontend/node_modules frontend/package-lock.json
+        npm --prefix frontend install --no-audit --no-fund
+      fi
     - npm --prefix frontend run build
     # Run the canonical test suite (pyproject.toml configures pytest to collect
     # from tests/ and emit the Cobertura coverage report referenced below).

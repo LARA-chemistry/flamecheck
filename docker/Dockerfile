@@ -25,13 +25,22 @@
 
 ARG PYTHON_VERSION=3.13
 ARG NODE_VERSION=22
+# npm that generated frontend/package-lock.json. Aligning the build npm avoids
+# the optional-deps bug (npm/cli#4828) that drops rolldown's native binding.
+ARG NPM_VERSION=11.19.0
 
 # --- Stage 1: build the frontend -------------------------------------------
 FROM node:${NODE_VERSION}-alpine AS frontend_build
 WORKDIR /app
 # Install dependencies from the lockfile first (better layer caching).
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+# Use the npm version that produced the lockfile, then install from it.
+RUN npm install -g "npm@${NPM_VERSION}" \
+ && npm ci --no-audit --no-fund \
+ && (find node_modules/@rolldown -name "rolldown-binding.linux-x64-*.node" 2>/dev/null | grep -q . \
+      || (echo "rolldown binding missing; clean reinstall" \
+          && rm -rf node_modules package-lock.json \
+          && npm install --no-audit --no-fund))
 # Build the SPA. Vite outputs to frontend/dist (see the "build" script).
 COPY frontend/ ./
 RUN npm run build
