@@ -125,21 +125,30 @@
       </template>
     </n-modal>
 
-    <!-- Window calendar (week view) for the course's analyses -->
+    <!-- Window calendar (week / month views) for the course's analyses -->
     <n-modal v-model:show="calendar.show" preset="card" :title="`Window calendar — ${calendar.courseName}`" style="width: 96vw; max-width: 1040px">
       <n-space vertical size="medium">
-        <n-text depth="3" style="font-size: 13px">
-          Each bar is an analysis (announcement) spanning its submission window, laid out by day.
-          <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
-          <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
-          <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
-          <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
-        </n-text>
+        <div class="cal-toolbar">
+          <n-radio-group v-model:value="calendar.view" size="small">
+            <n-space :wrap="false">
+              <n-radio-button value="week">Week</n-radio-button>
+              <n-radio-button value="month">Month</n-radio-button>
+            </n-space>
+          </n-radio-group>
+          <span class="cal-toolbar__spacer" />
+          <n-text depth="3" class="cal-legend-text" style="font-size: 12px">
+            <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
+            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
+            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
+            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
+          </n-text>
+        </div>
 
         <n-spin :show="calendar.loading">
           <n-empty v-if="!calendar.loading && calendarInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
-          <div v-else class="weekcal">
-            <!-- column header: one cell per day (weekend days tinted) -->
+
+          <!-- WEEK VIEW: one row per analysis, a bar across the days it spans -->
+          <div v-else-if="calendar.view === 'week'" class="weekcal">
             <div class="weekcal__head">
               <div class="weekcal__corner">Analysis</div>
               <div class="weekcal__head-days">
@@ -156,17 +165,14 @@
               </div>
             </div>
 
-            <!-- body: day grid + one row per analysis -->
             <div class="weekcal__body">
               <div class="weekcal__grid-layer" aria-hidden="true">
-                <!-- weekend column tints (full height) -->
                 <div
                   v-for="d in calendarWeekendDays"
                   :key="'wk-' + d.dateKey"
                   class="weekcal__weekend"
                   :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
                 ></div>
-                <!-- day boundary lines (thin) and week boundaries (thick, after Sundays) -->
                 <div
                   v-for="d in calendarDays"
                   :key="'ln-' + d.dateKey"
@@ -194,6 +200,39 @@
               </div>
             </div>
           </div>
+
+          <!-- MONTH VIEW: a Sun..Sat week grid; each day cell lists the analyses
+               whose window covers that day -->
+          <div v-else class="monthcal">
+            <div class="monthcal__dow">
+              <span v-for="d in DOW" :key="d" class="monthcal__dow-cell" :class="{ 'monthcal__dow-cell--weekend': d === 'Sun' || d === 'Sat' }">{{ d }}</span>
+            </div>
+            <div v-for="(week, wi) in calendarMonthWeeks" :key="wi" class="monthcal__week">
+              <div
+                v-for="cell in week"
+                :key="cell.dateKey"
+                class="monthcal__cell"
+                :class="{
+                  'monthcal__cell--weekend': cell.isWeekend,
+                  'monthcal__cell--other': !cell.inRange,
+                }"
+              >
+                <span class="monthcal__cell-date" :title="cell.monthLabel + ' ' + cell.dayNum">{{ cell.dayNum }}</span>
+                <div class="monthcal__chips">
+                  <div
+                    v-for="inst in cell.instances"
+                    :key="inst.id"
+                    class="monthcal__chip"
+                    :class="`monthcal__chip--${inst.status}`"
+                    :title="`${inst.type} #${inst.number}: ${fmt(inst.start)} → ${fmt(inst.end)}`"
+                  >
+                    <span class="monthcal__chip-num">#{{ inst.number }}</span>
+                    <span class="monthcal__chip-type">{{ inst.type }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </n-spin>
       </n-space>
       <template #footer>
@@ -213,7 +252,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
-  NModal, NSwitch, NTag, NEmpty, NAlert,
+  NModal, NSwitch, NTag, NEmpty, NAlert, NRadioGroup, NRadioButton,
 } from 'naive-ui'
 
 const router = useRouter()
@@ -260,13 +299,15 @@ const assign = ref({
   studentIds: [],
 })
 
-// Per-course window calendar (a Gantt-style timeline of the analysis windows).
+// Per-course window calendar. view is 'week' (Gantt timeline) or 'month'
+// (a classic month grid with one chip per analysis/day it covers).
 const calendar = ref({
   show: false,
   loading: false,
   courseId: null,
   courseName: '',
   instances: [],
+  view: 'week',
 })
 
 const courseStudents = computed(() =>
@@ -348,6 +389,72 @@ const calendarDays = computed(() => {
 
 // Weekend days only (for the full-height column tints).
 const calendarWeekendDays = computed(() => calendarDays.value.filter((d) => d.isWeekend))
+
+// ---- month view ------------------------------------------------------------
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// The month-view grid spans whole weeks: from the start of the week that
+// contains the earliest window day to the end of the week that contains the
+// latest window day. This yields a clean Sun..Sat grid of week-rows.
+const calendarMonthWeeks = computed(() => {
+  const list = calendarInstances.value
+  if (list.length === 0) return []
+  const starts = list.map((i) => startOfDay(new Date(i.window_start)).getTime())
+  const ends = list.map((i) => startOfDay(new Date(i.window_end)).getTime())
+  const minDay = Math.min(...starts)
+  const maxDay = Math.max(...ends)
+  // Align to the surrounding weeks (Sunday-start).
+  const firstWeekStart = minDay - (new Date(minDay).getDay() * DAY_MS)
+  const lastDay = maxDay + DAY_MS // start of the day after the last window day
+  let lastWeekEnd = lastDay + ((6 - new Date(lastDay - DAY_MS).getDay()) * DAY_MS)
+  // Build week rows (each a Sun..Sat run of 7 days).
+  const weeks = []
+  for (let t = firstWeekStart; t < lastWeekEnd; t += 7 * DAY_MS) {
+    const row = []
+    for (let k = 0; k < 7; k++) {
+      const dayStart = t + k * DAY_MS
+      const dayEnd = dayStart + DAY_MS
+      const d = new Date(dayStart)
+      const dow = d.getDay()
+      // Analyses whose window overlaps this day (window_start < dayEnd AND
+      // window_end > dayStart).
+      const covering = list.filter((i) => {
+        const ws = new Date(i.window_start).getTime()
+        const we = new Date(i.window_end).getTime()
+        return ws < dayEnd && we > dayStart
+      })
+      row.push({
+        dateKey: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
+        dayNum: d.getDate(),
+        monthLabel: MONTHS[d.getMonth()],
+        inRange: dayStart >= minDay && dayStart <= maxDay,
+        isWeekend: dow === 0 || dow === 6,
+        isSunday: dow === 0,
+        instances: covering.map((i) => ({
+          id: i.id,
+          number: i.number,
+          type: i.type,
+          status: windowStatus(i),
+          start: i.window_start,
+          end: i.window_end,
+        })),
+      })
+    }
+    weeks.push(row)
+  }
+  return weeks
+})
+
+// Month labels shown above the grid (the distinct months that appear in it).
+const calendarMonthLabels = computed(() => {
+  const seen = []
+  for (const week of calendarMonthWeeks.value) {
+    for (const cell of week) {
+      if (cell.inRange && !seen.includes(cell.monthLabel)) seen.push(cell.monthLabel)
+    }
+  }
+  return seen
+})
 
 // Map an instance's window to its bar's left/width (%) on the day-based axis.
 function barPosition(inst) {
@@ -810,4 +917,115 @@ onMounted(() => {
   text-overflow: ellipsis;
   overflow: hidden;
 }
+
+/* toolbar (view toggle + legend) */
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-sm);
+  flex-wrap: wrap;
+}
+.cal-toolbar__spacer {
+  flex: 1;
+}
+.cal-legend-text {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ---- month view ----------------------------------------------------------- */
+.monthcal {
+  --mc-weekend: var(--wk-weekend, #eef2fb);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius-sm);
+  overflow: hidden;
+  font-size: 12px;
+}
+.monthcal__dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: var(--fc-surface);
+  border-bottom: 2px solid var(--fc-border);
+}
+.monthcal__dow-cell {
+  padding: 6px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fc-text-soft);
+  border-left: 1px solid var(--fc-border);
+}
+.monthcal__dow-cell:first-child {
+  border-left: none;
+}
+.monthcal__dow-cell--weekend {
+  color: var(--wk-weekend-ink, #5b6b8c);
+}
+.monthcal__week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.monthcal__week + .monthcal__week {
+  border-top: 1px solid var(--fc-border);
+}
+.monthcal__cell {
+  min-height: 74px;
+  padding: 4px;
+  border-left: 1px solid var(--fc-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--fc-surface);
+}
+.monthcal__cell:first-child {
+  border-left: none;
+}
+.monthcal__cell--weekend {
+  background: var(--mc-weekend);
+}
+.monthcal__cell--other {
+  background: transparent;
+  opacity: 0.45;
+}
+.monthcal__cell-date {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fc-ink);
+  align-self: flex-start;
+}
+.monthcal__cell--weekend .monthcal__cell-date {
+  color: var(--wk-weekend-ink, #5b6b8c);
+}
+.monthcal__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.monthcal__chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  white-space: nowrap;
+  box-shadow: var(--fc-shadow-sm);
+  cursor: default;
+}
+.monthcal__chip-num {
+  flex-shrink: 0;
+}
+.monthcal__chip-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.monthcal__chip--open { background: rgba(24, 160, 88, 0.9); }
+.monthcal__chip--too_early { background: rgba(240, 160, 32, 0.9); }
+.monthcal__chip--too_late { background: rgba(208, 48, 80, 0.9); }
 </style>
