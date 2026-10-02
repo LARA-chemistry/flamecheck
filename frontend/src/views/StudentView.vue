@@ -24,21 +24,6 @@
     </header>
 
     <n-spin :show="loading">
-      <div v-if="summary" class="course-summary">
-        <div class="course-summary__stat">
-          <span class="course-summary__value">{{ summary.total_score }}</span>
-          <span class="course-summary__label">of {{ summary.ideal_score }} points</span>
-        </div>
-        <div class="course-summary__divider" aria-hidden="true"></div>
-        <div class="course-summary__stat">
-          <span class="course-summary__value">{{ summary.passing_score }}</span>
-          <span class="course-summary__label">points to pass</span>
-        </div>
-        <div class="course-summary__divider" aria-hidden="true"></div>
-        <n-tag :type="summary.passed ? 'success' : 'warning'" round size="small">
-          {{ summary.passed ? 'Passed' : 'Not passed yet' }}
-        </n-tag>
-      </div>
       <n-empty v-if="!loading && analyses.length === 0" class="empty" description="No analyses assigned yet." />
       <div v-else class="fc-card-grid">
         <div
@@ -98,25 +83,44 @@
          bar (progress towards the max points, with a tick at the passing line)
          and the total/max points on the right, red until the course is passed. -->
     <footer v-if="summary && summary.ideal_score > 0" class="progress-dock">
-      <div
-        class="progress-dock__bar"
-        role="progressbar"
-        aria-valuemin="0"
-        :aria-valuenow="summary.total_score"
-        :aria-valuemax="summary.ideal_score"
-        :aria-label="`Course progress: ${summary.total_score} of ${summary.ideal_score} points, ${summary.passing_score} required to pass`"
-      >
-        <div class="progress-dock__rest" :style="{ width: (100 - progressPct) + '%' }"></div>
-        <span
-          v-if="summary.passing_score > 0"
-          class="progress-dock__marker"
-          :style="{ left: passLinePct + '%' }"
-          :title="`${summary.passing_score} points to pass`"
-        ></span>
+      <div class="progress-dock__row">
+        <div
+          class="progress-dock__bar"
+          role="progressbar"
+          aria-valuemin="0"
+          :aria-valuenow="summary.total_score"
+          :aria-valuemax="summary.ideal_score"
+          :aria-label="`Course progress: ${summary.total_score} of ${summary.ideal_score} points, ${summary.passing_score} required to pass`"
+        >
+          <div class="progress-dock__rest" :style="{ width: (100 - progressPct) + '%' }"></div>
+          <span
+            v-if="summary.passing_score > 0"
+            class="progress-dock__marker"
+            :style="{ left: passLinePct + '%' }"
+            :title="`${summary.passing_score} points to pass`"
+          ></span>
+        </div>
+        <span class="progress-dock__points" :class="{ 'progress-dock__points--passed': summary.passed }">
+          {{ summary.total_score }} / {{ summary.ideal_score }}
+        </span>
       </div>
-      <span class="progress-dock__points" :class="{ 'progress-dock__points--passed': summary.passed }">
-        {{ summary.total_score }} / {{ summary.ideal_score }}
-      </span>
+
+      <!-- Course points summary, placed below the progress bar. -->
+      <div class="course-summary">
+        <div class="course-summary__stat">
+          <span class="course-summary__value">{{ summary.total_score }}</span>
+          <span class="course-summary__label">of {{ summary.ideal_score }} points</span>
+        </div>
+        <div class="course-summary__divider" aria-hidden="true"></div>
+        <div class="course-summary__stat">
+          <span class="course-summary__value">{{ summary.passing_score }}</span>
+          <span class="course-summary__label">points to pass</span>
+        </div>
+        <div class="course-summary__divider" aria-hidden="true"></div>
+        <n-tag :type="summary.passed ? 'success' : 'warning'" round size="small">
+          {{ summary.passed ? 'Passed' : 'Not passed yet' }}
+        </n-tag>
+      </div>
     </footer>
   </div>
 </template>
@@ -336,7 +340,8 @@ onMounted(load)
   }
 }
 
-/* Course result bar: total points, passing line and the pass status tag. */
+/* Course result bar: total points, passing line and the pass status tag.
+   Now lives in the page footer, below the progress bar. */
 .course-summary {
   display: flex;
   align-items: center;
@@ -346,7 +351,6 @@ onMounted(load)
   border-radius: var(--fc-radius, 12px);
   box-shadow: var(--fc-shadow);
   padding: var(--fc-space-sm) var(--fc-space-md);
-  margin-bottom: var(--fc-space-md);
   flex-wrap: wrap;
 }
 
@@ -490,13 +494,25 @@ onMounted(load)
    The bar's background is a full-width red -> yellow -> green gradient; the
    grey "rest" overlay covers everything right of the current progress, so the
    visible part always sits at the correct position on the 0..max scale. */
+/* The footer stacks two rows: the progress bar (with the total/max on the
+   right) on top, and the course-points summary bar below it. */
 .progress-dock {
   display: flex;
-  align-items: center;
-  gap: var(--fc-space-md);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--fc-space-sm);
   margin-top: calc(var(--fc-space-lg) + 8px);
   padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--fc-border);
+}
+
+/* Top row of the footer: the progress bar (fills) with the total/max points
+   on the right. */
+.progress-dock__row {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-md);
+  width: 100%;
 }
 
 .progress-dock__bar {
