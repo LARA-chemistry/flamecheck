@@ -1,14 +1,12 @@
 <template>
   <div class="fc-page">
+    <p v-if="user?.course_name" class="page-course">{{ user.course_name }}</p>
     <header class="fc-header landing-header">
       <div class="landing-brand">
         <img class="landing-logo" :src="logo" alt="FlameCheck logo" />
         <div>
           <h1 class="fc-title fc-title--hero">FlameCheck</h1>
           <p class="landing-subtitle">Your flame test analyses</p>
-          <n-tag v-if="user?.course_name" class="landing-course" type="info" :bordered="false" size="medium" round>
-            {{ user.course_name }}
-          </n-tag>
         </div>
       </div>
       <div class="landing-actions">
@@ -178,9 +176,16 @@ onMounted(load)
   margin-top: 2px;
 }
 
-.landing-course {
-  margin-top: var(--fc-space-xs);
+/* Course name sits at the very top of the page, above the brand — plain bold
+   text, no frame or background, at the (former) course-tag size. */
+.page-course {
+  margin: 0;
+  padding: 0;
   font-size: var(--fc-fs-sm);
+  font-weight: 700;
+  color: var(--fc-ink);
+  background: none;
+  border: none;
 }
 
 .landing-actions {
