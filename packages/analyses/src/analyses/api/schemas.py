@@ -207,6 +207,7 @@ class AnalysisCsvImportOut(Schema):
     analyses_reused: int
     students_assigned: int
     assignments_skipped: int
+    compositions_applied: int = 0
 
 
 class GradingConfigOut(Schema):

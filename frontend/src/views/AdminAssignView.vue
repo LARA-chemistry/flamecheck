@@ -47,10 +47,13 @@
         <!-- CSV import: bulk upload of the course's analyses (assign via Labspace IDs) -->
         <div class="csv-import-bar">
           <n-text depth="3" class="hint">
-            Bulk-import this course's analyses from a CSV file: one row per analysis (type name,
-            announcement number, optional window), with the students to assign listed by their
-            Labspace IDs. Existing analyses and assignments are kept, so re-uploading a corrected
-            file only adds what is missing.
+            Bulk-import this course's analyses from a CSV file: one row per
+            <em>student</em> analysis (type name, announcement number, optional window, the
+            student's Labspace ID, and the composition — the salts/compounds present, comma
+            separated). The composition becomes that student's answer key. Columns use
+            <code>;</code> as the separator and the composition cell uses <code>,</code>, so a
+            cell may hold commas without quoting. Existing analyses and assignments are kept, so
+            re-uploading a corrected file only adds what is missing.
           </n-text>
           <n-space align="center" :wrap="true">
             <n-button secondary :loading="csvImport.downloading" @click="downloadTemplate">

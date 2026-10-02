@@ -380,8 +380,9 @@ def download_analyses_template(request, course_id: int):
     Download a CSV template for importing a set of analyses for a course.
 
     The template has one example row per analysis type; window columns are
-    empty (rows then inherit the type's default window) and labspace_ids is
-    left empty for the admin to fill in.
+    empty (rows then inherit the type's default window) and the labspace_id /
+    substances columns are left empty for the admin to fill in. Columns are
+    ``;``-separated and the composition (substances) cell is ``,``-separated.
     """
     _admin_user(request)
     course = Course.objects.filter(pk=course_id).first()
@@ -401,12 +402,15 @@ def upload_analyses_csv(
     """
     Upload a CSV with a set of analyses for a course (admin).
 
-    Each row references an analysis type by name and an announcement number,
-    carries an optional window (falling back to the type's default) and may
-    list the students to assign via their Labspace IDs. Existing
-    (course, type, number) instances are reused and existing assignments are
-    skipped, so re-uploads are safe. Invalid files are rejected atomically
-    with all issues reported.
+    Each row is one student's analysis: it references an analysis type by
+    name, an announcement number, an optional window (falling back to the
+    type's default), the student's Labspace ID, and the composition — the
+    salts/compounds present, comma-separated. The composition becomes the
+    student's answer key (the union of the ions the substances provide) and
+    the reference substances. Columns are ``;``-separated; the composition
+    cell is ``,``-separated. Existing (student, course, number) instances are
+    reused and existing assignments skipped, so re-uploads are safe. Invalid
+    files are rejected atomically with all issues reported.
     """
     _admin_user(request)
     course = Course.objects.filter(pk=course_id).first()
@@ -420,13 +424,14 @@ def upload_analyses_csv(
     except CsvImportError as exc:
         raise HttpError(400, "; ".join(exc.issues)) from exc
     logger.info(
-        "Admin %s imported %d analysis rows for course %s (%d created, %d reused, %d assigned)",
+        "Admin %s imported %d analysis rows for course %s (%d created, %d reused, %d assigned, %d compositions)",
         request.user.username,
         summary.rows,
         course.name,
         summary.analyses_created,
         summary.analyses_reused,
         summary.students_assigned,
+        summary.compositions_applied,
     )
     return {
         "course_id": summary.course_id,
@@ -435,6 +440,7 @@ def upload_analyses_csv(
         "analyses_reused": summary.analyses_reused,
         "students_assigned": summary.students_assigned,
         "assignments_skipped": summary.assignments_skipped,
+        "compositions_applied": summary.compositions_applied,
     }
 
 
