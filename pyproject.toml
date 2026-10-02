@@ -130,7 +130,7 @@ lint.per-file-ignores."tests/**/*" = [
   "S311",  # seeded stdlib `random.Random` for deterministic test fixtures, not crypto
 ]
 # Non-cryptographic randomness: lab-sample assignment (not security-relevant).
-lint.per-file-ignores."packages/analyses/src/analyses/services.py" = [ "S311" ]
+lint.per-file-ignores."packages/analyses/src/analyses/services/randomize.py" = [ "S311" ]
 lint.per-file-ignores."packages/*/src/*/tests/**/*" = [
   "D100",
   "D101",

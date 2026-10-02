@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 from substances.models import Ion, Substance
 
-from .models import AnalysisInstance
+from analyses.models import AnalysisInstance
 
 
 class InsufficientIonsError(Exception):

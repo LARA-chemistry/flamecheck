@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 
 from analyses.api.schemas import (
+    AnalysisCsvImportOut,
     AnalysisInstanceIn,
     AnalysisTypeIn,
     AppSettingsOut,
@@ -24,9 +25,17 @@ from analyses.api.schemas import (
 )
 from analyses.models import AnalysisInstance, AnalysisType
 from analyses.services import InsufficientIonsError, randomize_substances_for_announcement
+from analyses.services.csv_import import (
+    MAX_UPLOAD_BYTES,
+    CsvImportError,
+    import_analyses_csv,
+    render_template,
+)
 from config.models import AppSettings, Course, GradingConfig
-from ninja import Router
+from django.http import HttpResponse
+from ninja import File, Form, Router
 from ninja.errors import AuthenticationError, HttpError
+from ninja.files import UploadedFile
 from substances.api.schemas import ion_to_schema, substance_to_schema
 from substances.models import Ion, Substance
 from users.models import StudentAssignment, User
@@ -357,6 +366,72 @@ def randomize_substances(request, payload: RandomizeSubstancesIn):
         "number": payload.number,
         "randomized": len(results),
         "students": students_out,
+    }
+
+
+# NOTE: these literal routes must stay ahead of the parameterized
+# ``/analysis-instances/{instance_id}`` routes below.
+@router.get("/analysis-instances/template-csv", response=None)
+def download_analyses_template(request, course_id: int):
+    """
+    Download a CSV template for importing a set of analyses for a course.
+
+    The template has one example row per analysis type; window columns are
+    empty (rows then inherit the type's default window) and labspace_ids is
+    left empty for the admin to fill in.
+    """
+    _admin_user(request)
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    response = HttpResponse(render_template(), content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="analysis_import_template_course_{course.id}.csv"'
+    return response
+
+
+@router.post("/analysis-instances/import-csv", response=AnalysisCsvImportOut)
+def upload_analyses_csv(
+    request,
+    course_id: int = Form(...),
+    file: UploadedFile = File(...),  # noqa: B008
+):
+    """
+    Upload a CSV with a set of analyses for a course (admin).
+
+    Each row references an analysis type by name and an announcement number,
+    carries an optional window (falling back to the type's default) and may
+    list the students to assign via their Labspace IDs. Existing
+    (course, type, number) instances are reused and existing assignments are
+    skipped, so re-uploads are safe. Invalid files are rejected atomically
+    with all issues reported.
+    """
+    _admin_user(request)
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    data = file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HttpError(400, f"File too large (max {MAX_UPLOAD_BYTES // 1024} KB).")
+    try:
+        summary = import_analyses_csv(course, data)
+    except CsvImportError as exc:
+        raise HttpError(400, "; ".join(exc.issues)) from exc
+    logger.info(
+        "Admin %s imported %d analysis rows for course %s (%d created, %d reused, %d assigned)",
+        request.user.username,
+        summary.rows,
+        course.name,
+        summary.analyses_created,
+        summary.analyses_reused,
+        summary.students_assigned,
+    )
+    return {
+        "course_id": summary.course_id,
+        "rows": summary.rows,
+        "analyses_created": summary.analyses_created,
+        "analyses_reused": summary.analyses_reused,
+        "students_assigned": summary.students_assigned,
+        "assignments_skipped": summary.assignments_skipped,
     }
 
 

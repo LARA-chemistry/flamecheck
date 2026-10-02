@@ -44,6 +44,31 @@
           </n-space>
         </div>
 
+        <!-- CSV import: bulk upload of the course's analyses (assign via Labspace IDs) -->
+        <div class="csv-import-bar">
+          <n-text depth="3" class="hint">
+            Bulk-import this course's analyses from a CSV file: one row per analysis (type name,
+            announcement number, optional window), with the students to assign listed by their
+            Labspace IDs. Existing analyses and assignments are kept, so re-uploading a corrected
+            file only adds what is missing.
+          </n-text>
+          <n-space align="center" :wrap="true">
+            <n-button secondary :loading="csvImport.downloading" @click="downloadTemplate">
+              Download CSV template
+            </n-button>
+            <n-button type="primary" secondary :loading="csvImport.uploading" @click="fileInput.click()">
+              Upload CSV
+            </n-button>
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".csv,text/csv"
+              class="csv-import-bar__file"
+              @change="onCsvPicked"
+            />
+          </n-space>
+        </div>
+
         <n-data-table :columns="instanceCols" :data="instances" size="small" :loading="loadingInstances" />
       </template>
     </n-card>
@@ -223,6 +248,51 @@ function onCourseChange() {
   loadAssignments()
 }
 
+// ---- CSV import of the course's analyses -----------------------------------
+const fileInput = ref(null)
+const csvImport = ref({ uploading: false, downloading: false })
+
+async function downloadTemplate() {
+  if (!courseId.value) return
+  csvImport.value.downloading = true
+  try {
+    await api.download(
+      `/admin/analysis-instances/template-csv?course_id=${courseId.value}`,
+      `analysis_import_template_course_${courseId.value}.csv`,
+    )
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    csvImport.value.downloading = false
+  }
+}
+
+async function onCsvPicked(ev) {
+  const input = ev.target
+  const file = input.files && input.files[0]
+  if (!file || !courseId.value) return
+  csvImport.value.uploading = true
+  try {
+    const data = await api.upload('/admin/analysis-instances/import-csv', file, {
+      course_id: courseId.value,
+    })
+    const extras = [
+      data.analyses_reused ? `${data.analyses_reused} reused` : null,
+      data.assignments_skipped ? `${data.assignments_skipped} already assigned` : null,
+    ].filter(Boolean)
+    message.value = `Imported ${data.rows} rows: ${data.analyses_created} new analysis(es), ${data.students_assigned} assignment(s)${extras.length ? ` (${extras.join(', ')})` : ''}.`
+    msgType.value = 'success'
+    await Promise.all([loadInstances(), loadAssignments()])
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    csvImport.value.uploading = false
+    input.value = ''
+  }
+}
+
 async function runRandomize() {
   if (!courseId.value || !randomize.value.number) return
   randomize.value.running = true
@@ -323,6 +393,18 @@ onMounted(async () => {
   margin-bottom: var(--fc-space-sm);
   border: 1px solid var(--fc-border, rgba(127, 127, 127, 0.2));
   border-radius: 6px;
+}
+.csv-import-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-xs);
+  padding: var(--fc-space-sm);
+  margin-bottom: var(--fc-space-sm);
+  border: 1px dashed var(--fc-border, rgba(127, 127, 127, 0.35));
+  border-radius: 6px;
+}
+.csv-import-bar__file {
+  display: none;
 }
 .hint {
   font-size: var(--fc-fs-sm);

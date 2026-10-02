@@ -198,6 +198,17 @@ class RandomizeSubstancesOut(Schema):
     students: list[RandomizeSubstancesStudentOut]
 
 
+class AnalysisCsvImportOut(Schema):
+    """Summary of a CSV import of a course's analyses."""
+
+    course_id: int
+    rows: int
+    analyses_created: int
+    analyses_reused: int
+    students_assigned: int
+    assignments_skipped: int
+
+
 class GradingConfigOut(Schema):
     """Grading configuration (admin read/write)."""
 
