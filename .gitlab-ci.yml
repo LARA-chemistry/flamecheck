@@ -12,10 +12,12 @@ variables:
   DOCS_BUILD_DIR: "docs/_build"
   PYTHON_VERSION: "3.13"
   UV_VERSION: "0.10.0"
-  # Node.js major version used to build the Vue/Vite frontend in CI. Keep in
+  # Exact Node.js version used to build the Vue/Vite frontend in CI. Keep in
   # sync with the NODE_VERSION ARG in docker/Dockerfile so the CI build matches
-  # the production image build.
-  NODE_VERSION: "22"
+  # the production image build. It must satisfy the NPM_VERSION engine
+  # requirement (npm 11 needs node ^20.17.0 || >=22.9.0), so pin a specific
+  # 22.x release rather than the bare major.
+  NODE_VERSION: "22.23.3"
   # npm version used to install the frontend. Must match the npm that generated
   # frontend/package-lock.json, otherwise `npm ci` can drop rolldown's native
   # (optional) bindings and `vite build` fails (npm/cli#4828).
@@ -170,11 +172,12 @@ test:
         aarch64) NODE_ARCH="arm64" ;;
         *) echo "Unsupported architecture: $ARCH" && exit 1 ;;
       esac
-      curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}.0.0/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
+      # NODE_VERSION is a full semver (e.g. 22.23.3), not a bare major.
+      curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
       tar -xJf /tmp/node.tar.xz -C /opt/
-      ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/node" /usr/local/bin/node
-      ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/npm" /usr/local/bin/npm
-      ln -sf "/opt/node-v${NODE_VERSION}.0.0-linux-${NODE_ARCH}/bin/npx" /usr/local/bin/npx
+      ln -sf "/opt/node-v${NODE_VERSION}-linux-${NODE_ARCH}/bin/node" /usr/local/bin/node
+      ln -sf "/opt/node-v${NODE_VERSION}-linux-${NODE_ARCH}/bin/npm" /usr/local/bin/npm
+      ln -sf "/opt/node-v${NODE_VERSION}-linux-${NODE_ARCH}/bin/npx" /usr/local/bin/npx
       # The frontend lockfile was generated with npm 11; align the CI npm so
       # `npm ci` installs rolldown's native bindings consistently (older npm
       # versions mishandle optional deps and can drop the platform binding).

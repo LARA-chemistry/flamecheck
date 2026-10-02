@@ -24,7 +24,9 @@
 # s. https://snyk.io/blog/best-practices-containerizing-python-docker/
 
 ARG PYTHON_VERSION=3.13
-ARG NODE_VERSION=22
+# Full Node version (must satisfy the NPM_VERSION engine requirement: npm 11
+# needs node ^20.17.0 || >=22.9.0). Keep in sync with .gitlab-ci.yml.
+ARG NODE_VERSION=22.23.3
 # npm that generated frontend/package-lock.json. Aligning the build npm avoids
 # the optional-deps bug (npm/cli#4828) that drops rolldown's native binding.
 ARG NPM_VERSION=11.19.0
