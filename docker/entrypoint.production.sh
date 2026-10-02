@@ -8,6 +8,11 @@ set -e
 # Apply database migrations (engine-agnostic: SQLite by default, or
 # PostgreSQL when DATABASE_URL is set via .env — see .env-template).
 python manage.py migrate --noinput
+# Self-heal a corrupt migration state: a previously crashed/partial migrate can
+# record a migration as applied even though its DDL never ran, leaving `migrate`
+# reporting "No migrations to apply" while the schema is missing columns. Detect
+# that mismatch and re-apply the pending migrations before the app serves.
+python manage.py check_migrations
 
 # Optional demo setup (staging). When SEED_DEMO is set, populate the database
 # with the factory-built demo dataset (courses, users, analyses, submissions)
