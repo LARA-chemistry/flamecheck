@@ -7,7 +7,7 @@ All mutating endpoints are admin-only and logged to the audit logger.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from analyses.api.schemas import (
     AnalysisCsvImportOut,
@@ -16,6 +16,8 @@ from analyses.api.schemas import (
     AppSettingsOut,
     AssignmentIn,
     CourseIn,
+    DatabaseRestoreIn,
+    DatabaseStatusOut,
     GradingConfigOut,
     RandomizeSubstancesIn,
     RandomizeSubstancesOut,
@@ -31,6 +33,7 @@ from analyses.services.csv_import import (
     import_analyses_csv,
     render_template,
 )
+from config import db_backup
 from config.models import AppSettings, Course, GradingConfig
 from django.http import HttpResponse
 from ninja import File, Form, Router
@@ -605,6 +608,10 @@ def get_app_settings(request):
         "points_per_analysis": s.points_per_analysis,
         "analyses_per_course": s.analyses_per_course,
         "active_course_id": s.active_course_id,
+        "backup_enabled": s.backup_enabled,
+        "backup_interval_minutes": s.backup_interval_minutes,
+        "backup_location": s.backup_location,
+        "backup_keep": s.backup_keep,
     }
 
 
@@ -616,10 +623,64 @@ def update_app_settings(request, payload: AppSettingsOut):
     s.points_per_analysis = payload.points_per_analysis
     s.analyses_per_course = payload.analyses_per_course
     s.active_course_id = payload.active_course_id
+    s.backup_enabled = payload.backup_enabled
+    s.backup_interval_minutes = max(1, payload.backup_interval_minutes)
+    s.backup_location = payload.backup_location
+    s.backup_keep = max(1, payload.backup_keep)
     s.save()
     logger.info("Admin %s updated app settings", request.user.username)
     return {
         "points_per_analysis": s.points_per_analysis,
         "analyses_per_course": s.analyses_per_course,
         "active_course_id": s.active_course_id,
+        "backup_enabled": s.backup_enabled,
+        "backup_interval_minutes": s.backup_interval_minutes,
+        "backup_location": s.backup_location,
+        "backup_keep": s.backup_keep,
     }
+
+
+# ---- database backups ----------------------------------------------------------
+@router.get("/database/backups", response=DatabaseStatusOut)
+def database_backups(request):
+    """Database section status: backend, backup settings, last runs, backup files (admin)."""
+    _admin_user(request)
+    return db_backup.get_status()
+
+
+def _mark_backup_taken(filename: str) -> None:
+    """Record a successful backup on the AppSettings singleton (fresh instance)."""
+    s = AppSettings.get_instance()
+    s.last_backup_at = datetime.now(UTC)
+    s.last_backup_file = filename
+    s.save(update_fields=["last_backup_at", "last_backup_file"])
+
+
+@router.post("/database/backup", response=DatabaseStatusOut)
+def database_backup_now(request):
+    """Take a database backup immediately (admin)."""
+    _admin_user(request)
+    s = AppSettings.get_instance()
+    try:
+        result = db_backup.run_backup(db_backup.resolve_backup_location(s.backup_location), s.backup_keep)
+    except db_backup.BackupError as exc:
+        raise HttpError(400, str(exc)) from exc
+    _mark_backup_taken(result["file"])
+    logger.info("Admin %s took a database backup (%s)", request.user.username, result["file"])
+    return db_backup.get_status()
+
+
+@router.post("/database/restore", response=DatabaseStatusOut)
+def database_restore(request, payload: DatabaseRestoreIn):
+    """Restore the database from a backup file (admin)."""
+    _admin_user(request)
+    s = AppSettings.get_instance()
+    try:
+        result = db_backup.restore_backup(db_backup.resolve_backup_location(s.backup_location), payload.file)
+    except db_backup.BackupError as exc:
+        raise HttpError(400, str(exc)) from exc
+    # restore_backup() closed the pooled connections (file swap), so re-fetch
+    # the settings and build the response from fresh data.
+    db_backup.mark_restored(result["file"])
+    logger.info("Admin %s restored the database from %s", request.user.username, result["file"])
+    return db_backup.get_status()

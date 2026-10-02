@@ -111,6 +111,10 @@ DATABASES = {
 DATABASES["default"]["ATOMIC_REQUESTS"] = env.bool("DJANGO_ATOMIC_REQUESTS", default=True)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# In-process database-backup scheduler (config app). Set to False to rely on
+# an external cron/systemd timer running ``manage.py backup_database``.
+DATABASE_BACKUP_SCHEDULER = env.bool("DATABASE_BACKUP_SCHEDULER", default=True)
+
 # ---------------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------------

@@ -15,3 +15,6 @@ DATABASES = {
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
 }
+
+# The in-process backup scheduler must not run during tests.
+DATABASE_BACKUP_SCHEDULER = False

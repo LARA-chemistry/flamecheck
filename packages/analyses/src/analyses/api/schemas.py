@@ -228,6 +228,42 @@ class AppSettingsOut(Schema):
     points_per_analysis: int
     analyses_per_course: int
     active_course_id: int | None
+    backup_enabled: bool = False
+    backup_interval_minutes: int = 60
+    backup_location: str = "backups"
+    backup_keep: int = 10
+
+
+class DatabaseBackupOut(Schema):
+    """One backup file in the configured location."""
+
+    file: str
+    size: int
+    modified_at: str
+    managed: bool
+
+
+class DatabaseStatusOut(Schema):
+    """Database section status (backend, backup settings, last runs, files)."""
+
+    backend: str
+    sqlite: bool
+    database_file: str | None
+    enabled: bool
+    interval_minutes: int
+    location: str
+    keep: int
+    last_backup_at: str | None
+    last_backup_file: str | None
+    last_restore_at: str | None
+    last_restore_file: str | None
+    backups: list[DatabaseBackupOut]
+
+
+class DatabaseRestoreIn(Schema):
+    """Payload for restoring the database from a backup file."""
+
+    file: str
 
 
 class CourseIn(Schema):

@@ -260,6 +260,32 @@ class AppSettings(models.Model):
         related_name="plus_active_settings",
         help_text=_("Currently active course (the one students see after login)."),
     )
+    # ---- database backup -----------------------------------------------------
+    backup_enabled = models.BooleanField(
+        default=False,
+        help_text=_("Run a scheduled database backup (in-process scheduler)."),
+    )
+    backup_interval_minutes = models.PositiveIntegerField(
+        default=60,
+        help_text=_("Minutes between scheduled backups (minimum 1)."),
+    )
+    backup_location = models.CharField(
+        max_length=500,
+        default="backups",
+        blank=True,
+        help_text=_(
+            "Directory for backup files. Relative paths are resolved against the "
+            "project root (e.g. 'backups' or '/var/backups/flamecheck')."
+        ),
+    )
+    backup_keep = models.PositiveIntegerField(
+        default=10,
+        help_text=_("Number of backups to keep; older ones are deleted after each backup."),
+    )
+    last_backup_at = models.DateTimeField(null=True, blank=True)
+    last_backup_file = models.CharField(max_length=255, blank=True, default="")
+    last_restore_at = models.DateTimeField(null=True, blank=True)
+    last_restore_file = models.CharField(max_length=255, blank=True, default="")
     objects = AppSettingsManager()
 
     class Meta:
