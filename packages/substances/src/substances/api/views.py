@@ -32,6 +32,10 @@ router = Router(tags=["substances"])
 # Header row for the CSV import format (also used for the downloadable template).
 CSV_HEADER = ["name", "synonyms", "formula", "ions", "pubchem_id", "wikipedia_link"]
 
+#: Column separator for the import file, so multi-value cells (ions, synonyms)
+#: may use ```` `,` ```` without needing CSV quoting.
+FIELD_SEP = ";"
+
 
 def _require_admin(request) -> None:
     """Raise unless the request user is an admin."""
@@ -69,15 +73,20 @@ def list_substances(request, ion_id: int | None = None):
 # ``/substances/{substance_id}`` routes, otherwise the parameterized route shadows them.
 @router.get("/substances/import-template", response=None, operation_id="substance_import_template")
 def substance_import_template(request):
-    """Return a sample CSV showing the expected import format (admin only)."""
+    """
+    Return a sample CSV showing the expected import format (admin only).
+
+    Columns are separated by ``;`` and the multi-value cells (``ions``,
+    ``synonyms``) are separated by ``,``, so a cell may hold commas without
+    needing CSV quoting.
+    """
     _require_admin(request)
-    # Multi-value cells (synonyms, ions) are semicolon-separated so they do not
-    # need CSV quoting; commas inside such a cell must be wrapped in quotes.
     sample = "\n".join(
         [
-            ",".join(CSV_HEADER),
-            "Sodium chloride,Table salt,NaCl,Na+;Cl-,238914022,https://en.wikipedia.org/wiki/Sodium_chloride",
-            "Potassium sulfate,,K2SO4,K+;SO4^2-,,,",
+            FIELD_SEP.join(CSV_HEADER),
+            # name;synonyms;formula;ions;pubchem_id;wikipedia_link (6 columns)
+            "Sodium chloride;Table salt;NaCl;Na+,Cl-;238914022;https://en.wikipedia.org/wiki/Sodium_chloride",
+            "Potassium sulfate;;K2SO4;K+,SO4^2-;;",
         ]
     )
     return _csv_response(sample)
@@ -89,13 +98,14 @@ def import_substances_csv(request, file: UploadedFile):
     Import substances from an uploaded CSV file (admin only).
 
     Expected columns (first row is a header): ``name`` (required), ``synonyms``,
-    ``formula``, ``ions`` (comma/semicolon-separated ion symbols), ``pubchem_id``,
-    ``wikipedia_link``. Substances are matched by name; a matching row updates the
-    existing substance, otherwise a new one is created. Ion symbols are resolved
-    against existing ions; symbols that are not found are collected in
-    ``missing_ions`` unless the ``create_missing_ions`` form field is set to
-    ``true``, in which case bare ions (kind inferred from the charge sign) are
-    created.
+    ``formula``, ``ions`` (comma-separated ion symbols), ``pubchem_id``,
+    ``wikipedia_link``. Columns are separated by ``;`` (a comma is also accepted
+    as the column separator for compatibility). Substances are matched by name;
+    a matching row updates the existing substance, otherwise a new one is
+    created. Ion symbols are resolved against existing ions; symbols that are
+    not found are collected in ``missing_ions`` unless the
+    ``create_missing_ions`` form field is set to ``true``, in which case bare
+    ions (kind inferred from the charge sign) are created.
     """
     _require_admin(request)
     # ``create_missing_ions`` arrives as a multipart form field (or query param);
@@ -110,7 +120,10 @@ def import_substances_csv(request, file: UploadedFile):
     except UnicodeDecodeError as exc:
         raise ValidationError({"file": [f"File is not valid UTF-8: {exc}"]}) from exc
 
-    reader = csv.DictReader(io.StringIO(text))
+    # The import file uses ``;`` as the column separator (so the ``ions`` cell
+    # may hold commas); fall back to `,` for legacy comma-separated files.
+    delim = FIELD_SEP if FIELD_SEP in text.splitlines()[0] else ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delim)
     if reader.fieldnames is None or "name" not in [f.strip() for f in reader.fieldnames]:
         raise ValidationError({"file": ["CSV must have a header row with a 'name' column."]})
 

@@ -10,10 +10,11 @@
         <n-text depth="3" class="hint">
           Upload a CSV with the columns: <code>name</code> (required), <code>synonyms</code>,
           <code>formula</code>, <code>ions</code>, <code>pubchem_id</code>,
-          <code>wikipedia_link</code>. Separate several ions or synonyms with a
-          <strong>semicolon</strong> (e.g. <code>Na+;Cl-</code>) to avoid CSV quoting issues.
-          Rows are matched by name - a match updates the existing substance, otherwise a new
-          one is created.
+          <code>wikipedia_link</code>. Columns are separated by
+          <code>;</code> and several ions or synonyms are separated by
+          <code>,</code> (e.g. <code>Na+,Cl-</code>), so a cell may hold commas
+          without quoting. Rows are matched by name - a match updates the existing
+          substance, otherwise a new one is created.
         </n-text>
         <n-space align="center" :wrap="true">
           <n-upload

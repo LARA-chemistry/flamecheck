@@ -118,12 +118,11 @@ class TestCsvImport:
 
     def test_import_creates_and_updates(self, client, admin_user, populated, auth_headers):
         cation, anion, existing = populated
-        # Multi-value cells (synonyms/ions) are semicolon-separated to avoid CSV
-        # quoting issues.
+        # Columns are ``;``-separated; the ions cell is comma-separated.
         csv_text = (
-            "name,synonyms,formula,ions,pubchem_id,wikipedia_link\n"
-            f"Fresh salt,Allosalt,KI,{cation.symbol};{anion.symbol},,,\n"
-            f"{existing.name},Updated alias,KI,{cation.symbol};{anion.symbol},123,https://en.wiki/I\n"
+            "name;synonyms;formula;ions;pubchem_id;wikipedia_link\n"
+            f"Fresh salt;Allosalt;KI;{cation.symbol},{anion.symbol};;;\n"
+            f"{existing.name};Updated alias;KI;{cation.symbol},{anion.symbol};123;https://en.wiki/I\n"
         )
         resp = client.post(
             "/api/v1/substances/import-csv",
@@ -144,7 +143,7 @@ class TestCsvImport:
         assert set(updated.ions.values_list("symbol", flat=True)) == {cation.symbol, anion.symbol}
 
     def test_missing_ions_collected(self, client, admin_user, auth_headers):
-        csv_text = "name,formula,ions\nMystery salt,??,Zz+;Qq-\n"
+        csv_text = "name;formula;ions\nMystery salt;??;Zz+,Qq-\n"
         resp = client.post(
             "/api/v1/substances/import-csv",
             {"file": self._csv_upload(csv_text)},
@@ -157,8 +156,8 @@ class TestCsvImport:
         # No ions were auto-created.
         assert not Ion.objects.filter(symbol="Zz+").exists()
 
-    def test_missing_ions_quoted_commas(self, client, admin_user, auth_headers):
-        # A properly quoted cell may use commas as the intra-cell delimiter.
+    def test_comma_separated_columns_still_accepted(self, client, admin_user, auth_headers):
+        # Legacy comma-separated files (ions cell quoted) still parse.
         csv_text = 'name,formula,ions\nQuoted salt,??,"Zz+,Qq-"\n'
         resp = client.post(
             "/api/v1/substances/import-csv",
@@ -168,9 +167,10 @@ class TestCsvImport:
         assert resp.status_code == 200
         data = resp.json()
         assert set(data["missing_ions"]) == {"Zz+", "Qq-"}
+        assert data["created"] == 1
 
     def test_create_missing_ions(self, client, admin_user, auth_headers):
-        csv_text = "name,formula,ions\nMystery salt,??,Zz+;Qq-\n"
+        csv_text = "name;formula;ions\nMystery salt;??;Zz+,Qq-\n"
         resp = client.post(
             "/api/v1/substances/import-csv",
             {"file": self._csv_upload(csv_text), "create_missing_ions": "true"},
@@ -200,7 +200,7 @@ class TestCsvImport:
 
     def test_rows_without_name_are_skipped(self, client, admin_user, populated, auth_headers):
         cation, _, _ = populated
-        csv_text = f"name,ions\n,cation.symbol\n\nGood salt,{cation.symbol}\n"
+        csv_text = f"name;ions\n;\n\nGood salt;{cation.symbol}\n"
         resp = client.post(
             "/api/v1/substances/import-csv",
             {"file": self._csv_upload(csv_text)},
@@ -216,7 +216,12 @@ class TestCsvImport:
         resp = client.get("/api/v1/substances/import-template", **auth_headers(admin_user))
         assert resp.status_code == 200
         assert resp["Content-Type"] == "text/csv"
-        assert resp.content.decode().startswith("name,synonyms,formula,ions,pubchem_id,wikipedia_link")
+        lines = resp.content.decode().strip().splitlines()
+        assert lines[0] == "name;synonyms;formula;ions;pubchem_id;wikipedia_link"
+        # Each sample row has 6 ``;``-separated columns.
+        assert all(len(line.split(";")) == 6 for line in lines)
+        # The ions cell uses commas as the intra-cell separator.
+        assert "Na+,Cl-" in lines[1]
 
     def test_template_forbidden_for_student(self, client, student, auth_headers):
         resp = client.get("/api/v1/substances/import-template", **auth_headers(student))
