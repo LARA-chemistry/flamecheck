@@ -374,3 +374,43 @@ class Submission(models.Model):
             "wrong": sorted(selected - correct_ids),
             "missing": sorted(correct_ids - selected),
         }
+
+
+def student_course_result(student, course=None) -> dict:
+    """
+    Compute the course result for ``student``.
+
+    Aggregates the student's final scores (see :meth:`AnalysisInstance.score`)
+    across all analyses of their course — including instances without a course
+    link — and compares the total with the course's passing score from the
+    applicable :class:`~config.models.GradingConfig`.
+
+    Args:
+        student: The student user.
+        course: The course to aggregate over (defaults to the student's course).
+
+    Returns:
+        dict with ``instances`` (the aggregated :class:`AnalysisInstance`
+        objects), ``total_score``, ``ideal_score``, ``passing_score`` and
+        ``passed`` (True when the total reaches the passing score; always True
+        when the passing score is 0).
+
+    """
+    if course is None:
+        course = getattr(student, "course", None)
+    grading = GradingConfig.get_for_course(course)
+    instances = [
+        i
+        for i in AnalysisInstance.objects.for_student(student)
+        if course is None or i.course_id == course.id or i.course is None
+    ]
+    total = sum(i.score() or 0 for i in instances)
+    ideal = sum(i.ideal_score() for i in instances)
+    passing = int(grading.passing_score)
+    return {
+        "instances": instances,
+        "total_score": total,
+        "ideal_score": ideal,
+        "passing_score": passing,
+        "passed": passing <= 0 or total >= passing,
+    }

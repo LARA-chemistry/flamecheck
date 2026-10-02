@@ -448,15 +448,7 @@ def get_grading_config(request):
     if not getattr(request.user, "is_authenticated", False):
         raise AuthenticationError(401, "Authentication required.")
     gc = GradingConfig.get_instance()
-    return {
-        "points_per_correct_ion": gc.points_per_correct_ion,
-        "penalty_second_submission": gc.penalty_second_submission,
-        "penalty_third_submission": gc.penalty_third_submission,
-        "false_positive_deduction": gc.false_positive_deduction,
-        "grading_mode": gc.grading_mode,
-        "max_submissions_per_analysis": gc.max_submissions_per_analysis,
-        "final_score_strategy": gc.final_score_strategy,
-    }
+    return _grading_config_payload(gc)
 
 
 @router.put("/grading-config", response=GradingConfigOut)
@@ -471,7 +463,7 @@ def update_grading_config(request, payload: GradingConfigOut):
 
 
 def _apply_grading_payload(gc: GradingConfig, payload: GradingConfigOut) -> None:
-    """Copy the seven grading fields from ``payload`` onto ``gc`` (no save)."""
+    """Copy the grading fields from ``payload`` onto ``gc`` (no save)."""
     gc.points_per_correct_ion = payload.points_per_correct_ion
     gc.penalty_second_submission = payload.penalty_second_submission
     gc.penalty_third_submission = payload.penalty_third_submission
@@ -479,6 +471,7 @@ def _apply_grading_payload(gc: GradingConfig, payload: GradingConfigOut) -> None
     gc.grading_mode = payload.grading_mode
     gc.max_submissions_per_analysis = payload.max_submissions_per_analysis
     gc.final_score_strategy = payload.final_score_strategy
+    gc.passing_score = payload.passing_score
 
 
 def _grading_config_payload(gc: GradingConfig) -> dict:
@@ -491,6 +484,7 @@ def _grading_config_payload(gc: GradingConfig) -> dict:
         "grading_mode": gc.grading_mode,
         "max_submissions_per_analysis": gc.max_submissions_per_analysis,
         "final_score_strategy": gc.final_score_strategy,
+        "passing_score": gc.passing_score,
     }
 
 

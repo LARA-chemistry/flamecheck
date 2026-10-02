@@ -24,6 +24,21 @@
     </header>
 
     <n-spin :show="loading">
+      <div v-if="summary" class="course-summary">
+        <div class="course-summary__stat">
+          <span class="course-summary__value">{{ summary.total_score }}</span>
+          <span class="course-summary__label">of {{ summary.ideal_score }} points</span>
+        </div>
+        <div class="course-summary__divider" aria-hidden="true"></div>
+        <div class="course-summary__stat">
+          <span class="course-summary__value">{{ summary.passing_score }}</span>
+          <span class="course-summary__label">points to pass</span>
+        </div>
+        <div class="course-summary__divider" aria-hidden="true"></div>
+        <n-tag :type="summary.passed ? 'success' : 'warning'" round size="small">
+          {{ summary.passed ? 'Passed' : 'Not passed yet' }}
+        </n-tag>
+      </div>
       <n-empty v-if="!loading && analyses.length === 0" class="empty" description="No analyses assigned yet." />
       <div v-else class="fc-card-grid">
         <div
@@ -94,6 +109,8 @@ const auth = useAuthStore()
 const user = auth.user
 const loading = ref(true)
 const analyses = ref([])
+// Course result (total/ideal/passing points + pass status) for the header bar.
+const summary = ref(null)
 
 function windowTagType(status) {
   const map = { open: 'success', too_early: 'warning', too_late: 'error', submitted: 'info' }
@@ -139,7 +156,14 @@ function openAnalysis(a) {
 async function load() {
   loading.value = true
   try {
-    analyses.value = await api.get('/analyses')
+    // The summary request is non-critical: if it fails, the card grid still
+    // renders (the pass-status bar just stays hidden).
+    const [list, sum] = await Promise.all([
+      api.get('/analyses'),
+      api.get('/me/summary').catch(() => null),
+    ])
+    analyses.value = list
+    summary.value = sum
   } finally {
     loading.value = false
   }
@@ -272,6 +296,44 @@ onMounted(load)
   .fc-user__name {
     max-width: none;
   }
+}
+
+/* Course result bar: total points, passing line and the pass status tag. */
+.course-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-md);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius, 12px);
+  box-shadow: var(--fc-shadow);
+  padding: var(--fc-space-sm) var(--fc-space-md);
+  margin-bottom: var(--fc-space-md);
+  flex-wrap: wrap;
+}
+
+.course-summary__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.course-summary__value {
+  font-size: var(--fc-fs-lg, 20px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.course-summary__label {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
+  white-space: nowrap;
+}
+
+.course-summary__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--fc-border);
 }
 
 .empty {

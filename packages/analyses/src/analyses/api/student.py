@@ -16,7 +16,7 @@ from analyses.api.schemas import (
     SummaryOut,
     ion_ids_to_dicts,
 )
-from analyses.models import AnalysisInstance
+from analyses.models import AnalysisInstance, student_course_result
 from ninja import Router
 from ninja.errors import AuthenticationError, HttpError
 from ninja.errors import ValidationError as NinjaValidationError
@@ -204,12 +204,21 @@ def analysis_result(request, analysis_id: int):
 
 @router.get("/me/summary", response=SummaryOut)
 def my_summary(request):
-    """All assigned analyses with scores and the total/ideal points."""
+    """
+    All assigned analyses with scores and the course result.
+
+    Includes the total/ideal points, the course's passing score and whether
+    the student currently reaches it.
+    """
     user = request.user
     if not getattr(user, "is_authenticated", False):
         raise AuthenticationError(401, "Authentication required.")
-    instances = AnalysisInstance.objects.for_student(user)
-    analyses = [AnalysisSummary.from_instance(i) for i in instances]
-    total = sum(a.score or 0 for a in analyses)
-    ideal = sum(i.ideal_score() for i in instances)
-    return {"total_score": total, "ideal_score": ideal, "analyses": analyses}
+    result = student_course_result(user)
+    analyses = [AnalysisSummary.from_instance(i) for i in result["instances"]]
+    return {
+        "total_score": result["total_score"],
+        "ideal_score": result["ideal_score"],
+        "passing_score": result["passing_score"],
+        "passed": result["passed"],
+        "analyses": analyses,
+    }

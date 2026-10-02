@@ -148,6 +148,7 @@ class TestGradingConfig:
             "grading_mode": "per_analysis",
             "max_submissions_per_analysis": 2,
             "final_score_strategy": "last",
+            "passing_score": 25,
         }
         resp = client.put(
             "/api/v1/admin/grading-config", payload, content_type="application/json", **auth_headers(admin_user)
@@ -156,6 +157,7 @@ class TestGradingConfig:
         gc = GradingConfig.get_instance()
         assert gc.points_per_correct_ion == 5
         assert gc.grading_mode == "per_analysis"
+        assert gc.passing_score == 25
 
     def test_student_cannot_update_grading_config(self, client, student, auth_headers):
         payload = {
@@ -166,6 +168,7 @@ class TestGradingConfig:
             "grading_mode": "per_ion",
             "max_submissions_per_analysis": 1,
             "final_score_strategy": "best",
+            "passing_score": 50,
         }
         resp = client.put(
             "/api/v1/admin/grading-config", payload, content_type="application/json", **auth_headers(student)

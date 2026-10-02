@@ -439,8 +439,9 @@ class Command(BaseCommand):
         GradingConfigFactory()  # the global default (pk=1, course=None)
 
         # A per-course override on the Biology course to demonstrate per-course
-        # grading (stricter: all-or-nothing, one attempt). The factory pins
-        # pk=1 (the singleton), so a per-course row is written via the model.
+        # grading (stricter: all-or-nothing points per completed analysis, one
+        # attempt, higher pass line). The factory pins pk=1 (the singleton), so
+        # a per-course row is written via the model.
         biology = courses.get("Inorganic Chemistry WS 2026 - Biology")
         if biology is not None:
             GradingConfig.objects.update_or_create(
@@ -450,6 +451,7 @@ class Command(BaseCommand):
                     "points_per_correct_ion": 20,
                     "max_submissions_per_analysis": 1,
                     "final_score_strategy": "last",
+                    "passing_score": 40,
                 },
             )
 

@@ -103,6 +103,8 @@ class SummaryOut(Schema):
 
     total_score: int
     ideal_score: int
+    passing_score: int
+    passed: bool
     analyses: list[AnalysisSummary]
 
 
@@ -206,6 +208,7 @@ class GradingConfigOut(Schema):
     grading_mode: str
     max_submissions_per_analysis: int
     final_score_strategy: str
+    passing_score: int
 
 
 class AppSettingsOut(Schema):

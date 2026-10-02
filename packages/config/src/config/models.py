@@ -29,11 +29,26 @@ class Course(models.Model):
 
 
 class GradingConfig(models.Model):
-    """Singleton grading configuration (admin-adjustable)."""
+    """
+    Grading configuration.
+
+    One global default row (``course=None``) plus at most one overriding row
+    per course (see :meth:`get_for_course`).
+    """
 
     points_per_correct_ion = models.PositiveSmallIntegerField(
         default=10,
-        help_text=_("Points awarded per correctly identified ion (per-ion mode)."),
+        help_text=(
+            "Points per correctly identified ion in per-ion mode; points per "
+            "completed analysis (all ions exact) in per-analysis mode."
+        ),
+    )
+    passing_score = models.PositiveIntegerField(
+        default=50,
+        help_text=_(
+            "Minimum total points a student needs across all analyses of the "
+            "course to pass it (0 disables the pass check)."
+        ),
     )
     penalty_second_submission = models.PositiveSmallIntegerField(
         default=2,
@@ -94,10 +109,10 @@ class GradingConfig(models.Model):
 
     def __str__(self) -> str:
         scope = f" ({self.course.name})" if self.course_id else ""
+        unit = "pts/analysis" if self.grading_mode == "per_analysis" else "pts/ion"
         return (
-            f"Grading{scope} ({self.grading_mode}, "
-            f"{self.points_per_correct_ion} pts/ion, "
-            f"max {self.max_submissions_per_analysis})"
+            f"Grading{scope} ({self.grading_mode}, {self.points_per_correct_ion} {unit}, "
+            f"pass >= {self.passing_score}, max {self.max_submissions_per_analysis})"
         )
 
     @classmethod
@@ -137,6 +152,12 @@ class GradingConfig(models.Model):
     ) -> dict[str, int]:
         """
         Grade one submission according to the configured mode.
+
+        In ``per_ion`` mode every correct ion is worth ``points_per_correct_ion``
+        (minus the false-positive deduction and the retry penalties). In
+        ``per_analysis`` mode the submission is all-or-nothing: the full
+        ``points_per_correct_ion`` value is awarded only when the selected set
+        exactly matches the correct set; retry penalties do not apply.
 
         Args:
             correct_ion_ids: IDs of the ions actually present in the analysis.

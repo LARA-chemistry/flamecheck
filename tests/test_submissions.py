@@ -177,6 +177,26 @@ class TestResultAndSummary:
         assert data["total_score"] == 30
         assert data["ideal_score"] == 30
         assert len(data["analyses"]) == 1
+        # Course pass status: 30 < default passing score of 50.
+        assert data["passing_score"] == 50
+        assert data["passed"] is False
+
+    def test_summary_passed_flag(self, client, student, assigned_instance, auth_headers):
+        gc = GradingConfig.get_instance()
+        gc.passing_score = 20
+        gc.save()
+        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        client.post(
+            f"/api/v1/analyses/{assigned_instance.id}/submissions",
+            {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
+            content_type="application/json",
+            **auth_headers(student),
+        )
+        resp = client.get("/api/v1/me/summary", **auth_headers(student))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["passing_score"] == 20
+        assert data["passed"] is True
 
 
 class TestPerAnalysisMode:

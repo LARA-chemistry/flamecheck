@@ -57,23 +57,29 @@
         Overrides the default grading configuration for this course only.
       </n-text>
       <n-form label-placement="left" label-width="200">
-        <n-form-item label="Points per correct ion">
-          <n-input-number v-model:value="grading.form.points_per_correct_ion" :min="0" />
-        </n-form-item>
-        <n-form-item label="Penalty 2nd submission">
-          <n-input-number v-model:value="grading.form.penalty_second_submission" :min="0" />
-        </n-form-item>
-        <n-form-item label="Penalty 3rd submission">
-          <n-input-number v-model:value="grading.form.penalty_third_submission" :min="0" />
-        </n-form-item>
-        <n-form-item label="False positive deduction">
-          <n-input-number v-model:value="grading.form.false_positive_deduction" :min="0" />
-        </n-form-item>
         <n-form-item label="Grading mode">
           <n-select
             v-model:value="grading.form.grading_mode"
             :options="[{ label: 'Per Ion', value: 'per_ion' }, { label: 'Per Analysis', value: 'per_analysis' }]"
           />
+        </n-form-item>
+        <n-form-item :label="pointsLabel">
+          <n-input-number v-model:value="grading.form.points_per_correct_ion" :min="0" />
+        </n-form-item>
+        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="Penalty 2nd submission">
+          <n-input-number v-model:value="grading.form.penalty_second_submission" :min="0" />
+        </n-form-item>
+        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="Penalty 3rd submission">
+          <n-input-number v-model:value="grading.form.penalty_third_submission" :min="0" />
+        </n-form-item>
+        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="False positive deduction">
+          <n-input-number v-model:value="grading.form.false_positive_deduction" :min="0" />
+        </n-form-item>
+        <n-form-item v-if="grading.form.grading_mode === 'per_analysis'" label=" " :show-label="false">
+          <n-text depth="3" style="font-size: 12px">
+            Per-analysis mode is all-or-nothing: full points only when every ion is correct.
+            Retry penalties do not apply.
+          </n-text>
         </n-form-item>
         <n-form-item label="Max submissions per analysis">
           <n-input-number v-model:value="grading.form.max_submissions_per_analysis" :min="1" />
@@ -84,6 +90,12 @@
             :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
           />
         </n-form-item>
+        <n-form-item label="Min. points to pass">
+          <n-input-number v-model:value="grading.form.passing_score" :min="0" />
+        </n-form-item>
+        <n-text depth="3" style="font-size: 12px; display:block; padding-left: 200px">
+          Minimum total points across all analyses of this course to pass it (0 disables).
+        </n-text>
       </n-form>
       <template #footer>
         <n-space justify="end">
@@ -287,8 +299,15 @@ const grading = ref({
     grading_mode: 'per_ion',
     max_submissions_per_analysis: 3,
     final_score_strategy: 'best',
+    passing_score: 50,
   },
 })
+
+// In per-analysis mode the same field holds the points per *completed*
+// analysis, so the label adapts to the selected grading mode.
+const pointsLabel = computed(
+  () => (grading.value.form.grading_mode === 'per_analysis' ? 'Points per analysis' : 'Points per correct ion'),
+)
 
 // Assign (enroll) students into a course.
 const assign = ref({
@@ -628,6 +647,7 @@ async function openGrading(row) {
     grading_mode: 'per_ion',
     max_submissions_per_analysis: 3,
     final_score_strategy: 'best',
+    passing_score: 50,
   }
   try {
     // The endpoint returns the course's own config or the global default, so the

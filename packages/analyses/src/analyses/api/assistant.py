@@ -12,6 +12,7 @@ import io
 
 from analyses.api.schemas import AnalysisSummary, AssistantCourseOut, AssistantRosterEntry
 from analyses.models import AnalysisInstance
+from config.models import GradingConfig
 from django.http import HttpResponse
 from ninja import Router
 from ninja.errors import AuthenticationError, HttpError
@@ -77,6 +78,7 @@ def list_courses(request):
             "submitted": submitted,
             "pending": total - submitted,
             "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "passing_score": int(GradingConfig.get_for_course(course).passing_score),
         }
         out.append(
             {
