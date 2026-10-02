@@ -125,6 +125,56 @@
       </template>
     </n-modal>
 
+    <!-- Window calendar (Gantt) for the course's analyses -->
+    <n-modal v-model:show="calendar.show" preset="card" :title="`Window calendar — ${calendar.courseName}`" style="width: 900px; max-width: 96vw">
+      <n-space vertical size="medium">
+        <n-text depth="3" style="font-size: 13px">
+          Each bar is an analysis (announcement) and spans its submission window, plotted on a
+          shared time axis. <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
+          <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
+          <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
+        </n-text>
+
+        <n-spin :show="calendar.loading">
+          <n-empty v-if="!calendar.loading && calendarInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
+          <div v-else class="gantt">
+            <!-- time axis -->
+            <div class="gantt__axis">
+              <div class="gantt__axis-labels">
+                <span v-for="t in calendarTicks" :key="t.left" class="gantt__tick" :style="{ left: t.left + '%' }">
+                  {{ t.label }}
+                </span>
+              </div>
+            </div>
+
+            <!-- one row per analysis -->
+            <div v-for="inst in calendarInstances" :key="inst.id" class="gantt__row">
+              <div class="gantt__row-label" :title="inst.type">
+                <span class="gantt__num">#{{ inst.number }}</span>
+                <span class="gantt__type">{{ inst.type }}</span>
+              </div>
+              <div class="gantt__track">
+                <div class="gantt__grid" aria-hidden="true"></div>
+                <div
+                  class="gantt__bar"
+                  :class="`gantt__bar--${windowStatus(inst)}`"
+                  :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
+                  :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
+                >
+                  <span class="gantt__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </n-spin>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="calendar.show = false">Close</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <n-alert v-if="message" :type="msgType">{{ message }}</n-alert>
   </n-space>
 </template>
@@ -182,6 +232,15 @@ const assign = ref({
   studentIds: [],
 })
 
+// Per-course window calendar (a Gantt-style timeline of the analysis windows).
+const calendar = ref({
+  show: false,
+  loading: false,
+  courseId: null,
+  courseName: '',
+  instances: [],
+})
+
 const courseStudents = computed(() =>
   students.value.filter((s) => s.course_id === selected.value?.id),
 )
@@ -204,6 +263,81 @@ const alreadyInCourseCount = computed(
   () => students.value.filter((s) => s.course_id === assign.value.courseId).length,
 )
 
+// ---- window calendar (Gantt) -------------------------------------------------
+// Sort the course's analyses by their window start so the timeline reads in
+// chronological order.
+const calendarInstances = computed(() =>
+  [...calendar.value.instances].sort(
+    (a, b) => new Date(a.window_start) - new Date(b.window_start),
+  ),
+)
+
+// The shared time axis: from the earliest window start to the latest window end,
+// padded a little on each side so bars do not touch the edges.
+const calendarRange = computed(() => {
+  const list = calendarInstances.value
+  if (list.length === 0) return null
+  const starts = list.map((i) => new Date(i.window_start).getTime())
+  const ends = list.map((i) => new Date(i.window_end).getTime())
+  let min = Math.min(...starts)
+  let max = Math.max(...ends)
+  const pad = Math.max((max - min) * 0.05, 30 * 60 * 1000) // at least 30 min of padding
+  return { min: min - pad, max: max + pad, span: Math.max(max - min, 1) }
+})
+
+// Map an instance to its bar's left/width (in %) on the shared axis.
+function barPosition(inst) {
+  const r = calendarRange.value
+  if (!r) return { left: 0, width: 0 }
+  const start = new Date(inst.window_start).getTime()
+  const end = new Date(inst.window_end).getTime()
+  const left = ((start - r.min) / r.span) * 100
+  const width = ((end - start) / r.span) * 100
+  return { left: Math.max(0, left), width: Math.max(0.5, Math.min(100 - left, width)) }
+}
+
+// A handful of axis tick labels spread across the range.
+const calendarTicks = computed(() => {
+  const r = calendarRange.value
+  if (!r) return []
+  const count = 5
+  const ticks = []
+  for (let i = 0; i < count; i++) {
+    const t = r.min + (r.span * i) / (count - 1)
+    const d = new Date(t)
+    ticks.push({
+      left: (i / (count - 1)) * 100,
+      label: `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+    })
+  }
+  return ticks
+})
+
+// Window status for coloring (open / too early / too late) relative to now.
+function windowStatus(inst) {
+  const now = Date.now()
+  const start = new Date(inst.window_start).getTime()
+  const end = new Date(inst.window_end).getTime()
+  if (now < start) return 'too_early'
+  if (now > end) return 'too_late'
+  return 'open'
+}
+
+// Format an ISO datetime for display (local time).
+function fmt(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+// Compact "Mon D HH:mm" form for the bar label.
+function fmtShort(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 const courseCols = [
   {
     title: 'Name',
@@ -222,6 +356,7 @@ const courseCols = [
         h(NButton, { size: 'tiny', secondary: true, onClick: () => openAssign(row) }, () => 'Assign'),
         h(NButton, { size: 'tiny', secondary: true, onClick: () => selectCourse(row) }, () => 'Students'),
         h(NButton, { size: 'tiny', secondary: true, onClick: () => openAnalyses(row) }, () => 'Analyses'),
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openCalendar(row) }, () => 'Calendar'),
         h(NButton, { size: 'tiny', secondary: true, onClick: () => openGrading(row) }, () => 'Grading'),
       ]),
   },
@@ -404,6 +539,23 @@ function openAnalyses(row) {
   router.push({ name: 'admin-assignments', query: { course: String(row.id) } })
 }
 
+// ---- window calendar: visualise the course's analysis windows -------------
+async function openCalendar(row) {
+  calendar.value.show = true
+  calendar.value.loading = true
+  calendar.value.courseId = row.id
+  calendar.value.courseName = row.name
+  calendar.value.instances = []
+  try {
+    calendar.value.instances = await api.get(`/admin/analysis-instances?course_id=${row.id}`)
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    calendar.value.loading = false
+  }
+}
+
 onMounted(() => {
   loadCourses()
   loadStudents()
@@ -436,5 +588,115 @@ onMounted(() => {
 }
 .student-row__spacer {
   flex: 1;
+}
+
+/* ---- window calendar (Gantt) ------------------------------------------ */
+.cal-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+}
+.cal-legend__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.cal-legend__dot--open { background: #18a058; }
+.cal-legend__dot--early { background: #f0a020; }
+.cal-legend__dot--late { background: #d03050; }
+
+.gantt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.gantt__axis {
+  display: flex;
+  align-items: center;
+  height: 18px;
+}
+.gantt__axis-labels {
+  position: relative;
+  flex: 1;
+  margin-left: 180px; /* align with the track (label column width) */
+  height: 100%;
+}
+.gantt__tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--fc-muted);
+  white-space: nowrap;
+}
+
+.gantt__row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 30px;
+}
+.gantt__row-label {
+  width: 180px;
+  flex: 0 0 180px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 10px;
+  border-right: 1px solid var(--fc-border);
+  overflow: hidden;
+}
+.gantt__num {
+  font-weight: 700;
+  color: var(--fc-flame-2, #ff8a00);
+}
+.gantt__type {
+  font-size: 12px;
+  color: var(--fc-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gantt__track {
+  position: relative;
+  flex: 1;
+  height: 100%;
+}
+/* faint vertical grid lines at the tick positions */
+.gantt__grid {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--fc-border) 0,
+    var(--fc-border) 1px,
+    transparent 1px,
+    transparent 25%
+  );
+  opacity: 0.5;
+}
+.gantt__bar {
+  position: absolute;
+  top: 5px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.gantt__bar--open { background: rgba(24, 160, 88, 0.85); color: #fff; }
+.gantt__bar--too_early { background: rgba(240, 160, 32, 0.85); color: #fff; }
+.gantt__bar--too_late { background: rgba(208, 48, 80, 0.85); color: #fff; }
+.gantt__bar-text {
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 </style>
