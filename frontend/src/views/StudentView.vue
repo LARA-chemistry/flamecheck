@@ -162,24 +162,20 @@ function windowLabel(status) {
   const map = { open: 'Open', too_early: 'Not Open Yet', too_late: 'Closed', submitted: 'Submitted' }
   return map[status] || status
 }
-// Format the active window as a compact "date — date" interval (e.g.
-// "01 Oct 13:00 – 15:00", or a full range across days). Returns '' if the
-// window times are missing.
+// Format the analysis window as a compact, unambiguous interval. The start is
+// always "day month · HH:MM"; the end adds its own date only when it falls on a
+// different day (e.g. "01 Oct · 13:00 – 15:00" or
+// "01 Oct · 08:00 – 05 Oct · 18:00"). Returns '' if either time is missing.
 function windowInterval(a) {
   if (!a?.window_start || !a?.window_end) return ''
   const start = new Date(a.window_start)
   const end = new Date(a.window_end)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return ''
-  const optsDay = { day: '2-digit', month: 'short' }
-  const optsFull = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }
+  const day = (d) => d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+  const time = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   const sameDay = start.toDateString() === end.toDateString()
-  if (sameDay) {
-    return `${start.toLocaleDateString(undefined, optsDay)} · ${start.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-    })} – ${end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
-  }
-  return `${start.toLocaleDateString(undefined, optsFull)} – ${end.toLocaleDateString(undefined, optsFull)}`
+  const startLabel = `${day(start)} · ${time(start)}`
+  return sameDay ? `${startLabel} – ${time(end)}` : `${startLabel} – ${day(end)} · ${time(end)}`
 }
 function initial(u) {
   return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
