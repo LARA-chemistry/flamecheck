@@ -27,10 +27,10 @@
 
 services:
   flamecheck:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    image: flamecheck-staging:${DOCKER_IMAGE_TAG:-latest}
+    # build:
+    #   context: .
+    #   dockerfile: docker/Dockerfile
+    image: "registry.gitlab.com/opensourcelab/cheminformatics/flamecheck/flamecheck:${DOCKER_IMAGE_TAG:-latest}"
     container_name: flamecheck-staging
     restart: unless-stopped
     ports:
