@@ -191,6 +191,7 @@
           "Download CSV" exports the course's results for grading or archiving.
         </p>
       </HelpSection>
+      <AboutSection />
     </HelpPanel>
   </div>
 </template>
@@ -209,6 +210,7 @@ import {
 import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
 import HelpSection from '../components/HelpSection.vue'
+import AboutSection from '../components/AboutSection.vue'
 
 const helpOpen = ref(false)
 

@@ -30,7 +30,13 @@ class RefreshIn(BaseModel):
 
 
 class UserOut(BaseModel):
-    """Minimal public representation of a user."""
+    """
+    Minimal public representation of a user.
+
+    ``version`` carries the running FlameCheck version (from
+    ``flamecheck.__version__``) so the client can surface it, e.g. in the
+    "About" section of the help panels.
+    """
 
     id: int
     username: str
@@ -39,6 +45,7 @@ class UserOut(BaseModel):
     lab: str | None = None
     matriculation_no: str | None = None
     course_name: str | None = None
+    version: str | None = None
 
     @classmethod
     def from_user(cls, user: Any) -> UserOut:
@@ -52,7 +59,18 @@ class UserOut(BaseModel):
             lab=user.lab or None,
             matriculation_no=(user.matriculation_no or None) if user.role == user.Role.STUDENT else None,
             course_name=course.name if course is not None else None,
+            version=_flamecheck_version(),
         )
+
+
+def _flamecheck_version() -> str:
+    """Return the running FlameCheck version, or an empty string if unknown."""
+    try:
+        import flamecheck
+
+        return flamecheck.__version__ or ""
+    except Exception:  # pragma: no cover - defensive; version is best-effort
+        return ""
 
 
 class TokenPairOut(Schema):

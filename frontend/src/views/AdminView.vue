@@ -92,6 +92,7 @@
           and the active course. These apply to every analysis.
         </p>
       </HelpSection>
+      <AboutSection />
     </HelpPanel>
   </div>
 </template>
@@ -105,6 +106,7 @@ import { NButton, NSpace } from 'naive-ui'
 import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
 import HelpSection from '../components/HelpSection.vue'
+import AboutSection from '../components/AboutSection.vue'
 
 const helpOpen = ref(false)
 
