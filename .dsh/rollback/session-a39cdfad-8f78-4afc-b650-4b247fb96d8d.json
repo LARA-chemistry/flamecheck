@@ -2,7 +2,7 @@
   "version": 2,
   "sessionId": "session-a39cdfad-8f78-4afc-b650-4b247fb96d8d",
   "cwd": "/lair/source/projects/science/teaching/inorg_prakticum_submission_system/flamecheck",
-  "updatedAt": 1791027318843,
+  "updatedAt": 1791037753283,
   "checkpoints": [
     {
       "turn": 1,
@@ -1236,6 +1236,230 @@
       "after": {
         "commit": "86e58100dca1366c49b4b36109862c5f02d63a9b",
         "time": 1791027318743
+      }
+    },
+    {
+      "turn": 70,
+      "commit": "1f8a307bd32771c1cfbd421478e2b9175ef249d6",
+      "parent": "86e58100dca1366c49b4b36109862c5f02d63a9b",
+      "time": 1791028668553,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "4264f7ab8b7cf3f845316da9adeba4d4fbea6702",
+        "time": 1791029172764
+      }
+    },
+    {
+      "turn": 71,
+      "commit": "4264f7ab8b7cf3f845316da9adeba4d4fbea6702",
+      "parent": "4264f7ab8b7cf3f845316da9adeba4d4fbea6702",
+      "time": 1791029172774,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "adfae2f46a0fb22954b75cae470a1c4e0df71266",
+        "time": 1791029368562
+      }
+    },
+    {
+      "turn": 72,
+      "commit": "adfae2f46a0fb22954b75cae470a1c4e0df71266",
+      "parent": "adfae2f46a0fb22954b75cae470a1c4e0df71266",
+      "time": 1791029368571,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "32d529e9ff9eef5992d7e8bc1da3722f78a2ac59",
+        "time": 1791030189033
+      }
+    },
+    {
+      "turn": 73,
+      "commit": "32d529e9ff9eef5992d7e8bc1da3722f78a2ac59",
+      "parent": "32d529e9ff9eef5992d7e8bc1da3722f78a2ac59",
+      "time": 1791030189048,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "0f871a5bf59d4cda048591e0a5b9394e89e2767f",
+        "time": 1791031555489
+      }
+    },
+    {
+      "turn": 74,
+      "commit": "0f871a5bf59d4cda048591e0a5b9394e89e2767f",
+      "parent": "0f871a5bf59d4cda048591e0a5b9394e89e2767f",
+      "time": 1791031555548,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "docs/_static/uni-greifswald-logo.png"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "eb78312daee723e892e3e856e853dbccbe9fc5b7",
+        "time": 1791032092442
+      }
+    },
+    {
+      "turn": 75,
+      "commit": "eb78312daee723e892e3e856e853dbccbe9fc5b7",
+      "parent": "eb78312daee723e892e3e856e853dbccbe9fc5b7",
+      "time": 1791032092451,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "docs/_static/uni-greifswald-logo.png"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "bcc60de812d8809ec00f8d9b6fc2c72b8404463f",
+        "time": 1791032293888
+      }
+    },
+    {
+      "turn": 76,
+      "commit": "3f17797584d80d7e1acb65656bdeb130be777d15",
+      "parent": "bcc60de812d8809ec00f8d9b6fc2c72b8404463f",
+      "time": 1791034059820,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "docs/_static/site_link_qrcode.svg",
+        "docs/_static/uni-greifswald-logo.png",
+        "media/branding/branding/login_logo.png",
+        "media/branding/branding/login_qr.svg"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "bb60a4fbf1bda6487f1a07a7794b9f56a38e1747",
+        "time": 1791034232779
+      }
+    },
+    {
+      "turn": 77,
+      "commit": "bb60a4fbf1bda6487f1a07a7794b9f56a38e1747",
+      "parent": "bb60a4fbf1bda6487f1a07a7794b9f56a38e1747",
+      "time": 1791034232791,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "docs/_static/site_link_qrcode.svg",
+        "docs/_static/uni-greifswald-logo.png"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "08647a56fc448c465ff3a11589de2e04b8a1afb6",
+        "time": 1791034327532
+      }
+    },
+    {
+      "turn": 78,
+      "commit": "08647a56fc448c465ff3a11589de2e04b8a1afb6",
+      "parent": "08647a56fc448c465ff3a11589de2e04b8a1afb6",
+      "time": 1791034327546,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "docs/_static/site_link_qrcode.svg",
+        "docs/_static/uni-greifswald-logo.png"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "b022d03a7abdac377dccbb2c3fe20afdea58e12d",
+        "time": 1791034671442
+      }
+    },
+    {
+      "turn": 79,
+      "commit": "33fa530184150aa2663236ffe20dac6ac5f6fed7",
+      "parent": "b022d03a7abdac377dccbb2c3fe20afdea58e12d",
+      "time": 1791036316736,
+      "untracked": [
+        ".tmp-e2e/csv-import-e2e.js",
+        ".tmp-e2e/db-backup-e2e.js",
+        ".tmp-e2e/dom-check.js",
+        ".tmp-e2e/e2e-upload.csv",
+        ".tmp-e2e/grading-e2e.js",
+        ".tmp-e2e/progress-dock-e2e.js",
+        ".tmp-e2e/step-debug.js",
+        ".tmp-e2e/student-only.js",
+        "docs/_static/site_link_qrcode.svg",
+        "docs/_static/uni-greifswald-logo.png",
+        "media/branding/branding/login_logo.png",
+        "media/branding/branding/login_qr.svg"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "b20026478734095e9d7bbcde96fb10ecc6d512e2",
+        "time": 1791037753105
       }
     }
   ],

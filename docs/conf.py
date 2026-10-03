@@ -87,7 +87,7 @@ html_theme = "python_docs_theme"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
-html_logo = "_static/LARA_logo.svg"
+html_logo = "_static/flamecheck_logo.svg"
 
 # -- Automatically run sphinx-apidoc -----------------------------------------
 
