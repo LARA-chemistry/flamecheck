@@ -36,7 +36,7 @@
         @update:value="switchCourseView"
       >
         <n-radio-button value="assign">Assign</n-radio-button>
-        <n-radio-button value="students">Students</n-radio-button>
+        <n-radio-button value="members">Members</n-radio-button>
         <n-radio-button value="analyses">Analyses</n-radio-button>
         <n-radio-button value="grading">Grading</n-radio-button>
         <n-radio-button value="calendar">Calendar</n-radio-button>
@@ -45,42 +45,43 @@
       <!-- View content, keyed by course + active view so Vue swaps the whole
            subtree (avoids mis-patching the v-for lists). -->
       <div :key="`${selected.id}:${courseView}`">
-        <!-- Students: the course roster. -->
-        <template v-if="courseView === 'students'">
+        <!-- Members: the course roster (students and assistants). -->
+        <template v-if="courseView === 'members'">
           <n-space align="center" style="margin-bottom: 8px">
-            <n-button type="primary" size="small" @click="openAddStudent">+ Add Student</n-button>
+            <n-button type="primary" size="small" @click="openAddMember('student')">+ Add Student</n-button>
+            <n-button type="primary" size="small" secondary @click="openAddMember('assistant')">+ Add Assistant</n-button>
             <n-button size="small" @click="openImport">Import CSV</n-button>
-            <n-button size="small" @click="loadStudents()">Refresh</n-button>
+            <n-button size="small" @click="loadMembers()">Refresh</n-button>
           </n-space>
-          <n-empty v-if="!loadingStudents && courseStudents.length === 0" description="No students in this course yet." size="small" />
-          <n-data-table v-else :columns="studentCols" :data="courseStudents" size="small" :loading="loadingStudents" />
+          <n-empty v-if="!loadingMembers && courseMembers.length === 0" description="No members in this course yet." size="small" />
+          <n-data-table v-else :columns="memberCols" :data="courseMembers" size="small" :loading="loadingMembers" />
         </template>
 
-        <!-- Assign: enroll (or move) students into this course. -->
+        <!-- Assign: enroll (or move) members into this course. -->
         <template v-else-if="courseView === 'assign'">
           <n-space vertical>
             <n-text depth="3" style="font-size: 13px">
-              Students you select are enrolled in this course (their current course, if any, is replaced).
+              Members you select are enrolled in this course (their current course, if any, is replaced).
             </n-text>
             <n-select
-              v-model:value="assignStudentIds"
-              :options="assignableStudentOptions"
+              v-model:value="assignMemberIds"
+              :options="assignableMemberOptions"
               multiple
               filterable
-              placeholder="Select students to add to this course"
+              placeholder="Select students or assistants to add to this course"
               style="max-width: 560px"
             />
             <n-text v-if="alreadyInCourseCount" depth="3" style="font-size: 13px">
-              {{ alreadyInCourseCount }} student{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
+              {{ alreadyInCourseCount }} member{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
             </n-text>
             <n-button
               type="primary"
               size="small"
               :loading="assignSaving"
-              :disabled="assignStudentIds.length === 0"
+              :disabled="assignMemberIds.length === 0"
               @click="saveAssign"
             >
-              Assign {{ assignStudentIds.length || '' }} Student{{ assignStudentIds.length === 1 ? '' : 's' }}
+              Assign {{ assignMemberIds.length || '' }} Member{{ assignMemberIds.length === 1 ? '' : 's' }}
             </n-button>
           </n-space>
         </template>
@@ -290,54 +291,54 @@
       </template>
     </n-modal>
 
-    <!-- Add / edit a student account -->
-    <n-modal v-model:show="studentModal.show" preset="card" :title="studentModal.editing ? `Edit student — ${studentModal.form.username}` : 'Add student'" style="width: 520px; max-width: 94vw">
+    <!-- Add / edit a member (student or assistant) account -->
+    <n-modal v-model:show="memberModal.show" preset="card" :title="memberModalTitle" style="width: 520px; max-width: 94vw">
       <n-space vertical>
-        <n-alert v-if="studentModal.generatedPassword" type="success" title="Student created">
+        <n-alert v-if="memberModal.generatedPassword" type="success" title="Account created">
           The initial (auto-generated) password is
-          <code style="font-weight: 700">{{ studentModal.generatedPassword }}</code> — share it with the student and have them change it after first login.
+          <code style="font-weight: 700">{{ memberModal.generatedPassword }}</code> — share it with the member and have them change it after first login.
         </n-alert>
         <n-form label-placement="left" label-width="130">
           <n-form-item label="Username">
-            <n-input v-model:value="studentModal.form.username" placeholder="e.g. jdoe" />
+            <n-input v-model:value="memberModal.form.username" placeholder="e.g. jdoe" />
           </n-form-item>
-          <n-form-item :label="studentModal.editing ? 'New password' : 'Password'">
+          <n-form-item :label="memberModal.editing ? 'New password' : 'Password'">
             <n-input
-              v-model:value="studentModal.form.password"
-              :placeholder="studentModal.editing ? 'Leave blank to keep the current password' : 'Leave blank to auto-generate'"
+              v-model:value="memberModal.form.password"
+              :placeholder="memberModal.editing ? 'Leave blank to keep the current password' : 'Leave blank to auto-generate'"
             />
           </n-form-item>
           <n-form-item label="Name">
-            <n-input v-model:value="studentModal.form.name" placeholder="e.g. Jane Doe" />
+            <n-input v-model:value="memberModal.form.name" placeholder="e.g. Jane Doe" />
           </n-form-item>
           <n-form-item label="Email">
-            <n-input v-model:value="studentModal.form.email" placeholder="e.g. jane.doe@example.com" />
+            <n-input v-model:value="memberModal.form.email" placeholder="e.g. jane.doe@example.com" />
           </n-form-item>
-          <n-form-item label="Matriculation no.">
-            <n-input v-model:value="studentModal.form.matriculation_no" placeholder="e.g. M123456" />
+          <n-form-item v-if="memberModal.role === 'student'" label="Matriculation no.">
+            <n-input v-model:value="memberModal.form.matriculation_no" placeholder="e.g. M123456" />
           </n-form-item>
           <n-form-item label="Lab">
-            <n-input v-model:value="studentModal.form.lab" placeholder="e.g. Inorganic Chemistry, Biology track" />
+            <n-input v-model:value="memberModal.form.lab" placeholder="e.g. Inorganic Chemistry, Biology track" />
           </n-form-item>
           <n-form-item label="Labspace ID">
-            <n-input v-model:value="studentModal.form.labspace_id" placeholder="e.g. LS-000123" />
+            <n-input v-model:value="memberModal.form.labspace_id" placeholder="e.g. LS-000123" />
           </n-form-item>
           <n-form-item label="Telephone">
-            <n-input v-model:value="studentModal.form.telephone" placeholder="e.g. +49 151 2345678" />
+            <n-input v-model:value="memberModal.form.telephone" placeholder="e.g. +49 151 2345678" />
           </n-form-item>
-          <n-form-item v-if="!studentModal.editing" label="Course">
-            <n-select v-model:value="studentModal.form.course_id" :options="courseOptions" clearable placeholder="No course" />
+          <n-form-item v-if="!memberModal.editing" label="Course">
+            <n-select v-model:value="memberModal.form.course_id" :options="courseOptions" clearable placeholder="No course" />
           </n-form-item>
           <n-form-item v-else label="Active">
-            <n-switch v-model:value="studentModal.form.is_active" />
+            <n-switch v-model:value="memberModal.form.is_active" />
           </n-form-item>
         </n-form>
       </n-space>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="studentModal.show = false">Close</n-button>
-          <n-button type="primary" :loading="studentModal.saving" @click="saveStudent">
-            {{ studentModal.editing ? 'Save' : 'Create' }}
+          <n-button @click="memberModal.show = false">Close</n-button>
+          <n-button type="primary" :loading="memberModal.saving" @click="saveMember">
+            {{ memberModal.editing ? 'Save' : 'Create' }}
           </n-button>
         </n-space>
       </template>
@@ -411,8 +412,10 @@ const loading = ref(true)
 const courses = ref([])
 const selected = ref(null)
 
+// Course members: students and assistants (fetched in parallel, kept apart).
 const students = ref([])
-const loadingStudents = ref(false)
+const assistants = ref([])
+const loadingMembers = ref(false)
 
 const modal = ref({
   show: false,
@@ -421,9 +424,9 @@ const modal = ref({
   form: { id: null, name: '', semester: '', track: '', is_active: true },
 })
 
-// Active tab of the course detail view: 'assign' | 'students' | 'analyses'
+// Active tab of the course detail view: 'assign' | 'members' | 'analyses'
 // | 'grading' | 'calendar'.
-const courseView = ref('students')
+const courseView = ref('members')
 
 // Per-course analysis instances (shared by the Analyses and Calendar tabs).
 const courseInstances = ref([])
@@ -448,41 +451,65 @@ const pointsLabel = computed(
   () => (gradingForm.value.grading_mode === 'per_analysis' ? 'Points per analysis' : 'Points per correct ion'),
 )
 
-// Assign (enroll) students into the open course.
-const assignStudentIds = ref([])
+// Assign (enroll) members into the open course.
+const assignMemberIds = ref([])
 const assignSaving = ref(false)
 
 // Calendar tab: 'week' (Gantt timeline) or 'month' (a classic month grid with
 // one chip per analysis/day it covers).
 const calendarView = ref('week')
 
-const courseStudents = computed(() =>
-  students.value.filter((s) => s.course_id === selected.value?.id),
-)
+// The open course's roster: students and assistants in one list (each entry
+// carries its member_role so rows can be rendered and edited role-aware).
+const courseMembers = computed(() => {
+  const cid = selected.value?.id
+  return [
+    ...students.value.filter((m) => m.course_id === cid).map((m) => ({ ...m, member_role: 'student' })),
+    ...assistants.value.filter((m) => m.course_id === cid).map((m) => ({ ...m, member_role: 'assistant' })),
+  ]
+})
 
-// Students that can be enrolled into the open course. Everyone is a candidate
-// (a student can be moved from one course to another); those already in the
-// target course are flagged so the admin knows.
-const assignableStudentOptions = computed(() =>
-  students.value.map((s) => {
-    const inTarget = s.course_id === selected.value?.id
+// All members (both roles) that can be enrolled into the open course.
+// Everyone is a candidate (a member can be moved from one course to another);
+// those already in the target course are flagged so the admin knows.
+const assignableMemberOptions = computed(() => {
+  const all = [
+    ...students.value.map((m) => ({ ...m, member_role: 'student' })),
+    ...assistants.value.map((m) => ({ ...m, member_role: 'assistant' })),
+  ]
+  return all.map((m) => {
+    const inTarget = m.course_id === selected.value?.id
+    const where = m.course_name ? 'in ' + m.course_name : 'no course'
     return {
-      label: inTarget ? `${s.name || s.username} (already in course)` : `${s.name || s.username} (${s.course_name ? 'in ' + s.course_name : 'no course'})`,
-      value: s.id,
+      label: inTarget ? `${m.name || m.username} (${m.member_role}, already in course)` : `${m.name || m.username} (${m.member_role}, ${where})`,
+      value: m.id,
       disabled: inTarget,
+      member_role: m.member_role,
     }
-  }),
+  })
+})
+
+const alreadyInCourseCount = computed(() =>
+  students.value.filter((m) => m.course_id === selected.value?.id).length +
+  assistants.value.filter((m) => m.course_id === selected.value?.id).length,
 )
 
-const alreadyInCourseCount = computed(
-  () => students.value.filter((s) => s.course_id === selected.value?.id).length,
-)
+// Role of a member id (ids live in one shared User PK space).
+function memberRoleById(id) {
+  return assistants.value.some((a) => a.id === id) ? 'assistant' : 'student'
+}
 
-// ---- add / edit a student account -------------------------------------------
-const studentModal = ref({
+// API base for a role's member endpoints.
+function memberBase(role) {
+  return role === 'assistant' ? '/admin/assistants' : '/admin/students'
+}
+
+// ---- add / edit a member (student or assistant) account ---------------------
+const memberModal = ref({
   show: false,
   editing: false,
   saving: false,
+  role: 'student',
   generatedPassword: null,
   form: {
     id: null,
@@ -499,6 +526,12 @@ const studentModal = ref({
   },
 })
 
+const memberModalTitle = computed(() =>
+  memberModal.value.editing
+    ? `Edit ${memberModal.value.role} — ${memberModal.value.form.username}`
+    : `Add ${memberModal.value.role}`,
+)
+
 // ---- bulk student import (CSV) ------------------------------------------------
 const importModal = ref({
   show: false,
@@ -510,11 +543,21 @@ const importModal = ref({
 
 const courseOptions = computed(() => courses.value.map((c) => ({ label: c.name, value: c.id })))
 
-// Student table for the "Students — <course>" panel.
-const studentCols = [
+// Member table for the Members tab of the course detail view.
+const memberCols = [
+  {
+    title: 'Role',
+    key: 'member_role',
+    render: (row) => (row.member_role === 'assistant' ? 'Assistant' : 'Student'),
+    width: 100,
+  },
   { title: 'Name', key: 'name', render: (row) => row.name || '—' },
   { title: 'Username', key: 'username' },
-  { title: 'Matriculation no.', key: 'matriculation_no', render: (row) => row.matriculation_no || '—' },
+  {
+    title: 'Matriculation no.',
+    key: 'matriculation_no',
+    render: (row) => (row.member_role === 'student' ? row.matriculation_no || '—' : '—'),
+  },
   { title: 'Labspace', key: 'labspace_id', render: (row) => row.labspace_id || '—' },
   { title: 'Telephone', key: 'telephone', render: (row) => row.telephone || '—' },
   { title: 'Active', key: 'is_active', render: (row) => (row.is_active ? '✓' : '—') },
@@ -523,18 +566,19 @@ const studentCols = [
     key: 'actions',
     render: (row) =>
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditStudent(row) }, () => 'Edit'),
-        h(NButton, { size: 'tiny', tertiary: true, onClick: () => detachStudent(row) }, () => 'Detach'),
-        h(NButton, { size: 'tiny', tertiary: true, type: 'error', onClick: () => deleteStudent(row) }, () => 'Delete'),
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditMember(row) }, () => 'Edit'),
+        h(NButton, { size: 'tiny', tertiary: true, onClick: () => detachMember(row) }, () => 'Detach'),
+        h(NButton, { size: 'tiny', tertiary: true, type: 'error', onClick: () => deleteMember(row) }, () => 'Delete'),
       ]),
   },
 ]
 
-function openAddStudent() {
-  studentModal.value = {
+function openAddMember(role) {
+  memberModal.value = {
     show: true,
     editing: false,
     saving: false,
+    role,
     generatedPassword: null,
     form: {
       id: null,
@@ -552,87 +596,91 @@ function openAddStudent() {
   }
 }
 
-function openEditStudent(s) {
-  studentModal.value = {
+function openEditMember(m) {
+  memberModal.value = {
     show: true,
     editing: true,
     saving: false,
+    role: m.member_role,
     generatedPassword: null,
     form: {
-      id: s.id,
-      username: s.username,
+      id: m.id,
+      username: m.username,
       password: '',
-      name: s.name || '',
-      email: s.email || '',
-      matriculation_no: s.matriculation_no || '',
-      lab: s.lab || '',
-      labspace_id: s.labspace_id || '',
-      telephone: s.telephone || '',
-      course_id: s.course_id,
-      is_active: s.is_active,
+      name: m.name || '',
+      email: m.email || '',
+      matriculation_no: m.matriculation_no || '',
+      lab: m.lab || '',
+      labspace_id: m.labspace_id || '',
+      telephone: m.telephone || '',
+      course_id: m.course_id,
+      is_active: m.is_active,
     },
   }
 }
 
-async function saveStudent() {
-  const f = studentModal.value.form
+async function saveMember() {
+  const f = memberModal.value.form
+  const role = memberModal.value.role
   if (!f.username) {
     message.value = 'Username is required.'
     msgType.value = 'error'
     return
   }
-  studentModal.value.saving = true
+  memberModal.value.saving = true
   try {
-    if (studentModal.value.editing) {
+    if (memberModal.value.editing) {
       const payload = {
         username: f.username,
         name: f.name,
         email: f.email,
-        matriculation_no: f.matriculation_no,
         lab: f.lab,
         labspace_id: f.labspace_id,
         telephone: f.telephone,
         is_active: f.is_active,
       }
+      if (role === 'student') payload.matriculation_no = f.matriculation_no
       if (f.password) payload.password = f.password
-      const res = await api.put(`/admin/students/${f.id}`, payload)
+      const res = await api.put(`${memberBase(role)}/${f.id}`, payload)
       message.value = f.password
-        ? `Student ${res.username} updated (password reset).`
-        : `Student ${res.username} updated.`
-      studentModal.value.show = false
+        ? `${role[0].toUpperCase() + role.slice(1)} ${res.username} updated (password reset).`
+        : `${role[0].toUpperCase() + role.slice(1)} ${res.username} updated.`
+      memberModal.value.show = false
     } else {
-      const res = await api.post('/admin/students', {
+      const payload = {
         username: f.username,
         password: f.password,
         name: f.name,
         email: f.email,
-        matriculation_no: f.matriculation_no,
         lab: f.lab,
         labspace_id: f.labspace_id,
         telephone: f.telephone,
         course_id: f.course_id,
-      })
+      }
+      if (role === 'student') payload.matriculation_no = f.matriculation_no
+      const res = await api.post(memberBase(role), payload)
       // Keep the modal open so an auto-generated initial password can be copied.
-      if (res.password) studentModal.value.generatedPassword = res.password
-      message.value = `Student ${res.username} created.`
+      if (res.password) memberModal.value.generatedPassword = res.password
+      message.value = `${role[0].toUpperCase() + role.slice(1)} ${res.username} created.`
     }
     msgType.value = 'success'
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
-    studentModal.value.saving = false
+    memberModal.value.saving = false
   }
 }
 
-async function deleteStudent(s) {
-  if (!confirm(`Delete student ${s.username} (including assignments and barcodes)? This cannot be undone.`)) return
+async function deleteMember(m) {
+  const label = m.member_role === 'assistant' ? 'assistant' : 'student'
+  if (!confirm(`Delete ${label} ${m.username} (including assignments and barcodes)? This cannot be undone.`)) return
   try {
-    await api.delete(`/admin/students/${s.id}`)
-    message.value = `Student ${s.username} deleted.`
+    await api.delete(`${memberBase(m.member_role)}/${m.id}`)
+    message.value = `${label[0].toUpperCase() + label.slice(1)} ${m.username} deleted.`
     msgType.value = 'success'
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -660,7 +708,7 @@ async function doImport() {
   importModal.value.uploading = true
   try {
     importModal.value.result = await api.upload('/admin/students/import-csv', importModal.value.file)
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -859,11 +907,11 @@ function courseRowProps(row) {
 }
 
 // Open the detail view for a course and preload all tab data.
-function openCourseDetail(row, view = 'students') {
+function openCourseDetail(row, view = 'members') {
   selected.value = row
   courseView.value = view
-  assignStudentIds.value = []
-  loadStudents()
+  assignMemberIds.value = []
+  loadMembers()
   loadCourseInstances(row.id)
   loadGrading(row.id)
 }
@@ -907,14 +955,17 @@ async function loadCourseInstances(courseId = selected.value?.id) {
   }
 }
 
-async function loadStudents() {
-  loadingStudents.value = true
+// Load all members (students and assistants in parallel).
+async function loadMembers() {
+  loadingMembers.value = true
   try {
-    students.value = await api.get('/admin/students')
+    const [st, as] = await Promise.all([api.get('/admin/students'), api.get('/admin/assistants')])
+    students.value = st
+    assistants.value = as
   } catch (e) {
     /* ignore */
   } finally {
-    loadingStudents.value = false
+    loadingMembers.value = false
   }
 }
 
@@ -974,12 +1025,13 @@ async function removeCourse() {
   }
 }
 
-async function detachStudent(s) {
+async function detachMember(m) {
+  const key = m.member_role === 'assistant' ? 'assistant_id' : 'student_id'
   try {
-    await api.put(`/admin/students/${s.id}/course`, { student_id: s.id, course_id: null })
-    message.value = `${s.username} removed from course.`
+    await api.put(`${memberBase(m.member_role)}/${m.id}/course`, { [key]: m.id, course_id: null })
+    message.value = `${m.username} removed from course.`
     msgType.value = 'success'
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -1017,21 +1069,23 @@ async function saveGrading() {
   }
 }
 
-// ---- assign (enroll) students into the open course -------------------------
+// ---- assign (enroll) members into the open course --------------------------
 async function saveAssign() {
-  if (!selected.value || assignStudentIds.value.length === 0) return
+  if (!selected.value || assignMemberIds.value.length === 0) return
   assignSaving.value = true
   let ok = 0
   try {
-    for (const sid of assignStudentIds.value) {
-      await api.put(`/admin/students/${sid}/course`, { student_id: sid, course_id: selected.value.id })
+    for (const id of assignMemberIds.value) {
+      const role = memberRoleById(id)
+      const key = role === 'assistant' ? 'assistant_id' : 'student_id'
+      await api.put(`${memberBase(role)}/${id}/course`, { [key]: id, course_id: selected.value.id })
       ok += 1
     }
-    message.value = `${ok} student${ok === 1 ? '' : 's'} assigned to ${selected.value.name}.`
+    message.value = `${ok} member${ok === 1 ? '' : 's'} assigned to ${selected.value.name}.`
     msgType.value = 'success'
-    assignStudentIds.value = []
-    // Refresh the student list; the "Students" tab (if open) re-filters itself.
-    await loadStudents()
+    assignMemberIds.value = []
+    // Refresh the member lists; the "Members" tab (if open) re-filters itself.
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -1069,7 +1123,7 @@ const analysisCols = [
 
 onMounted(() => {
   loadCourses()
-  loadStudents()
+  loadMembers()
 })
 </script>
 

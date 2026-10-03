@@ -641,3 +641,177 @@ class TestStudentManagement:
             **auth_headers(student),
         )
         assert resp.status_code == 403
+
+
+class TestAssistantManagement:
+    """Assistant account CRUD + course assignment (admin)."""
+
+    def test_list_assistants_excludes_students(self, client, admin_user, student, assistant, auth_headers):
+        resp = client.get("/api/v1/admin/assistants", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        usernames = [r["username"] for r in resp.json()]
+        assert assistant.username in usernames
+        assert student.username not in usernames
+
+    def test_list_assistants_course_filter(self, client, admin_user, assistant, course, auth_headers):
+        assistant.course = course
+        assistant.save()
+        resp = client.get(f"/api/v1/admin/assistants?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert [r["username"] for r in resp.json()] == [assistant.username]
+        resp = client.get(f"/api/v1/admin/assistants?course_id={course.id + 1}", **auth_headers(admin_user))
+        assert resp.json() == []
+
+    def test_create_assistant_with_password(self, client, admin_user, course, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {
+                "username": "jlab",
+                "password": "FlameCheck32!",
+                "name": "Jane Lab",
+                "email": "jane.lab@example.com",
+                "lab": "Inorganic",
+                "labspace_id": "LS-000456",
+                "telephone": "+49 151 3456789",
+                "course_id": course.id,
+            },
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["username"] == "jlab"
+        assert body["course_id"] == course.id
+        assert body["password"] is None  # explicit password is not echoed back
+        from users.models import User
+
+        created = User.objects.get(username="jlab")
+        assert created.is_assistant
+        assert not created.is_student
+        assert created.check_password("FlameCheck32!")
+        assert created.course_id == course.id
+
+    def test_create_assistant_generates_password_when_empty(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "anon-assistant", "name": "Anonymous"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        generated = resp.json()["password"]
+        assert generated and len(generated) >= 8
+        from users.models import User
+
+        assert User.objects.get(username="anon-assistant").check_password(generated)
+
+    def test_create_assistant_rejects_weak_password(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "weakpw-a", "password": "123"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+
+    def test_create_assistant_duplicate_username_409(self, client, admin_user, student, auth_headers):
+        # username uniqueness spans roles: a student username blocks an assistant
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": student.username, "password": "FlameCheck32!"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 409
+
+    def test_create_assistant_unknown_course_404(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "nocourse-a", "course_id": 99999},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_update_assistant_fields(self, client, admin_user, assistant, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}",
+            {"name": "Renamed Assistant", "telephone": "+49 151 999"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assistant.refresh_from_db()
+        assert assistant.name == "Renamed Assistant"
+        assert assistant.telephone == "+49 151 999"
+
+    def test_update_assistant_resets_password(self, client, admin_user, assistant, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}",
+            {"password": "NewPass123!"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["password"]
+        assistant.refresh_from_db()
+        assert assistant.check_password("NewPass123!")
+
+    def test_update_assistant_with_student_id_404(self, client, admin_user, student, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{student.id}",
+            {"name": "x"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_assign_assistant_course(self, client, admin_user, assistant, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}/course",
+            {"assistant_id": assistant.id, "course_id": course.id},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["course_id"] == course.id
+        assistant.refresh_from_db()
+        assert assistant.course_id == course.id
+
+    def test_assign_assistant_detach(self, client, admin_user, assistant, course, auth_headers):
+        assistant.course = course
+        assistant.save()
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}/course",
+            {"assistant_id": assistant.id, "course_id": None},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assistant.refresh_from_db()
+        assert assistant.course_id is None
+
+    def test_assign_assistant_with_student_id_404(self, client, admin_user, student, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{student.id}/course",
+            {"assistant_id": student.id, "course_id": course.id},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_delete_assistant(self, client, admin_user, assistant, auth_headers):
+        resp = client.delete(f"/api/v1/admin/assistants/{assistant.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        from users.models import User
+
+        assert not User.objects.filter(pk=assistant.pk).exists()
+
+    def test_student_cannot_create_assistant(self, client, student, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "sneaky-a", "password": "FlameCheck32!"},
+            content_type="application/json",
+            **auth_headers(student),
+        )
+        assert resp.status_code == 403

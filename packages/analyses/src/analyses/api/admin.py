@@ -18,6 +18,11 @@ from analyses.api.schemas import (
     AnalysisTypeIn,
     AppSettingsOut,
     AssignmentIn,
+    AssistantCourseAssignIn,
+    AssistantCreatedOut,
+    AssistantIn,
+    AssistantOut,
+    AssistantUpdateIn,
     CourseIn,
     DatabaseRestoreIn,
     DatabaseStatusOut,
@@ -201,14 +206,25 @@ def _set_student_fields(student: User, row: dict) -> None:
     student.telephone = (row.get("telephone") or "").strip()
 
 
+def _list_members(request, role: User.Role, course_id: int | None) -> list[dict]:
+    """List users with ``role`` (admin), optionally filtered by their course."""
+    _admin_user(request)
+    qs = User.objects.filter(role=role).select_related("course")
+    if course_id is not None:
+        qs = qs.filter(course_id=course_id)
+    return [_student_to_out(u) for u in qs]
+
+
 @router.get("/students", response=list[StudentOut])
 def list_students(request, course_id: int | None = None):
     """List students (admin), optionally filtered by their course."""
-    _admin_user(request)
-    qs = User.objects.filter(role=User.Role.STUDENT).select_related("course")
-    if course_id is not None:
-        qs = qs.filter(course_id=course_id)
-    return [_student_to_out(s) for s in qs]
+    return _list_members(request, User.Role.STUDENT, course_id)
+
+
+@router.get("/assistants", response=list[AssistantOut])
+def list_assistants(request, course_id: int | None = None):
+    """List assistants (admin), optionally filtered by their course."""
+    return _list_members(request, User.Role.ASSISTANT, course_id)
 
 
 # NOTE: the literal ``/students/import-*`` routes must be registered before the
@@ -328,9 +344,13 @@ def import_students_csv(request, file: UploadedFile = File(...)):  # noqa: B008
     }
 
 
-@router.post("/students", response=StudentCreatedOut)
-def create_student(request, payload: StudentIn):
-    """Create a student account (admin). An empty ``password`` is auto-generated."""
+def _member_label(role: User.Role) -> str:
+    """Human label for a member role used in log messages and error texts."""
+    return "assistant" if role == User.Role.ASSISTANT else "student"
+
+
+def _create_member(request, role: User.Role, payload) -> dict:
+    """Create a member account (student or assistant); empty password auto-generates."""
     _admin_user(request)
     if User.objects.filter(username__iexact=payload.username).exists():
         raise HttpError(409, f"Username '{payload.username}' is already taken.")
@@ -343,106 +363,153 @@ def create_student(request, payload: StudentIn):
     else:
         password = _generate_student_password()
         generated = True
-    student = User(username=payload.username, role=User.Role.STUDENT, is_active=True)
-    student.set_password(password)
-    student.name = payload.name
-    student.email = payload.email
-    student.matriculation_no = payload.matriculation_no
-    student.lab = payload.lab
-    student.labspace_id = payload.labspace_id
-    student.telephone = payload.telephone
-    student.course_id = payload.course_id
-    student.save()
+    member = User(username=payload.username, role=role, is_active=True)
+    member.set_password(password)
+    member.name = payload.name
+    member.email = payload.email
+    member.matriculation_no = payload.matriculation_no
+    member.lab = payload.lab
+    member.labspace_id = payload.labspace_id
+    member.telephone = payload.telephone
+    member.course_id = payload.course_id
+    member.save()
     logger.info(
-        "Admin %s created student %s (auto password: %s)",
+        "Admin %s created %s %s (auto password: %s)",
         request.user.username,
+        _member_label(role),
         payload.username,
         generated,
     )
-    out = _student_to_out(student)
+    out = _student_to_out(member)
     if generated:
         out["password"] = password
     return out
 
 
-@router.put("/students/{student_id}", response=StudentCreatedOut)
-def update_student(request, student_id: int, payload: StudentUpdateIn):
-    """Update a student account (admin); only provided fields are changed."""
+def _update_member(request, role: User.Role, member_id: int, payload) -> dict:
+    """Update a member account (student or assistant); only provided fields change."""
     _admin_user(request)
-    student = User.objects.filter(pk=student_id, role=User.Role.STUDENT).first()
-    if student is None:
-        raise HttpError(404, "Student not found.")
-    if payload.username is not None and payload.username != student.username:
-        if User.objects.filter(username__iexact=payload.username).exclude(pk=student.pk).exists():
+    member = User.objects.filter(pk=member_id, role=role).first()
+    if member is None:
+        raise HttpError(404, f"{_member_label(role).capitalize()} not found.")
+    if payload.username is not None and payload.username != member.username:
+        if User.objects.filter(username__iexact=payload.username).exclude(pk=member.pk).exists():
             raise HttpError(409, f"Username '{payload.username}' is already taken.")
-        student.username = payload.username
+        member.username = payload.username
     if payload.password:
         _validate_or_raise(payload.password)
-        student.set_password(payload.password)
+        member.set_password(payload.password)
     if payload.name is not None:
-        student.name = payload.name
+        member.name = payload.name
     if payload.email is not None:
-        student.email = payload.email
+        member.email = payload.email
     if payload.matriculation_no is not None:
-        student.matriculation_no = payload.matriculation_no
+        member.matriculation_no = payload.matriculation_no
     if payload.lab is not None:
-        student.lab = payload.lab
+        member.lab = payload.lab
     if payload.labspace_id is not None:
-        student.labspace_id = payload.labspace_id
+        member.labspace_id = payload.labspace_id
     if payload.telephone is not None:
-        student.telephone = payload.telephone
+        member.telephone = payload.telephone
     if payload.is_active is not None:
-        student.is_active = payload.is_active
-    student.save()
-    logger.info("Admin %s updated student %s", request.user.username, student.username)
-    out = _student_to_out(student)
+        member.is_active = payload.is_active
+    member.save()
+    logger.info("Admin %s updated %s %s", request.user.username, _member_label(role), member.username)
+    out = _student_to_out(member)
     if payload.password:
         out["password"] = payload.password
     return out
 
 
-@router.delete("/students/{student_id}", response=dict)
-def delete_student(request, student_id: int):
+def _delete_member(request, role: User.Role, member_id: int) -> dict:
     """
-    Delete a student account (admin).
+    Delete a member account (student or assistant) (admin).
 
-    Refused with 409 while the student still has submissions (their results
-    must be preserved); course assignments and barcodes are removed.
+    Refused with 409 while the member still has submissions (their results must
+    be preserved); course assignments and barcodes are removed.
     """
     _admin_user(request)
-    student = User.objects.filter(pk=student_id, role=User.Role.STUDENT).first()
-    if student is None:
-        raise HttpError(404, "Student not found.")
-    if student.submissions.exists():
-        raise HttpError(409, "Student has submissions and cannot be deleted.")
-    username = student.username
-    student.delete()
-    logger.info("Admin %s deleted student %s", request.user.username, username)
-    return {"id": student_id, "deleted": True}
+    member = User.objects.filter(pk=member_id, role=role).first()
+    if member is None:
+        raise HttpError(404, f"{_member_label(role).capitalize()} not found.")
+    if member.submissions.exists():
+        raise HttpError(409, f"{_member_label(role).capitalize()} has submissions and cannot be deleted.")
+    username = member.username
+    member.delete()
+    logger.info("Admin %s deleted %s %s", request.user.username, _member_label(role), username)
+    return {"id": member_id, "deleted": True}
+
+
+def _assign_member_course(request, role: User.Role, member_id: int, course_id: int | None) -> dict:
+    """Set (or clear, with ``course_id = null``) a member's course (admin)."""
+    _admin_user(request)
+    member = User.objects.filter(pk=member_id, role=role).first()
+    if member is None:
+        raise HttpError(404, f"{_member_label(role).capitalize()} not found.")
+    if course_id is not None:
+        course = Course.objects.filter(pk=course_id).first()
+        if course is None:
+            raise HttpError(404, "Course not found.")
+        member.course = course
+    else:
+        member.course = None
+    member.save(update_fields=["course"])
+    logger.info(
+        "Admin %s set course for %s %s to %s",
+        request.user.username,
+        _member_label(role),
+        member.username,
+        course_id,
+    )
+    return {"id": member.id, "username": member.username, "course_id": member.course_id}
+
+
+@router.post("/students", response=StudentCreatedOut)
+def create_student(request, payload: StudentIn):
+    """Create a student account (admin). An empty ``password`` is auto-generated."""
+    return _create_member(request, User.Role.STUDENT, payload)
+
+
+@router.put("/students/{student_id}", response=StudentCreatedOut)
+def update_student(request, student_id: int, payload: StudentUpdateIn):
+    """Update a student account (admin); only provided fields are changed."""
+    return _update_member(request, User.Role.STUDENT, student_id, payload)
+
+
+@router.delete("/students/{student_id}", response=dict)
+def delete_student(request, student_id: int):
+    """Delete a student account (admin); refused while they have submissions."""
+    return _delete_member(request, User.Role.STUDENT, student_id)
 
 
 @router.put("/students/{student_id}/course", response=dict)
 def assign_student_course(request, student_id: int, payload: StudentCourseAssignIn):
     """Assign a student to a course (or detach with ``course_id = null``) (admin)."""
-    _admin_user(request)
-    student = User.objects.filter(pk=payload.student_id, role=User.Role.STUDENT).first()
-    if student is None:
-        raise HttpError(404, "Student not found.")
-    if payload.course_id is not None:
-        course = Course.objects.filter(pk=payload.course_id).first()
-        if course is None:
-            raise HttpError(404, "Course not found.")
-        student.course = course
-    else:
-        student.course = None
-    student.save(update_fields=["course"])
-    logger.info(
-        "Admin %s set course for student %s to %s",
-        request.user.username,
-        student.username,
-        payload.course_id,
-    )
-    return {"id": student.id, "username": student.username, "course_id": student.course_id}
+    return _assign_member_course(request, User.Role.STUDENT, payload.student_id, payload.course_id)
+
+
+@router.post("/assistants", response=AssistantCreatedOut)
+def create_assistant(request, payload: AssistantIn):
+    """Create an assistant account (admin). An empty ``password`` is auto-generated."""
+    return _create_member(request, User.Role.ASSISTANT, payload)
+
+
+@router.put("/assistants/{assistant_id}", response=AssistantCreatedOut)
+def update_assistant(request, assistant_id: int, payload: AssistantUpdateIn):
+    """Update an assistant account (admin); only provided fields are changed."""
+    return _update_member(request, User.Role.ASSISTANT, assistant_id, payload)
+
+
+@router.delete("/assistants/{assistant_id}", response=dict)
+def delete_assistant(request, assistant_id: int):
+    """Delete an assistant account (admin); refused while they have submissions."""
+    return _delete_member(request, User.Role.ASSISTANT, assistant_id)
+
+
+@router.put("/assistants/{assistant_id}/course", response=dict)
+def assign_assistant_course(request, assistant_id: int, payload: AssistantCourseAssignIn):
+    """Assign an assistant to a course (or detach with ``course_id = null``) (admin)."""
+    return _assign_member_course(request, User.Role.ASSISTANT, payload.assistant_id, payload.course_id)
 
 
 # ---- analysis types ------------------------------------------------------------
