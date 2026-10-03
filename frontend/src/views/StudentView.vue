@@ -17,6 +17,7 @@
           <span class="fc-user__meta">
             <span class="fc-user__name">{{ user.name || user.username }}</span>
             <span v-if="user.matriculation_no" class="fc-user__matric">Mat. {{ user.matriculation_no }}</span>
+            <span v-if="user.labspace_id" class="fc-user__labspace">Labspace {{ user.labspace_id }}</span>
           </span>
         </span>
         <n-button size="small" secondary @click="handleLogout">Logout</n-button>
@@ -32,9 +33,8 @@
           class="fc-card"
           :class="isActive(a) ? 'fc-card--interactive' : 'fc-card--inactive'"
           role="button"
-          :tabindex="isActive(a) ? 0 : -1"
-          :aria-label="`Open ${a.type} number ${a.number}`"
-          :aria-disabled="String(!isActive(a))"
+          tabindex="0"
+          :aria-label="`Open ${a.type} number ${a.number} (${windowLabel(a.window_status)})`"
           @click="openAnalysis(a)"
           @keyup.enter="openAnalysis(a)"
         >
@@ -186,9 +186,10 @@ function isActive(a) {
   return a.window_status === 'open' || a.window_status === 'submitted'
 }
 function openAnalysis(a) {
-  if (isActive(a)) {
-    router.push(`/analysis/${a.id}`)
-  }
+  // Every card opens its detail page: open analyses can be submitted, and the
+  // greyed-out (not-yet-open / closed) ones are viewable so the student can
+  // see the state, the possible ions and any result already recorded.
+  router.push(`/analysis/${a.id}`)
 }
 
 async function load() {
@@ -330,6 +331,11 @@ onMounted(load)
   color: var(--fc-text-soft);
 }
 
+.fc-user__labspace {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-text-soft);
+}
+
 @media (min-width: 900px) {
   .fc-user__name {
     max-width: none;
@@ -460,17 +466,26 @@ onMounted(load)
   margin-top: var(--fc-space-xs);
 }
 
-/* Inactive (not yet open / closed) analyses: greyed out and not interactive. */
+/* Inactive (not yet open / closed) analyses: greyed out, but still clickable
+   so the student can open the detail page (state, possible ions, any result). */
 .fc-card--inactive {
-  cursor: default;
+  cursor: pointer;
   opacity: 0.62;
   filter: grayscale(0.55);
   box-shadow: var(--fc-shadow-sm);
+  outline: none;
 }
 .fc-card--inactive:hover,
 .fc-card--inactive:focus-within {
-  transform: none;
-  box-shadow: var(--fc-shadow-sm);
+  transform: translateY(-2px);
+  box-shadow: var(--fc-shadow);
+  opacity: 0.8;
+}
+.fc-card--inactive:focus-visible {
+  border-color: var(--fc-flame-2);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fc-flame-2) 35%, transparent),
+    var(--fc-shadow);
 }
 .fc-card--inactive .analysis-card__num,
 .fc-card--inactive .analysis-card__title {
