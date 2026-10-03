@@ -25,9 +25,9 @@ class BrandingOut(Schema):
 
 logger = logging.getLogger(__name__)
 
-# 512 KB is plenty for an SVG logo / QR and keeps uploads cheap.
+# 512 KB is plenty for an SVG/PNG logo / QR and keeps uploads cheap.
 MAX_UPLOAD_BYTES = 512_000
-ALLOWED_LOGO_EXT = {".svg"}
+ALLOWED_LOGO_EXT = {".svg", ".png"}
 ALLOWED_QR_EXT = {".svg", ".png"}
 
 

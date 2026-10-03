@@ -134,8 +134,8 @@
         <h3 class="grading-card-title">Login</h3>
         <span class="grading-card-hint">
           Branding shown on the public login page. The logo appears in the upper-right
-          corner (SVG); the QR code — a scan of the login URL — appears below the login
-          card on wide screens (SVG or PNG) so a smartphone can be used to log in.
+          corner (SVG or PNG); the QR code — a scan of the login URL — appears below the
+          login card on wide screens (SVG or PNG) so a smartphone can be used to log in.
         </span>
       </div>
 
@@ -149,7 +149,7 @@
             </div>
           </div>
           <div class="branding-controls">
-            <p class="branding-label">University / institut logo <span class="branding-sub">(SVG)</span></p>
+            <p class="branding-label">University / institut logo <span class="branding-sub">(SVG or PNG)</span></p>
             <n-space align="center">
               <n-button type="primary" secondary :loading="brandingBusy === 'logo'" @click="pickFile('logo')">
                 Upload logo
@@ -201,7 +201,7 @@
       <input
         ref="logoInput"
         type="file"
-        accept=".svg,image/svg+xml"
+        accept=".svg,.png,image/svg+xml,image/png"
         style="display: none"
         @change="onFileChosen('logo', $event)"
       />

@@ -8,6 +8,10 @@
       class="login-institution-logo"
     />
 
+    <!-- Centered column: the login card with the QR (below it) on wide screens.
+         Wrapping them together lets the QR sit directly beneath the card in
+         normal flow (no overlap) while staying horizontally centered. -->
+    <div class="login-center">
     <div class="login-card">
       <div class="login-brand">
         <img class="login-logo" :src="logo" alt="FlameCheck logo" />
@@ -72,6 +76,7 @@
     <div v-if="branding.login_qr" class="login-qr">
       <img :src="branding.login_qr" alt="Scan to log in" class="login-qr__img" />
       <p class="login-qr__hint">Scan with your phone to open the login page</p>
+    </div>
     </div>
   </div>
 </template>
@@ -168,6 +173,19 @@ async function handleLogin() {
   .login-container::after { animation: none; }
 }
 
+/* Centered column holding the card and (on wide screens) the QR below it.
+   It is the flex child of the container, so the card + QR stay centered and
+   stacked, with the QR sitting directly beneath the card in normal flow. */
+.login-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 440px;
+}
+
 .login-card {
   position: relative;
   z-index: 1;
@@ -196,16 +214,16 @@ async function handleLogin() {
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
 }
 
-/* Login QR code, below the card. Shown only on wide screens (> 1024px) where
-   there is room beside the card; on smaller screens it is hidden. */
+/* Login QR code, below the card and horizontally centered. Shown only on wide
+   screens (> 1024px); hidden on smaller ones. It sits in normal flow inside the
+   centered .login-center column, so it lands directly beneath the card with a
+   consistent gap and is centered on the card's axis. */
 .login-qr {
   display: none;
 }
 @media (min-width: 1025px) {
   .login-qr {
-    position: absolute;
-    top: calc(50% + 180px);
-    right: var(--fc-space-lg);
+    margin-top: var(--fc-space-md);
     z-index: 2;
     display: flex;
     flex-direction: column;
