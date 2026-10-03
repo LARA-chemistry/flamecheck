@@ -39,3 +39,9 @@ api.add_router("assistant", assistant_router)
 from analyses.api.admin import router as admin_router  # noqa: E402
 
 api.add_router("admin", admin_router)
+
+# Login-page branding (public logo/QR + admin upload). Its endpoints carry
+# their own full paths (/branding, /admin/branding/...), so mount at root.
+from config.api.branding import router as branding_router  # noqa: E402
+
+api.add_router("", branding_router)

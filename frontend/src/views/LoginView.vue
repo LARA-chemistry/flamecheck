@@ -1,5 +1,13 @@
 <template>
   <div class="login-container">
+    <!-- University / institut logo, upper-right corner (only when configured). -->
+    <img
+      v-if="branding.login_logo"
+      :src="branding.login_logo"
+      alt="Institution logo"
+      class="login-institution-logo"
+    />
+
     <div class="login-card">
       <div class="login-brand">
         <img class="login-logo" :src="logo" alt="FlameCheck logo" />
@@ -59,14 +67,21 @@
 
       <n-alert v-if="error" type="error" class="login-error">{{ error }}</n-alert>
     </div>
+
+    <!-- Login QR code, below the card (only on wide screens > 1024px). -->
+    <div v-if="branding.login_qr" class="login-qr">
+      <img :src="branding.login_qr" alt="Scan to log in" class="login-qr__img" />
+      <p class="login-qr__hint">Scan with your phone to open the login page</p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { homeForRole } from '../router'
+import { api } from '../api/client'
 import logo from '../assets/flamecheck-logo.svg'
 import { NForm, NFormItem, NInput, NButton, NAlert } from 'naive-ui'
 
@@ -74,6 +89,19 @@ const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
 const error = ref('')
+
+// Public login-page branding (institution logo + login QR), fetched without
+// authentication. Either may be null, in which case the element is hidden.
+const branding = ref({ login_logo: null, login_qr: null })
+
+async function loadBranding() {
+  try {
+    branding.value = await api.get('/branding')
+  } catch {
+    /* branding is best-effort; the login page still works without it */
+  }
+}
+onMounted(loadBranding)
 
 const form = ref({ username: '', password: '' })
 const showPassword = ref(false)
@@ -152,6 +180,54 @@ async function handleLogin() {
   box-shadow: var(--fc-shadow-lift);
   padding: var(--fc-space-md);
   margin: var(--fc-space-md) 0;
+}
+
+/* Institution / university logo, fixed to the upper-right corner of the page.
+   Hidden on small screens where it would crowd the card. */
+.login-institution-logo {
+  position: absolute;
+  top: var(--fc-space-md);
+  right: var(--fc-space-md);
+  z-index: 2;
+  max-height: 88px;
+  max-width: min(220px, 32vw);
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
+}
+
+/* Login QR code, below the card. Shown only on wide screens (> 1024px) where
+   there is room beside the card; on smaller screens it is hidden. */
+.login-qr {
+  display: none;
+}
+@media (min-width: 1025px) {
+  .login-qr {
+    position: absolute;
+    top: calc(50% + 180px);
+    right: var(--fc-space-lg);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--fc-space-xs);
+    padding: var(--fc-space-sm);
+    border-radius: var(--fc-radius);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    box-shadow: var(--fc-shadow);
+  }
+  .login-qr__img {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+  }
+  .login-qr__hint {
+    margin: 0;
+    font-size: var(--fc-fs-xs);
+    color: var(--fc-text-soft);
+    font-weight: 600;
+  }
 }
 
 @media (min-width: 620px) {

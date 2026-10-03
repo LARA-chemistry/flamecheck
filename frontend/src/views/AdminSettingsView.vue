@@ -128,6 +128,92 @@
       </template>
     </n-card>
 
+    <!-- Login-page branding (university logo + login QR code) -->
+    <n-card size="small" :bordered="false">
+      <div class="grading-card-head">
+        <h3 class="grading-card-title">Login</h3>
+        <span class="grading-card-hint">
+          Branding shown on the public login page. The logo appears in the upper-right
+          corner (SVG); the QR code — a scan of the login URL — appears below the login
+          card on wide screens (SVG or PNG) so a smartphone can be used to log in.
+        </span>
+      </div>
+
+      <n-space vertical size="large">
+        <!-- University / institut logo -->
+        <n-space align="center" :wrap="true">
+          <div class="branding-slot">
+            <img v-if="branding.login_logo" :src="branding.login_logo" alt="Login logo preview" class="branding-preview branding-preview--logo" />
+            <div v-else class="branding-placeholder branding-placeholder--logo">
+              <span>No logo</span>
+            </div>
+          </div>
+          <div class="branding-controls">
+            <p class="branding-label">University / institut logo <span class="branding-sub">(SVG)</span></p>
+            <n-space align="center">
+              <n-button type="primary" secondary :loading="brandingBusy === 'logo'" @click="pickFile('logo')">
+                Upload logo
+              </n-button>
+              <n-button
+                v-if="branding.login_logo"
+                type="warning"
+                secondary
+                :loading="brandingBusy === 'remove-logo'"
+                @click="removeBranding('logo')"
+              >
+                Remove
+              </n-button>
+            </n-space>
+          </div>
+        </n-space>
+
+        <n-divider style="margin: 0" />
+
+        <!-- Login QR code -->
+        <n-space align="center" :wrap="true">
+          <div class="branding-slot">
+            <img v-if="branding.login_qr" :src="branding.login_qr" alt="Login QR preview" class="branding-preview branding-preview--qr" />
+            <div v-else class="branding-placeholder branding-placeholder--qr">
+              <span>No QR code</span>
+            </div>
+          </div>
+          <div class="branding-controls">
+            <p class="branding-label">Login QR code <span class="branding-sub">(SVG or PNG)</span></p>
+            <n-space align="center">
+              <n-button type="primary" secondary :loading="brandingBusy === 'qr'" @click="pickFile('qr')">
+                Upload QR code
+              </n-button>
+              <n-button
+                v-if="branding.login_qr"
+                type="warning"
+                secondary
+                :loading="brandingBusy === 'remove-qr'"
+                @click="removeBranding('qr')"
+              >
+                Remove
+              </n-button>
+            </n-space>
+          </div>
+        </n-space>
+      </n-space>
+
+      <!-- Hidden file inputs (one per target) -->
+      <input
+        ref="logoInput"
+        type="file"
+        accept=".svg,image/svg+xml"
+        style="display: none"
+        @change="onFileChosen('logo', $event)"
+      />
+      <input
+        ref="qrInput"
+        type="file"
+        accept=".svg,.png,image/svg+xml,image/png"
+        style="display: none"
+        @change="onFileChosen('qr', $event)"
+      />
+    </n-card>
+
     <n-alert v-if="message" :type="msgType">{{ message }}</n-alert>
   </n-space>
 </template>
@@ -142,6 +228,12 @@ import {
 
 const message = ref('')
 const msgType = ref('success')
+
+// ---- login-page branding ---------------------------------------------------
+const branding = ref({ login_logo: null, login_qr: null })
+const brandingBusy = ref(null) // 'logo' | 'qr' | 'remove-logo' | 'remove-qr' | null
+const logoInput = ref(null)
+const qrInput = ref(null)
 
 const courses = ref([])
 const appSettings = ref({
@@ -272,6 +364,55 @@ async function loadGrading() {
   }
 }
 
+async function loadBranding() {
+  try {
+    branding.value = await api.get('/branding')
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function pickFile(kind) {
+  const input = kind === 'logo' ? logoInput.value : qrInput.value
+  input && input.click()
+}
+
+async function onFileChosen(kind, event) {
+  const input = event.target
+  const file = input.files && input.files[0]
+  input.value = '' // allow re-selecting the same file
+  if (!file) return
+  brandingBusy.value = kind
+  try {
+    const path = kind === 'logo' ? '/admin/branding/logo' : '/admin/branding/qr'
+    const res = await api.upload(path, file)
+    branding.value = { ...branding.value, [kind]: res[kind] }
+    message.value = `${kind === 'logo' ? 'Logo' : 'QR code'} uploaded.`
+    msgType.value = 'success'
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    brandingBusy.value = null
+  }
+}
+
+async function removeBranding(kind) {
+  brandingBusy.value = `remove-${kind}`
+  try {
+    const path = kind === 'logo' ? '/admin/branding/logo' : '/admin/branding/qr'
+    await api.delete(path)
+    branding.value = { ...branding.value, [kind]: null }
+    message.value = `${kind === 'logo' ? 'Logo' : 'QR code'} removed.`
+    msgType.value = 'success'
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    brandingBusy.value = null
+  }
+}
+
 async function saveAppSettings() {
   savingAppSettings.value = true
   try {
@@ -305,6 +446,7 @@ onMounted(() => {
   loadAppSettings()
   loadGrading()
   loadDbStatus()
+  loadBranding()
 })
 </script>
 
@@ -321,5 +463,57 @@ onMounted(() => {
 .grading-card-hint {
   font-size: var(--fc-fs-sm);
   color: var(--fc-text-soft);
+}
+
+/* ---- login-page branding ------------------------------------------------- */
+.branding-slot {
+  width: 120px;
+  height: 96px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--fc-border);
+  border-radius: var(--fc-radius-sm);
+  background: var(--fc-bg);
+  overflow: hidden;
+}
+.branding-preview {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.branding-preview--logo {
+  width: 100%;
+  height: auto;
+}
+.branding-preview--qr {
+  width: 84px;
+  height: 84px;
+}
+.branding-placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--fc-muted);
+  font-size: var(--fc-fs-xs);
+  font-weight: 600;
+}
+.branding-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-xs);
+  min-width: 0;
+}
+.branding-label {
+  margin: 0;
+  font-size: var(--fc-fs-base);
+  font-weight: 700;
+  color: var(--fc-ink);
+}
+.branding-sub {
+  font-weight: 500;
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-muted);
 }
 </style>

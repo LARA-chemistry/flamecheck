@@ -286,6 +286,24 @@ class AppSettings(models.Model):
     last_backup_file = models.CharField(max_length=255, blank=True, default="")
     last_restore_at = models.DateTimeField(null=True, blank=True)
     last_restore_file = models.CharField(max_length=255, blank=True, default="")
+    # ---- login-page branding ------------------------------------------------
+    # A university/institut logo shown in the upper-right corner of the login
+    # page (SVG only). ``FileField`` (not ``ImageField``) because SVG is not
+    # raster-validated by Pillow.
+    login_logo = models.FileField(
+        upload_to="branding",
+        null=True,
+        blank=True,
+        help_text=_("Optional university/institut logo (SVG) shown on the login page."),
+    )
+    # A QR code of the main login-page URL (SVG or PNG), shown below the login
+    # card on wide screens so a smartphone can be used to log in.
+    login_qr = models.FileField(
+        upload_to="branding",
+        null=True,
+        blank=True,
+        help_text=_("Optional QR code (SVG or PNG) of the login URL, shown on wide screens."),
+    )
     objects = AppSettingsManager()
 
     class Meta:

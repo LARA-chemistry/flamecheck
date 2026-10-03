@@ -11,9 +11,10 @@ next step that touches those columns crashes (e.g. ``seed_demo`` failing with
 This command reconciles the two sides. For every migration recorded as applied
 it checks that the columns the migration adds actually exist in the database.
 When a missing column is found, the recorded state and the real schema disagree,
-so the affected migration rows are deleted and ``migrate`` is re-run, which
-re-applies the now-"pending" migrations on top of the existing schema (an
-``AddField`` is a no-op for a column that already exists).
+so the missing columns are re-added directly through the schema editor. The
+migration records are left untouched (deleting a record and re-running
+``migrate`` would break the dependency chain once a later applied migration
+depends on the repaired one).
 
 The check is engine-agnostic (SQLite and PostgreSQL) and only inspects columns
 added by ``AddField`` operations - the class of migration that can be left
@@ -39,8 +40,8 @@ class Command(BaseCommand):
 
     help = (
         "Check that every applied migration's columns exist in the database; "
-        "if a recorded migration's DDL is missing, unapply its record and "
-        "re-run `migrate` to reconcile the schema."
+        "if a recorded migration's DDL is missing, re-add the missing columns "
+        "to reconcile the schema."
     )
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
@@ -85,31 +86,76 @@ class Command(BaseCommand):
 
             raise CommandError("Schema out of sync with recorded migrations (re-run without --check to repair).")
 
-        self.stdout.write(self.style.WARNING("Unapplying the out-of-date records and re-running `migrate`..."))
-        for app_label, name in missing:
-            self._unapply_record(app_label, name)
-        self._remigrate()
-        self.stdout.write(self.style.SUCCESS("Re-applied pending migrations; schema is now in sync."))
+        self.stdout.write(self.style.WARNING("Re-adding the missing columns..."))
+        self._repair(missing, loader)
+        self.stdout.write(self.style.SUCCESS("Schema is now in sync with the recorded migrations."))
 
-    def _remigrate(self) -> None:
+    def _repair(self, missing: dict[tuple[str, str], list[str]], loader: MigrationLoader) -> None:
         """
-        Re-run ``migrate`` to apply the now-pending migrations.
+        Re-add the missing columns for each out-of-sync migration.
 
-        Wrapped so that SQLite foreign-key constraint checks are suspended for
-        the duration: re-applying an ``AddField`` is a schema change, and
-        SQLite's schema editor refuses to run while FK checks are enabled inside
-        a (possibly outer, e.g. pytest) atomic transaction.
+        Rather than deleting the migration record and re-running ``migrate``
+        (which breaks the dependency chain when a *later* applied migration
+        depends on the one being repaired), the missing columns are added
+        directly through the schema editor. The migration record is left
+        untouched, so the recorded history stays consistent.
+
+        SQLite foreign-key checks are suspended for the schema changes.
         """
-        from django.core.management import call_command
+        from django.apps import apps as django_apps
 
         supports = connection.features.can_defer_constraint_checks
         if supports:
             connection.disable_constraint_checking()
         try:
-            call_command("migrate", interactive=False, verbosity=1)
+            for (app_label, name), missing_columns in sorted(missing.items()):
+                migration = loader.disk_migrations[(app_label, name)]
+                self._reapply_missing_columns(app_label, migration, missing_columns, django_apps)
         finally:
             if supports:
                 connection.enable_constraint_checking()
+
+    @staticmethod
+    def _reapply_missing_columns(app_label: str, migration, missing_columns: list[str], django_apps) -> None:
+        """
+        Add back only the columns in ``missing_columns`` from the migration.
+
+        The model class is resolved from the ``AddField``'s ``model_name`` and
+        the cloned field is rebound to it (a migration field is otherwise
+        unbound), which is what ``schema_editor.add_field`` requires.
+        """
+        add_fields = [op for op in migration.operations if isinstance(op, AddField)]
+        with connection.schema_editor() as schema_editor:
+            for column in missing_columns:
+                operation = next((op for op in add_fields if Command._column_for_field(op) == column), None)
+                if operation is None:
+                    # M2M intermediate tables are not re-created here (rare in a
+                    # half-applied AddField); skip so the rest still reconcile.
+                    continue
+                model = django_apps.get_model(app_label, operation.model_name)
+                # Idempotency guard: if the column is already present (e.g. the
+                # drop in a test / a concurrent change did not take effect in
+                # this connection's view), skip it instead of duplicating.
+                if Command._column_exists(model, column):
+                    continue
+                field = operation.field.clone()
+                # A migration field is unbound: set its name/column/concrete
+                # (normally done during model-class construction) and bind the
+                # model, which ``schema_editor.add_field`` requires.
+                field.set_attributes_from_name(operation.name)
+                field.model = model
+                schema_editor.add_field(model, field)
+
+    @staticmethod
+    def _column_exists(model, column: str) -> bool:
+        """True if ``column`` is present on ``model``'s table right now."""
+        table = model._meta.db_table
+        with connection.cursor() as cursor:
+            try:
+                columns = connection.introspection.get_table_description(cursor, table)
+            except Exception:  # pragma: no cover - table vanished mid-flight
+                return False
+        return any(col.name == column for col in columns)
 
     @staticmethod
     def _column_for_field(operation: AddField) -> str | None:
@@ -146,8 +192,3 @@ class Command(BaseCommand):
                 continue
             columns.add(self._column_for_field(operation))
         return columns
-
-    def _unapply_record(self, app_label: str, name: str) -> None:
-        """Delete one ``django_migrations`` row (so the migration looks unapplied)."""
-        with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM django_migrations WHERE app = %s AND name = %s", [app_label, name])
