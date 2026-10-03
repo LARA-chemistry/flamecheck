@@ -251,6 +251,7 @@ version_toml = [ "pyproject.toml:project.version" ]
 version_variables = [
   "src/flamecheck/__init__.py:__version__",
   "docs/conf.py:release",
+  ".gitlab-ci.yml:FLAMECHECK_VERSION",
 ]
 build_command = """
 uv lock

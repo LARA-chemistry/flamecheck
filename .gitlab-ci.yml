@@ -23,7 +23,7 @@ variables:
   # (optional) bindings and `vite build` fails (npm/cli#4828).
   NPM_VERSION: "11.19.0"
   BASE_LAYER: "trixie"
-  LARA_VERSION: "0.2.108"
+  FLAMECHECK_VERSION: "0.0.4"
   UV_PUBLISH_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
   UV_PUBLISH_PYPI_URL: "https://upload.pypi.org/legacy/"
   UV_PUBLISH_USERNAME: "gitlab-ci-token"
@@ -280,7 +280,7 @@ docker-build:
         --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:cache \
         --cache-to type=registry,ref=$CI_REGISTRY_IMAGE:cache,mode=max \
         -t "$CONTAINER_RELEASE_IMAGE" \
-        -t "$CI_REGISTRY_IMAGE/flamecheck:${LARA_VERSION}" \
+        -t "$CI_REGISTRY_IMAGE/flamecheck:${FLAMECHECK_VERSION}" \
         -t "$CONTAINER_RELEASE_IMAGE_LATEST" \
         .
     # Development image (runserver + dev settings + dev tools + built frontend).
@@ -290,7 +290,7 @@ docker-build:
         --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:cache \
         --cache-to type=registry,ref=$CI_REGISTRY_IMAGE:cache,mode=max \
         -t "$CONTAINER_RELEASE_IMAGE_DEV" \
-        -t "$CI_REGISTRY_IMAGE/flamecheck-dev:${LARA_VERSION}" \
+        -t "$CI_REGISTRY_IMAGE/flamecheck-dev:${FLAMECHECK_VERSION}" \
         -t "$CONTAINER_RELEASE_IMAGE_DEV_LATEST" \
         .
     # buildx --push already pushes all tags, so no separate push commands needed.
