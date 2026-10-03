@@ -45,6 +45,7 @@ class UserOut(BaseModel):
     lab: str | None = None
     matriculation_no: str | None = None
     labspace_id: str | None = None
+    telephone: str | None = None
     course_name: str | None = None
     version: str | None = None
 
@@ -61,6 +62,7 @@ class UserOut(BaseModel):
             lab=user.lab or None,
             matriculation_no=(user.matriculation_no or None) if is_student else None,
             labspace_id=(user.labspace_id or None) if is_student else None,
+            telephone=(user.telephone or None) if is_student else None,
             course_name=course.name if course is not None else None,
             version=_flamecheck_version(),
         )

@@ -12,14 +12,20 @@
         </div>
       </div>
       <div class="landing-actions">
-        <span class="fc-user" v-if="user">
+        <button
+          class="fc-user fc-user--clickable"
+          v-if="user"
+          type="button"
+          @click="profileShow = true"
+          aria-haspopup="dialog"
+        >
           <span class="fc-user__avatar">{{ initial(user) }}</span>
           <span class="fc-user__meta">
             <span class="fc-user__name">{{ user.name || user.username }}</span>
             <span v-if="user.matriculation_no" class="fc-user__matric">Mat. {{ user.matriculation_no }}</span>
             <span v-if="user.labspace_id" class="fc-user__labspace">Labspace {{ user.labspace_id }}</span>
           </span>
-        </span>
+        </button>
         <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </div>
     </header>
@@ -122,6 +128,8 @@
         </n-tag>
       </div>
     </footer>
+
+    <ProfileModal v-model:show="profileShow" :user="user" :analyses="analyses" />
   </div>
 </template>
 
@@ -131,6 +139,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { api } from '../api/client'
 import logo from '../assets/flamecheck-logo.svg'
+import ProfileModal from '../components/ProfileModal.vue'
 import { NSpin, NEmpty, NTag, NButton } from 'naive-ui'
 
 const router = useRouter()
@@ -140,6 +149,8 @@ const loading = ref(true)
 const analyses = ref([])
 // Course result (total/ideal/passing points + pass status) for the header bar.
 const summary = ref(null)
+// Profile modal visibility (toggled by clicking the user chip in the header).
+const profileShow = ref(false)
 
 // Progress-dock geometry: fill = total/max points (capped at 100%), and the
 // tick marks where the passing line sits on the same 0..max scale.

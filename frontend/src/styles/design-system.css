@@ -139,6 +139,30 @@ body {
   font-size: var(--fc-fs-sm);
 }
 
+/* Clickable variant (rendered as a <button>): reset button defaults and add
+   a hover/focus affordance so the chip reads as a control. */
+.fc-user--clickable {
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+.fc-user--clickable:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--fc-flame-2) 45%, var(--fc-border));
+  box-shadow: var(--fc-shadow);
+}
+.fc-user--clickable:focus-visible {
+  outline: none;
+  border-color: var(--fc-flame-2);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fc-flame-2) 35%, transparent),
+    var(--fc-shadow);
+}
+
 /* On large screens the username gets a bigger, more prominent chip. */
 @media (min-width: 900px) {
   .fc-user {
