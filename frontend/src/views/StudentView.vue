@@ -38,9 +38,13 @@
           :key="a.id"
           class="fc-card"
           :class="isActive(a) ? 'fc-card--interactive' : 'fc-card--inactive'"
-          role="button"
-          tabindex="0"
-          :aria-label="`Open ${a.type} number ${a.number} (${windowLabel(a.window_status)})`"
+          :role="isClickable(a) ? 'button' : undefined"
+          :tabindex="isClickable(a) ? 0 : undefined"
+          :aria-label="
+            isClickable(a)
+              ? `Open ${a.type} number ${a.number} (${windowLabel(a.window_status)})`
+              : `${a.type} number ${a.number} (${windowLabel(a.window_status)}), no result yet`
+          "
           @click="openAnalysis(a)"
           @keyup.enter="openAnalysis(a)"
         >
@@ -191,15 +195,19 @@ function windowInterval(a) {
 function initial(u) {
   return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
 }
-// An analysis is actionable only while its window is open or already submitted.
-// too_early / too_late analyses are shown greyed-out and are not clickable.
+// An analysis is shown (not greyed out) while its window is open or a
+// submission already exists.
 function isActive(a) {
   return a.window_status === 'open' || a.window_status === 'submitted'
 }
+// A card can be opened when the window is open (to submit) or when a result
+// (submission) exists to show. A greyed-out card without a result is inert:
+// clicking it does nothing.
+function isClickable(a) {
+  return a.window_status === 'open' || a.submission_count > 0
+}
 function openAnalysis(a) {
-  // Every card opens its detail page: open analyses can be submitted, and the
-  // greyed-out (not-yet-open / closed) ones are viewable so the student can
-  // see the state, the possible ions and any result already recorded.
+  if (!isClickable(a)) return // no result yet (e.g. not submitted): no action
   router.push(`/analysis/${a.id}`)
 }
 
@@ -477,26 +485,14 @@ onMounted(load)
   margin-top: var(--fc-space-xs);
 }
 
-/* Inactive (not yet open / closed) analyses: greyed out, but still clickable
-   so the student can open the detail page (state, possible ions, any result). */
+/* Inactive (not yet open / closed) analyses: greyed out and inert. They only
+   appear without a result, so clicking them does nothing. */
 .fc-card--inactive {
-  cursor: pointer;
+  cursor: default;
   opacity: 0.62;
   filter: grayscale(0.55);
   box-shadow: var(--fc-shadow-sm);
   outline: none;
-}
-.fc-card--inactive:hover,
-.fc-card--inactive:focus-within {
-  transform: translateY(-2px);
-  box-shadow: var(--fc-shadow);
-  opacity: 0.8;
-}
-.fc-card--inactive:focus-visible {
-  border-color: var(--fc-flame-2);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--fc-flame-2) 35%, transparent),
-    var(--fc-shadow);
 }
 .fc-card--inactive .analysis-card__num,
 .fc-card--inactive .analysis-card__title {
