@@ -18,13 +18,26 @@ class AccountAdapter(DefaultAccountAdapter):
         return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
 
 
+def _onboarding_mode() -> str:
+    """Return the active onboarding mode without requiring a settings row."""
+    from config.models import AppSettings
+
+    return AppSettings.get_onboarding_mode()
+
+
 class SocialAccountAdapter(DefaultSocialAccountAdapter):
     def is_open_for_signup(
         self,
         request: HttpRequest,
         sociallogin: SocialLogin,
     ) -> bool:
-        return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
+        """
+        Allow OAuth sign-ups only while the onboarding mode is ``oauth``.
+
+        This is the gate that decides whether a brand-new identity from an
+        external provider may create a FlameCheck account.
+        """
+        return _onboarding_mode() == "oauth"
 
     def populate_user(
         self,
@@ -33,7 +46,11 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
         data: dict[str, typing.Any],
     ) -> User:
         """
-        Populates user information from social provider info.
+        Populate a new user from social provider data.
+
+        Every OAuth-created account is a *student* that still has to complete
+        the onboarding page (course + metadata + generated analyses), so
+        ``role`` is forced to student and ``onboarded`` starts False.
 
         See: https://docs.allauth.org/en/latest/socialaccount/advanced.html#creating-and-populating-user-instances
         """
@@ -45,4 +62,6 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
                 user.name = first_name
                 if last_name := data.get("last_name"):
                     user.name += f" {last_name}"
+        user.role = user.Role.STUDENT
+        user.onboarded = False
         return user

@@ -229,6 +229,7 @@ class AppSettingsOut(Schema):
     points_per_analysis: int
     analyses_per_course: int
     active_course_id: int | None
+    onboarding: str = "manual"
     backup_enabled: bool = False
     backup_interval_minutes: int = 60
     backup_location: str = "backups"

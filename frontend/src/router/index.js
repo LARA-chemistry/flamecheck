@@ -9,6 +9,29 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/register',
+    name: 'register',
+    component: () => import('../views/RegisterView.vue'),
+    meta: { public: true },
+  },
+  {
+    // Landed here after an OAuth sign-in (allauth set a Django session). The
+    // component exchanges the session for a JWT; it is public because the user
+    // is not JWT-authenticated yet.
+    path: '/oauth-callback',
+    name: 'oauth-callback',
+    component: () => import('../views/OAuthCallbackView.vue'),
+    meta: { public: true },
+  },
+  {
+    // OAuth students complete this page (course + metadata + generated analyses)
+    // before reaching the student home.
+    path: '/onboarding',
+    name: 'onboarding',
+    component: () => import('../views/OnboardingView.vue'),
+    meta: { roles: ['student'] },
+  },
+  {
     path: '/',
     name: 'home',
     component: () => import('../views/StudentView.vue'),
@@ -105,14 +128,31 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
+  const needsOnboarding =
+    auth.isAuthenticated && auth.user?.role === 'student' && auth.user?.onboarded === false
+
   if (!to.meta.public && !auth.isAuthenticated) {
     return { name: 'login' }
   }
   if (to.meta.public && auth.isAuthenticated) {
+    if (needsOnboarding) return { name: 'onboarding' }
     return { name: homeForRole(auth.user?.role) }
   }
   if (to.meta.roles && auth.user && !to.meta.roles.includes(auth.user.role)) {
     return { name: homeForRole(auth.user.role) }
+  }
+  // An un-onboarded student is confined to the onboarding page.
+  if (needsOnboarding && !to.meta.public && to.name !== 'onboarding') {
+    return { name: 'onboarding' }
+  }
+  // An onboarded student no longer needs the onboarding page.
+  if (
+    auth.isAuthenticated &&
+    auth.user?.role === 'student' &&
+    auth.user?.onboarded &&
+    to.name === 'onboarding'
+  ) {
+    return { name: 'home' }
   }
 })
 

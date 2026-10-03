@@ -1,12 +1,19 @@
+import logging
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core import signing
 from django.core.exceptions import PermissionDenied
 from django.db.models import QuerySet
+from django.http import HttpRequest, HttpResponseRedirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DetailView, RedirectView, UpdateView
 
+from users import email_verification
 from users.models import User
+
+logger = logging.getLogger("flamecheck.audit")
 
 
 class UserCreateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
@@ -99,3 +106,32 @@ class UserProfileView(SuccessMessageMixin, UpdateView):
 
 
 user_profile_view = UserProfileView.as_view()
+
+
+def verify_email(request: HttpRequest, token: str) -> HttpResponseRedirect:
+    """
+    Activate a self-registered student from their e-mail-confirmation link.
+
+    Verifies the signed, timestamped ``token``; on success the account is
+    activated (``is_active=True``) and marked onboarded, then the user is sent to
+    the (SPA) login page with a confirmation flag. Invalid or expired tokens are
+    sent to the login page with an error flag. This view is public (no session).
+    """
+    try:
+        username = email_verification.verify_token(token)
+    except signing.SignatureExpired:
+        logger.info("E-mail confirmation: expired token")
+        return HttpResponseRedirect("/login?confirm_error=expired")
+    except signing.BadSignature:
+        logger.info("E-mail confirmation: invalid token")
+        return HttpResponseRedirect("/login?confirm_error=invalid")
+
+    user = User.objects.filter(username=username).first()
+    if user is None:
+        return HttpResponseRedirect("/login?confirm_error=invalid")
+    if not user.is_active:
+        user.is_active = True
+        user.onboarded = True
+        user.save(update_fields=["is_active", "onboarded"])
+        logger.info("E-mail confirmation: account %s activated", user.username)
+    return HttpResponseRedirect("/login?confirmed=1")

@@ -1,9 +1,25 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+def generate_labspace_id() -> str:
+    """
+    Return a random labspace id.
+
+    Used during onboarding when the student (or their OAuth provider) did not
+    supply a labspace number, e.g. ``LS-1A2B3C4D``.
+
+    Returns:
+        str: A fresh, unique labspace identifier.
+
+    """
+    return f"LS-{uuid.uuid4().hex[:8].upper()}"
 
 
 class User(AbstractUser):
@@ -60,6 +76,14 @@ class User(AbstractUser):
     token_version = models.PositiveIntegerField(
         default=0,
         help_text=_("Bumped on logout to revoke all issued JWTs."),
+    )
+    onboarded = models.BooleanField(
+        default=True,
+        help_text=(
+            "Whether the user has completed onboarding. OAuth-created students start "
+            "False and complete an onboarding page (course + metadata + generated analyses); "
+            "manually created and self-registered accounts are onboarded by default."
+        ),
     )
 
     # -- role helpers -------------------------------------------------------

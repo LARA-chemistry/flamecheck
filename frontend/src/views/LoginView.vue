@@ -69,7 +69,38 @@
         </n-button>
       </n-form>
 
+      <!-- E-mail-confirmation feedback (returned from the confirmation link). -->
+      <n-alert v-if="confirmSuccess" type="success" class="login-confirm">
+        Your e-mail address is confirmed — you can now sign in.
+      </n-alert>
+      <n-alert v-if="confirmError" type="warning" class="login-confirm">{{ confirmError }}</n-alert>
+
       <n-alert v-if="error" type="error" class="login-error">{{ error }}</n-alert>
+
+      <!-- Self-registration: a "Register" link (only in self-registration mode). -->
+      <template v-if="onboardingConfig.onboarding === 'self_registration'">
+        <n-divider style="margin: var(--fc-space-sm) 0" />
+        <p class="login-register">
+          New student?
+          <router-link to="/register" class="login-register__link">Register</router-link>
+        </p>
+      </template>
+
+      <!-- OAuth: one button per configured provider (only in oauth mode). -->
+      <template v-if="onboardingConfig.onboarding === 'oauth' && onboardingConfig.providers.length">
+        <n-divider style="margin: var(--fc-space-sm) 0" />
+        <n-space vertical>
+          <button
+            v-for="provider in onboardingConfig.providers"
+            :key="provider"
+            type="button"
+            class="login-oauth"
+            @click="startOAuth(provider)"
+          >
+            Continue with {{ providerLabel(provider) }}
+          </button>
+        </n-space>
+      </template>
     </div>
 
     <!-- Login QR code, below the card (only on wide screens > 1024px). -->
@@ -83,14 +114,15 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { homeForRole } from '../router'
 import { api } from '../api/client'
 import logo from '../assets/flamecheck-logo.svg'
-import { NForm, NFormItem, NInput, NButton, NAlert } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NAlert, NDivider, NSpace } from 'naive-ui'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const loading = ref(false)
 const error = ref('')
@@ -99,6 +131,21 @@ const error = ref('')
 // authentication. Either may be null, in which case the element is hidden.
 const branding = ref({ login_logo: null, login_qr: null })
 
+// Onboarding configuration (public): which mode is active + available OAuth
+// providers. Drives the "Register" link / OAuth buttons on this page.
+const onboardingConfig = ref({ onboarding: 'manual', providers: [] })
+
+// E-mail-confirmation feedback, read from the ?confirmed / ?confirm_error query
+// params that the confirmation link redirects to.
+const confirmSuccess = ref(route.query.confirmed === '1')
+const confirmError = ref(
+  route.query.confirm_error === 'expired'
+    ? 'The confirmation link has expired. Please register again.'
+    : route.query.confirm_error
+      ? 'The confirmation link is invalid.'
+      : '',
+)
+
 async function loadBranding() {
   try {
     branding.value = await api.get('/branding')
@@ -106,7 +153,29 @@ async function loadBranding() {
     /* branding is best-effort; the login page still works without it */
   }
 }
-onMounted(loadBranding)
+
+async function loadOnboardingConfig() {
+  try {
+    onboardingConfig.value = await api.get('/onboarding/config')
+  } catch {
+    /* best-effort; the login page still works without the extra controls */
+  }
+}
+
+function providerLabel(id) {
+  return id.charAt(0).toUpperCase() + id.slice(1)
+}
+
+// Start an OAuth sign-in: a full-page redirect to the provider via allauth.
+// On success the browser is redirected back to /oauth-callback (with a session).
+function startOAuth(provider) {
+  window.location.href = `/${provider}/login/?next=/oauth-callback`
+}
+
+onMounted(() => {
+  loadBranding()
+  loadOnboardingConfig()
+})
 
 const form = ref({ username: '', password: '' })
 const showPassword = ref(false)
@@ -126,7 +195,13 @@ async function handleLogin() {
   error.value = ''
   try {
     await auth.login(form.value.username, form.value.password)
-    router.push({ name: homeForRole(auth.user?.role) })
+    // An OAuth student who has not yet onboarded goes to the onboarding page;
+    // everyone else goes to their role's landing page.
+    if (auth.user?.role === 'student' && auth.user?.onboarded === false) {
+      router.push({ name: 'onboarding' })
+    } else {
+      router.push({ name: homeForRole(auth.user?.role) })
+    }
   } catch (e) {
     error.value = e.message
   } finally {
@@ -307,6 +382,42 @@ async function handleLogin() {
 
 .login-error {
   margin-top: var(--fc-space-sm);
+}
+
+.login-confirm {
+  margin-top: var(--fc-space-sm);
+}
+
+.login-register {
+  margin: 0;
+  text-align: center;
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-text-soft);
+}
+.login-register__link {
+  color: var(--fc-flame-2);
+  font-weight: 700;
+  text-decoration: none;
+}
+.login-register__link:hover {
+  text-decoration: underline;
+}
+
+.login-oauth {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: var(--fc-radius-sm);
+  background: #fff;
+  color: var(--fc-ink);
+  font-size: var(--fc-fs-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.login-oauth:hover {
+  background: var(--fc-flame-soft);
+  border-color: var(--fc-flame-2);
 }
 
 /* Password show/hide eye toggle (input suffix). */

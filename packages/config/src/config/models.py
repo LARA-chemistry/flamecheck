@@ -244,6 +244,24 @@ class AssistantCourse(models.Model):
 class AppSettings(models.Model):
     """Singleton global application settings (points per analysis, analyses per course)."""
 
+    class Onboarding(models.TextChoices):
+        """How new student accounts are created (mutually exclusive)."""
+
+        MANUAL = "manual", _("Manual (created by an admin in Admin → Courses → Members)")
+        SELF_REGISTRATION = "self_registration", _("Self-registration (students register + confirm their e-mail)")
+        OAUTH = "oauth", _("OAuth (students sign in via an external identity provider)")
+
+    onboarding = models.CharField(
+        max_length=24,
+        choices=Onboarding.choices,
+        default=Onboarding.MANUAL,
+        help_text=(
+            "How new student accounts are created. Exactly one mode is active at a time: "
+            "manual (admin creates accounts), self-registration (students register and confirm "
+            "their e-mail) or OAuth (students sign in via an external provider and complete an "
+            "onboarding page)."
+        ),
+    )
     points_per_analysis = models.PositiveSmallIntegerField(
         default=10,
         help_text=_("Points per correctly identified analysis (per-analysis mode)."),
@@ -317,3 +335,16 @@ class AppSettings(models.Model):
     def get_instance(cls) -> "AppSettings":
         """Return (creating if necessary) the singleton settings row."""
         return cls.objects.get_or_create_instance()
+
+    @classmethod
+    def get_onboarding_mode(cls) -> str:
+        """
+        Return the active onboarding mode without creating a settings row.
+
+        Returns:
+            str: One of :class:`AppSettings.Onboarding` values; ``"manual"`` when no
+                settings row exists yet (e.g. a brand-new database).
+
+        """
+        instance = cls.objects.first()
+        return instance.onboarding if instance is not None else cls.Onboarding.MANUAL

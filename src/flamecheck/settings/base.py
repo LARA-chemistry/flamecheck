@@ -140,6 +140,24 @@ ACCOUNT_LOGIN_METHODS = {"username", "email"}
 ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_ADAPTER = "users.adapters.AccountAdapter"
 SOCIALACCOUNT_ADAPTER = "users.adapters.SocialAccountAdapter"
+# OAuth identity providers (django-allauth). A JSON object keyed by provider id,
+# e.g. {"google": {"APP": {"client_id": "...", "secret": "...", "key": ""}}}.
+# Empty by default: OAuth onboarding only offers buttons for configured providers.
+SOCIALACCOUNT_PROVIDERS = env.json("SOCIALACCOUNT_PROVIDERS", default={})
+# A plain link to the provider login URL (e.g. /google/login/) starts the
+# provider flow immediately instead of rendering an intermediate confirm page,
+# which is what the SPA login button expects.
+SOCIALACCOUNT_LOGIN_ON_GET = True
+
+# ---------------------------------------------------------------------------
+# E-mail
+# ---------------------------------------------------------------------------
+# The console backend is the default *development* choice (see development.py);
+# production sets a real SMTP backend. These defaults keep the address stable.
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="FlameCheck <no-reply@flamecheck.local>")
+EMAIL_SUBJECT_PREFIX = env.str("EMAIL_SUBJECT_PREFIX", default="[FlameCheck] ")
+# How long a self-registration e-mail-confirmation link stays valid (seconds).
+EMAIL_VERIFICATION_TOKEN_MAX_AGE = env.int("EMAIL_VERIFICATION_TOKEN_MAX_AGE", default=48 * 3600)
 
 # ---------------------------------------------------------------------------
 # JWT / token auth

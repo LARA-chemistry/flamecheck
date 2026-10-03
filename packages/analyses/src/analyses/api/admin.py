@@ -962,6 +962,7 @@ def get_app_settings(request):
         "points_per_analysis": s.points_per_analysis,
         "analyses_per_course": s.analyses_per_course,
         "active_course_id": s.active_course_id,
+        "onboarding": s.onboarding,
         "backup_enabled": s.backup_enabled,
         "backup_interval_minutes": s.backup_interval_minutes,
         "backup_location": s.backup_location,
@@ -977,6 +978,11 @@ def update_app_settings(request, payload: AppSettingsOut):
     s.points_per_analysis = payload.points_per_analysis
     s.analyses_per_course = payload.analyses_per_course
     s.active_course_id = payload.active_course_id
+    s.onboarding = (
+        payload.onboarding
+        if payload.onboarding in dict(AppSettings.Onboarding.choices)
+        else AppSettings.Onboarding.MANUAL
+    )
     s.backup_enabled = payload.backup_enabled
     s.backup_interval_minutes = max(1, payload.backup_interval_minutes)
     s.backup_location = payload.backup_location
@@ -987,6 +993,7 @@ def update_app_settings(request, payload: AppSettingsOut):
         "points_per_analysis": s.points_per_analysis,
         "analyses_per_course": s.analyses_per_course,
         "active_course_id": s.active_course_id,
+        "onboarding": s.onboarding,
         "backup_enabled": s.backup_enabled,
         "backup_interval_minutes": s.backup_interval_minutes,
         "backup_location": s.backup_location,

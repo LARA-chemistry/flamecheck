@@ -48,6 +48,8 @@ class UserOut(BaseModel):
     telephone: str | None = None
     course_name: str | None = None
     version: str | None = None
+    # Whether the user still needs to complete onboarding (OAuth students only).
+    onboarded: bool = True
 
     @classmethod
     def from_user(cls, user: Any) -> UserOut:
@@ -65,7 +67,50 @@ class UserOut(BaseModel):
             telephone=(user.telephone or None) if is_student else None,
             course_name=course.name if course is not None else None,
             version=_flamecheck_version(),
+            onboarded=bool(getattr(user, "onboarded", True)),
         )
+
+
+class OnboardingConfigOut(BaseModel):
+    """Public onboarding configuration (drives the login-page controls)."""
+
+    onboarding: str
+    providers: list[str] = []
+
+
+class RegisterIn(BaseModel):
+    """Payload for the self-registration endpoint (students only)."""
+
+    name: str
+    email: str
+    password: str
+    matriculation_no: str = ""
+    lab: str = ""
+    telephone: str = ""
+
+
+class RegisterOut(BaseModel):
+    """Acknowledgement for a self-registration request."""
+
+    message: str
+
+
+class OnboardingIn(BaseModel):
+    """Payload for completing onboarding (course + metadata an OAuth idp lacked)."""
+
+    course_id: int
+    name: str = ""
+    matriculation_no: str = ""
+    labspace_id: str = ""
+    lab: str = ""
+    telephone: str = ""
+
+
+class CourseOptionOut(BaseModel):
+    """A course offered on the onboarding page."""
+
+    id: int
+    name: str
 
 
 def _flamecheck_version() -> str:

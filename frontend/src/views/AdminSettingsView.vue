@@ -23,6 +23,28 @@
       </n-form>
     </n-card>
 
+    <!-- Onboarding: how new student accounts are created (mutually exclusive) -->
+    <n-card title="Onboarding" size="small" :bordered="false">
+      <n-space vertical size="large">
+        <n-text depth="3">
+          Choose how new student accounts are created. Exactly one mode is active at a time.
+        </n-text>
+        <n-radio-group v-model:value="appSettings.onboarding" name="onboarding">
+          <n-space vertical>
+            <n-space v-for="opt in onboardingOptions" :key="opt.value" vertical size="small">
+              <n-radio-button :value="opt.value" :bordered="false" style="width: 240px">
+                {{ opt.label }}
+              </n-radio-button>
+              <n-text depth="3" style="padding-left: 8px">{{ opt.hint }}</n-text>
+            </n-space>
+          </n-space>
+        </n-radio-group>
+        <n-button type="primary" :loading="savingAppSettings" @click="saveAppSettings">
+          Save Onboarding
+        </n-button>
+      </n-space>
+    </n-card>
+
     <n-card size="small" :bordered="false">
       <div class="grading-card-head">
         <h3 class="grading-card-title">Default grading configuration</h3>
@@ -224,6 +246,7 @@ import { api } from '../api/client'
 import {
   NSpace, NButton, NInputNumber, NInput, NSelect, NForm, NFormItem, NAlert,
   NCard, NSwitch, NDivider, NDataTable, NEmpty, NText, NPopconfirm,
+  NRadioGroup, NRadioButton,
 } from 'naive-ui'
 
 const message = ref('')
@@ -240,11 +263,19 @@ const appSettings = ref({
   points_per_analysis: 10,
   analyses_per_course: 3,
   active_course_id: null,
+  onboarding: 'manual',
   backup_enabled: false,
   backup_interval_minutes: 60,
   backup_location: 'backups',
   backup_keep: 10,
 })
+
+// Descriptions for the mutually-exclusive onboarding modes (the radio group).
+const onboardingOptions = [
+  { value: 'manual', label: 'Manual', hint: 'A new student account is created by an admin in Admin → Courses → Members.' },
+  { value: 'self_registration', label: 'Self-registration', hint: 'The login page shows a “Register” link. Students register and confirm their e-mail address (console e-mail in development).' },
+  { value: 'oauth', label: 'OAuth', hint: 'Students sign in via an external identity provider (django-allauth); a student account is created and they complete an onboarding page (course + details + generated analyses).' },
+]
 const grading = ref({
   points_per_correct_ion: 10,
   penalty_second_submission: 2,
