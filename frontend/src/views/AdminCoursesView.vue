@@ -6,21 +6,263 @@
         <n-button type="primary" size="small" @click="openCreate">+ New Course</n-button>
       </div>
 
-      <n-data-table :columns="courseCols" :data="courses" size="small" :loading="loading" />
+      <!-- Clicking a course row opens the course detail view below (like the
+           assistant's course view). -->
+      <n-data-table
+        :columns="courseCols"
+        :data="courses"
+        size="small"
+        :loading="loading"
+        :row-props="courseRowProps"
+      />
     </n-card>
 
-    <!-- Students in the selected course -->
+    <!-- Course detail view: tabbed navigation over the per-course work areas. -->
     <n-card v-if="selected" size="small" :bordered="false">
       <div class="page-head">
-        <h2 class="page-title">Students — {{ selected.name }}</h2>
+        <h2 class="page-title">
+          {{ selected.name }}
+          <span class="muted">({{ selected.semester }}{{ selected.track ? ', ' + selected.track : '' }})</span>
+        </h2>
         <n-space size="small">
-          <n-button type="primary" size="small" @click="openAddStudent">+ Add Student</n-button>
-          <n-button size="small" @click="openImport">Import CSV</n-button>
-          <n-button size="small" @click="loadStudents(selected.id)">Refresh</n-button>
+          <n-button size="small" @click="openEdit(selected)">Edit</n-button>
         </n-space>
       </div>
-      <n-empty v-if="!loadingStudents && courseStudents.length === 0" description="No students in this course yet." size="small" />
-      <n-data-table v-else :columns="studentCols" :data="courseStudents" size="small" :loading="loadingStudents" />
+
+      <n-radio-group
+        :value="courseView"
+        size="small"
+        class="course-nav"
+        @update:value="switchCourseView"
+      >
+        <n-radio-button value="assign">Assign</n-radio-button>
+        <n-radio-button value="students">Students</n-radio-button>
+        <n-radio-button value="analyses">Analyses</n-radio-button>
+        <n-radio-button value="grading">Grading</n-radio-button>
+        <n-radio-button value="calendar">Calendar</n-radio-button>
+      </n-radio-group>
+
+      <!-- View content, keyed by course + active view so Vue swaps the whole
+           subtree (avoids mis-patching the v-for lists). -->
+      <div :key="`${selected.id}:${courseView}`">
+        <!-- Students: the course roster. -->
+        <template v-if="courseView === 'students'">
+          <n-space align="center" style="margin-bottom: 8px">
+            <n-button type="primary" size="small" @click="openAddStudent">+ Add Student</n-button>
+            <n-button size="small" @click="openImport">Import CSV</n-button>
+            <n-button size="small" @click="loadStudents()">Refresh</n-button>
+          </n-space>
+          <n-empty v-if="!loadingStudents && courseStudents.length === 0" description="No students in this course yet." size="small" />
+          <n-data-table v-else :columns="studentCols" :data="courseStudents" size="small" :loading="loadingStudents" />
+        </template>
+
+        <!-- Assign: enroll (or move) students into this course. -->
+        <template v-else-if="courseView === 'assign'">
+          <n-space vertical>
+            <n-text depth="3" style="font-size: 13px">
+              Students you select are enrolled in this course (their current course, if any, is replaced).
+            </n-text>
+            <n-select
+              v-model:value="assignStudentIds"
+              :options="assignableStudentOptions"
+              multiple
+              filterable
+              placeholder="Select students to add to this course"
+              style="max-width: 560px"
+            />
+            <n-text v-if="alreadyInCourseCount" depth="3" style="font-size: 13px">
+              {{ alreadyInCourseCount }} student{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
+            </n-text>
+            <n-button
+              type="primary"
+              size="small"
+              :loading="assignSaving"
+              :disabled="assignStudentIds.length === 0"
+              @click="saveAssign"
+            >
+              Assign {{ assignStudentIds.length || '' }} Student{{ assignStudentIds.length === 1 ? '' : 's' }}
+            </n-button>
+          </n-space>
+        </template>
+
+        <!-- Analyses: this course's analysis instances. -->
+        <template v-else-if="courseView === 'analyses'">
+          <n-space align="center" style="margin-bottom: 8px">
+            <n-button type="primary" size="small" @click="goToAssignments">Manage Assignments</n-button>
+            <n-button size="small" @click="loadCourseInstances()">Refresh</n-button>
+          </n-space>
+          <n-empty v-if="!loadingInstances && courseInstances.length === 0" description="No analyses for this course yet." size="small" />
+          <n-data-table
+            v-else
+            :columns="analysisCols"
+            :data="courseInstances"
+            size="small"
+            :loading="loadingInstances"
+          />
+        </template>
+
+        <!-- Grading: per-course grading configuration. -->
+        <template v-else-if="courseView === 'grading'">
+          <n-space vertical>
+            <n-text depth="3" style="font-size: 13px">
+              Overrides the default grading configuration for this course only.
+            </n-text>
+            <n-form label-placement="left" label-width="200" style="max-width: 640px">
+              <n-form-item label="Grading mode">
+                <n-select
+                  v-model:value="gradingForm.grading_mode"
+                  :options="[{ label: 'Per Ion', value: 'per_ion' }, { label: 'Per Analysis', value: 'per_analysis' }]"
+                />
+              </n-form-item>
+              <n-form-item :label="pointsLabel">
+                <n-input-number v-model:value="gradingForm.points_per_correct_ion" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_ion'" label="Penalty 2nd submission">
+                <n-input-number v-model:value="gradingForm.penalty_second_submission" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_ion'" label="Penalty 3rd submission">
+                <n-input-number v-model:value="gradingForm.penalty_third_submission" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_ion'" label="False positive deduction">
+                <n-input-number v-model:value="gradingForm.false_positive_deduction" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_analysis'" label=" " :show-label="false">
+                <n-text depth="3" style="font-size: 12px">
+                  Per-analysis mode is all-or-nothing: full points only when every ion is correct.
+                  Retry penalties do not apply.
+                </n-text>
+              </n-form-item>
+              <n-form-item label="Max submissions per analysis">
+                <n-input-number v-model:value="gradingForm.max_submissions_per_analysis" :min="1" />
+              </n-form-item>
+              <n-form-item label="Final score strategy">
+                <n-select
+                  v-model:value="gradingForm.final_score_strategy"
+                  :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
+                />
+              </n-form-item>
+              <n-form-item label="Min. points to pass">
+                <n-input-number v-model:value="gradingForm.passing_score" :min="0" />
+              </n-form-item>
+            </n-form>
+            <n-button type="primary" size="small" :loading="gradingSaving" @click="saveGrading">
+              Save Course Grading
+            </n-button>
+          </n-space>
+        </template>
+
+        <!-- Calendar: the course's analysis windows (week / month views). -->
+        <template v-else-if="courseView === 'calendar'">
+          <n-space vertical size="medium">
+            <div class="cal-toolbar">
+              <n-radio-group v-model:value="calendarView" size="small">
+                <n-space :wrap="false">
+                  <n-radio-button value="week">Week</n-radio-button>
+                  <n-radio-button value="month">Month</n-radio-button>
+                </n-space>
+              </n-radio-group>
+              <span class="cal-toolbar__spacer" />
+              <n-text depth="3" class="cal-legend-text" style="font-size: 12px">
+                <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
+                <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
+                <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
+                <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
+              </n-text>
+            </div>
+
+            <n-spin :show="loadingInstances">
+              <n-empty v-if="!loadingInstances && courseInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
+
+              <!-- WEEK VIEW: one row per analysis, a bar across the days it spans -->
+              <div v-else-if="calendarView === 'week'" class="weekcal">
+                <div class="weekcal__head">
+                  <div class="weekcal__corner">Analysis</div>
+                  <div class="weekcal__head-days">
+                    <div
+                      v-for="d in calendarDays"
+                      :key="d.dateKey"
+                      class="weekcal__day"
+                      :class="{ 'weekcal__day--weekend': d.isWeekend }"
+                      :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
+                    >
+                      <span class="weekcal__day-dow">{{ d.dowLabel }}</span>
+                      <span class="weekcal__day-date">{{ d.dayNum }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="weekcal__body">
+                  <div class="weekcal__grid-layer" aria-hidden="true">
+                    <div
+                      v-for="d in calendarWeekendDays"
+                      :key="'wk-' + d.dateKey"
+                      class="weekcal__weekend"
+                      :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
+                    ></div>
+                    <div
+                      v-for="d in calendarDays"
+                      :key="'ln-' + d.dateKey"
+                      class="weekcal__vline"
+                      :class="{ 'weekcal__vline--week': d.isSunday }"
+                      :style="{ left: d.leftPct + '%' }"
+                    ></div>
+                  </div>
+
+                  <div v-for="inst in calendarInstances" :key="inst.id" class="weekcal__row">
+                    <div class="weekcal__row-label" :title="inst.type">
+                      <span class="weekcal__num">#{{ inst.number }}</span>
+                      <span class="weekcal__type">{{ inst.type }}</span>
+                    </div>
+                    <div class="weekcal__track">
+                      <div
+                        class="weekcal__bar"
+                        :class="`weekcal__bar--${windowStatus(inst)}`"
+                        :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
+                        :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
+                      >
+                        <span class="weekcal__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- MONTH VIEW: a Sun..Sat week grid; each day cell lists the analyses
+                   whose window covers that day -->
+              <div v-else class="monthcal">
+                <div class="monthcal__dow">
+                  <span v-for="d in DOW" :key="d" class="monthcal__dow-cell" :class="{ 'monthcal__dow-cell--weekend': d === 'Sun' || d === 'Sat' }">{{ d }}</span>
+                </div>
+                <div v-for="(week, wi) in calendarMonthWeeks" :key="wi" class="monthcal__week">
+                  <div
+                    v-for="cell in week"
+                    :key="cell.dateKey"
+                    class="monthcal__cell"
+                    :class="{
+                      'monthcal__cell--weekend': cell.isWeekend,
+                      'monthcal__cell--other': !cell.inRange,
+                    }"
+                  >
+                    <span class="monthcal__cell-date" :title="cell.monthLabel + ' ' + cell.dayNum">{{ cell.dayNum }}</span>
+                    <div class="monthcal__chips">
+                      <div
+                        v-for="inst in cell.instances"
+                        :key="inst.id"
+                        class="monthcal__chip"
+                        :class="`monthcal__chip--${inst.status}`"
+                        :title="`${inst.type} #${inst.number}: ${fmt(inst.start)} → ${fmt(inst.end)}`"
+                      >
+                        <span class="monthcal__chip-num">#{{ inst.number }}</span>
+                        <span class="monthcal__chip-type">{{ inst.type }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </n-spin>
+          </n-space>
+        </template>
+      </div>
     </n-card>
 
     <!-- Create / edit modal -->
@@ -44,92 +286,6 @@
           <n-button v-if="modal.editing" type="error" ghost @click="removeCourse">Delete</n-button>
           <n-button @click="modal.show = false">Cancel</n-button>
           <n-button type="primary" :loading="modal.saving" @click="saveCourse">Save</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
-    <!-- Per-course grading settings -->
-    <n-modal v-model:show="grading.show" preset="card" :title="`Grading — ${grading.courseName}`" style="width: 500px; max-width: 94vw">
-      <n-text depth="3" style="font-size: 13px; display:block; margin-bottom: 12px">
-        Overrides the default grading configuration for this course only.
-      </n-text>
-      <n-form label-placement="left" label-width="200">
-        <n-form-item label="Grading mode">
-          <n-select
-            v-model:value="grading.form.grading_mode"
-            :options="[{ label: 'Per Ion', value: 'per_ion' }, { label: 'Per Analysis', value: 'per_analysis' }]"
-          />
-        </n-form-item>
-        <n-form-item :label="pointsLabel">
-          <n-input-number v-model:value="grading.form.points_per_correct_ion" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="Penalty 2nd submission">
-          <n-input-number v-model:value="grading.form.penalty_second_submission" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="Penalty 3rd submission">
-          <n-input-number v-model:value="grading.form.penalty_third_submission" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="False positive deduction">
-          <n-input-number v-model:value="grading.form.false_positive_deduction" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_analysis'" label=" " :show-label="false">
-          <n-text depth="3" style="font-size: 12px">
-            Per-analysis mode is all-or-nothing: full points only when every ion is correct.
-            Retry penalties do not apply.
-          </n-text>
-        </n-form-item>
-        <n-form-item label="Max submissions per analysis">
-          <n-input-number v-model:value="grading.form.max_submissions_per_analysis" :min="1" />
-        </n-form-item>
-        <n-form-item label="Final score strategy">
-          <n-select
-            v-model:value="grading.form.final_score_strategy"
-            :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
-          />
-        </n-form-item>
-        <n-form-item label="Min. points to pass">
-          <n-input-number v-model:value="grading.form.passing_score" :min="0" />
-        </n-form-item>
-        <n-text depth="3" style="font-size: 12px; display:block; padding-left: 200px">
-          Minimum total points across all analyses of this course to pass it (0 disables).
-        </n-text>
-      </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="grading.show = false">Cancel</n-button>
-          <n-button type="primary" :loading="grading.saving" @click="saveGrading">Save Course Grading</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
-    <!-- Assign (enroll) students into the course -->
-    <n-modal v-model:show="assign.show" preset="card" :title="`Assign students — ${assign.courseName}`" style="width: 520px; max-width: 94vw">
-      <n-space vertical>
-        <n-text depth="3" style="font-size: 13px; display:block">
-          Students you select are enrolled in this course (their current course, if any, is replaced).
-        </n-text>
-        <n-select
-          v-model:value="assign.studentIds"
-          :options="assignableStudentOptions"
-          multiple
-          filterable
-          placeholder="Select students to add to this course"
-        />
-        <n-text v-if="alreadyInCourseCount" depth="3" style="font-size: 13px">
-          {{ alreadyInCourseCount }} student{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
-        </n-text>
-      </n-space>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="assign.show = false">Cancel</n-button>
-          <n-button
-            type="primary"
-            :loading="assign.saving"
-            :disabled="assign.studentIds.length === 0"
-            @click="saveAssign"
-          >
-            Assign {{ assign.studentIds.length || '' }} Student{{ assign.studentIds.length === 1 ? '' : 's' }}
-          </n-button>
         </n-space>
       </template>
     </n-modal>
@@ -234,123 +390,6 @@
       </template>
     </n-modal>
 
-    <!-- Window calendar (week / month views) for the course's analyses -->
-    <n-modal v-model:show="calendar.show" preset="card" :title="`Window calendar — ${calendar.courseName}`" style="width: 96vw; max-width: 1040px">
-      <n-space vertical size="medium">
-        <div class="cal-toolbar">
-          <n-radio-group v-model:value="calendar.view" size="small">
-            <n-space :wrap="false">
-              <n-radio-button value="week">Week</n-radio-button>
-              <n-radio-button value="month">Month</n-radio-button>
-            </n-space>
-          </n-radio-group>
-          <span class="cal-toolbar__spacer" />
-          <n-text depth="3" class="cal-legend-text" style="font-size: 12px">
-            <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
-            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
-            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
-            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
-          </n-text>
-        </div>
-
-        <n-spin :show="calendar.loading">
-          <n-empty v-if="!calendar.loading && calendarInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
-
-          <!-- WEEK VIEW: one row per analysis, a bar across the days it spans -->
-          <div v-else-if="calendar.view === 'week'" class="weekcal">
-            <div class="weekcal__head">
-              <div class="weekcal__corner">Analysis</div>
-              <div class="weekcal__head-days">
-                <div
-                  v-for="d in calendarDays"
-                  :key="d.dateKey"
-                  class="weekcal__day"
-                  :class="{ 'weekcal__day--weekend': d.isWeekend }"
-                  :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
-                >
-                  <span class="weekcal__day-dow">{{ d.dowLabel }}</span>
-                  <span class="weekcal__day-date">{{ d.dayNum }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="weekcal__body">
-              <div class="weekcal__grid-layer" aria-hidden="true">
-                <div
-                  v-for="d in calendarWeekendDays"
-                  :key="'wk-' + d.dateKey"
-                  class="weekcal__weekend"
-                  :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
-                ></div>
-                <div
-                  v-for="d in calendarDays"
-                  :key="'ln-' + d.dateKey"
-                  class="weekcal__vline"
-                  :class="{ 'weekcal__vline--week': d.isSunday }"
-                  :style="{ left: d.leftPct + '%' }"
-                ></div>
-              </div>
-
-              <div v-for="inst in calendarInstances" :key="inst.id" class="weekcal__row">
-                <div class="weekcal__row-label" :title="inst.type">
-                  <span class="weekcal__num">#{{ inst.number }}</span>
-                  <span class="weekcal__type">{{ inst.type }}</span>
-                </div>
-                <div class="weekcal__track">
-                  <div
-                    class="weekcal__bar"
-                    :class="`weekcal__bar--${windowStatus(inst)}`"
-                    :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
-                    :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
-                  >
-                    <span class="weekcal__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- MONTH VIEW: a Sun..Sat week grid; each day cell lists the analyses
-               whose window covers that day -->
-          <div v-else class="monthcal">
-            <div class="monthcal__dow">
-              <span v-for="d in DOW" :key="d" class="monthcal__dow-cell" :class="{ 'monthcal__dow-cell--weekend': d === 'Sun' || d === 'Sat' }">{{ d }}</span>
-            </div>
-            <div v-for="(week, wi) in calendarMonthWeeks" :key="wi" class="monthcal__week">
-              <div
-                v-for="cell in week"
-                :key="cell.dateKey"
-                class="monthcal__cell"
-                :class="{
-                  'monthcal__cell--weekend': cell.isWeekend,
-                  'monthcal__cell--other': !cell.inRange,
-                }"
-              >
-                <span class="monthcal__cell-date" :title="cell.monthLabel + ' ' + cell.dayNum">{{ cell.dayNum }}</span>
-                <div class="monthcal__chips">
-                  <div
-                    v-for="inst in cell.instances"
-                    :key="inst.id"
-                    class="monthcal__chip"
-                    :class="`monthcal__chip--${inst.status}`"
-                    :title="`${inst.type} #${inst.number}: ${fmt(inst.start)} → ${fmt(inst.end)}`"
-                  >
-                    <span class="monthcal__chip-num">#{{ inst.number }}</span>
-                    <span class="monthcal__chip-type">{{ inst.type }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </n-spin>
-      </n-space>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="calendar.show = false">Close</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
     <n-alert v-if="message" :type="msgType">{{ message }}</n-alert>
   </n-space>
 </template>
@@ -361,7 +400,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
-  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload,
+  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload, NSpin,
 } from 'naive-ui'
 
 const router = useRouter()
@@ -382,60 +421,51 @@ const modal = ref({
   form: { id: null, name: '', semester: '', track: '', is_active: true },
 })
 
+// Active tab of the course detail view: 'assign' | 'students' | 'analyses'
+// | 'grading' | 'calendar'.
+const courseView = ref('students')
+
+// Per-course analysis instances (shared by the Analyses and Calendar tabs).
+const courseInstances = ref([])
+const loadingInstances = ref(false)
+
 // Per-course grading settings (overrides the global default for one course).
-const grading = ref({
-  show: false,
-  saving: false,
-  courseId: null,
-  courseName: '',
-  form: {
-    points_per_correct_ion: 10,
-    penalty_second_submission: 2,
-    penalty_third_submission: 4,
-    false_positive_deduction: 0,
-    grading_mode: 'per_ion',
-    max_submissions_per_analysis: 3,
-    final_score_strategy: 'best',
-    passing_score: 50,
-  },
+const gradingForm = ref({
+  points_per_correct_ion: 10,
+  penalty_second_submission: 2,
+  penalty_third_submission: 4,
+  false_positive_deduction: 0,
+  grading_mode: 'per_ion',
+  max_submissions_per_analysis: 3,
+  final_score_strategy: 'best',
+  passing_score: 50,
 })
+const gradingSaving = ref(false)
 
 // In per-analysis mode the same field holds the points per *completed*
 // analysis, so the label adapts to the selected grading mode.
 const pointsLabel = computed(
-  () => (grading.value.form.grading_mode === 'per_analysis' ? 'Points per analysis' : 'Points per correct ion'),
+  () => (gradingForm.value.grading_mode === 'per_analysis' ? 'Points per analysis' : 'Points per correct ion'),
 )
 
-// Assign (enroll) students into a course.
-const assign = ref({
-  show: false,
-  saving: false,
-  courseId: null,
-  courseName: '',
-  studentIds: [],
-})
+// Assign (enroll) students into the open course.
+const assignStudentIds = ref([])
+const assignSaving = ref(false)
 
-// Per-course window calendar. view is 'week' (Gantt timeline) or 'month'
-// (a classic month grid with one chip per analysis/day it covers).
-const calendar = ref({
-  show: false,
-  loading: false,
-  courseId: null,
-  courseName: '',
-  instances: [],
-  view: 'week',
-})
+// Calendar tab: 'week' (Gantt timeline) or 'month' (a classic month grid with
+// one chip per analysis/day it covers).
+const calendarView = ref('week')
 
 const courseStudents = computed(() =>
   students.value.filter((s) => s.course_id === selected.value?.id),
 )
 
-// Students that can be enrolled into the course being assigned to. Everyone is
-// a candidate (a student can be moved from one course to another); those already
-// in the target course are flagged so the admin knows.
+// Students that can be enrolled into the open course. Everyone is a candidate
+// (a student can be moved from one course to another); those already in the
+// target course are flagged so the admin knows.
 const assignableStudentOptions = computed(() =>
   students.value.map((s) => {
-    const inTarget = s.course_id === assign.value.courseId
+    const inTarget = s.course_id === selected.value?.id
     return {
       label: inTarget ? `${s.name || s.username} (already in course)` : `${s.name || s.username} (${s.course_name ? 'in ' + s.course_name : 'no course'})`,
       value: s.id,
@@ -445,7 +475,7 @@ const assignableStudentOptions = computed(() =>
 )
 
 const alreadyInCourseCount = computed(
-  () => students.value.filter((s) => s.course_id === assign.value.courseId).length,
+  () => students.value.filter((s) => s.course_id === selected.value?.id).length,
 )
 
 // ---- add / edit a student account -------------------------------------------
@@ -643,7 +673,7 @@ async function doImport() {
 // Sort the course's analyses by their window start so the rows read in
 // chronological order.
 const calendarInstances = computed(() =>
-  [...calendar.value.instances].sort(
+  [...courseInstances.value].sort(
     (a, b) => new Date(a.window_start) - new Date(b.window_start),
   ),
 )
@@ -814,29 +844,66 @@ const courseCols = [
     render: (row) =>
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
         h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => openEdit(row) }, () => 'Edit'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openAssign(row) }, () => 'Assign'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => selectCourse(row) }, () => 'Students'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openAnalyses(row) }, () => 'Analyses'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openCalendar(row) }, () => 'Calendar'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openGrading(row) }, () => 'Grading'),
       ]),
   },
 ]
 
-function selectCourse(row) {
+// Clickable course rows: opening a row selects the course and shows the
+// detail view below the table (like the assistant's course view).
+function courseRowProps(row) {
+  return {
+    style: 'cursor: pointer',
+    class: row.id === selected.value?.id ? 'course-row--selected' : '',
+    onClick: () => openCourseDetail(row),
+  }
+}
+
+// Open the detail view for a course and preload all tab data.
+function openCourseDetail(row, view = 'students') {
   selected.value = row
+  courseView.value = view
+  assignStudentIds.value = []
   loadStudents()
+  loadCourseInstances(row.id)
+  loadGrading(row.id)
+}
+
+function switchCourseView(view) {
+  courseView.value = view
+}
+
+// Keep the open detail row in sync after the course list is refreshed
+// (e.g. after creating or editing a course).
+function refreshSelected() {
+  if (!selected.value?.id) return
+  selected.value = courses.value.find((c) => c.id === selected.value.id) ?? null
 }
 
 async function loadCourses() {
   loading.value = true
   try {
     courses.value = await api.get('/admin/courses')
+    refreshSelected()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
     loading.value = false
+  }
+}
+
+// Load the open course's analysis instances (shared by the Analyses and
+// Calendar tabs).
+async function loadCourseInstances(courseId = selected.value?.id) {
+  if (!courseId) return
+  loadingInstances.value = true
+  try {
+    courseInstances.value = await api.get(`/admin/analysis-instances?course_id=${courseId}`)
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    loadingInstances.value = false
   }
 }
 
@@ -920,27 +987,12 @@ async function detachStudent(s) {
 }
 
 // ---- per-course grading settings ---------------------------------------------
-async function openGrading(row) {
-  // Mutate fields (rather than reassigning the ref) so the open <n-modal>'s
-  // v-model:show binding stays reactive.
-  grading.value.show = true
-  grading.value.saving = false
-  grading.value.courseId = row.id
-  grading.value.courseName = row.name
-  grading.value.form = {
-    points_per_correct_ion: 10,
-    penalty_second_submission: 2,
-    penalty_third_submission: 4,
-    false_positive_deduction: 0,
-    grading_mode: 'per_ion',
-    max_submissions_per_analysis: 3,
-    final_score_strategy: 'best',
-    passing_score: 50,
-  }
+async function loadGrading(courseId = selected.value?.id) {
+  if (!courseId) return
   try {
     // The endpoint returns the course's own config or the global default, so the
     // form is always populated with usable starting values.
-    grading.value.form = await api.get(`/admin/courses/${row.id}/grading-config`)
+    gradingForm.value = await api.get(`/admin/courses/${courseId}/grading-config`)
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -948,75 +1000,72 @@ async function openGrading(row) {
 }
 
 async function saveGrading() {
-  grading.value.saving = true
+  if (!selected.value) return
+  gradingSaving.value = true
   try {
-    grading.value.form = await api.put(
-      `/admin/courses/${grading.value.courseId}/grading-config`,
-      grading.value.form,
+    gradingForm.value = await api.put(
+      `/admin/courses/${selected.value.id}/grading-config`,
+      gradingForm.value,
     )
-    message.value = `Grading saved for ${grading.value.courseName}.`
+    message.value = `Grading saved for ${selected.value.name}.`
     msgType.value = 'success'
-    grading.value.show = false
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
-    grading.value.saving = false
+    gradingSaving.value = false
   }
 }
 
-// ---- assign (enroll) students into a course --------------------------------
-function openAssign(row) {
-  assign.value = { show: true, saving: false, courseId: row.id, courseName: row.name, studentIds: [] }
-  // Make sure we have a fresh student list (with current course assignments).
-  loadStudents()
-}
-
+// ---- assign (enroll) students into the open course -------------------------
 async function saveAssign() {
-  const a = assign.value
-  if (a.studentIds.length === 0) return
-  a.saving = true
+  if (!selected.value || assignStudentIds.value.length === 0) return
+  assignSaving.value = true
   let ok = 0
   try {
-    for (const sid of a.studentIds) {
-      await api.put(`/admin/students/${sid}/course`, { student_id: sid, course_id: a.courseId })
+    for (const sid of assignStudentIds.value) {
+      await api.put(`/admin/students/${sid}/course`, { student_id: sid, course_id: selected.value.id })
       ok += 1
     }
-    message.value = `${ok} student${ok === 1 ? '' : 's'} assigned to ${a.courseName}.`
+    message.value = `${ok} student${ok === 1 ? '' : 's'} assigned to ${selected.value.name}.`
     msgType.value = 'success'
-    a.show = false
-    // Refresh the student list; the "Students" panel (if open) re-filters itself.
+    assignStudentIds.value = []
+    // Refresh the student list; the "Students" tab (if open) re-filters itself.
     await loadStudents()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
-    a.saving = false
+    assignSaving.value = false
   }
 }
 
 // ---- analyses: open the per-course analysis-assignment workflow ------------
-function openAnalyses(row) {
+function goToAssignments() {
   // Reuse the Assignments page, pre-selecting this course via the query param.
-  router.push({ name: 'admin-assignments', query: { course: String(row.id) } })
+  router.push({ name: 'admin-assignments', query: { course: String(selected.value.id) } })
 }
 
-// ---- window calendar: visualise the course's analysis windows -------------
-async function openCalendar(row) {
-  calendar.value.show = true
-  calendar.value.loading = true
-  calendar.value.courseId = row.id
-  calendar.value.courseName = row.name
-  calendar.value.instances = []
-  try {
-    calendar.value.instances = await api.get(`/admin/analysis-instances?course_id=${row.id}`)
-  } catch (e) {
-    message.value = e.message
-    msgType.value = 'error'
-  } finally {
-    calendar.value.loading = false
-  }
-}
+// Window status label for the Analyses tab.
+const STATUS_LABEL = { open: 'Open', too_early: 'Too early', too_late: 'Too late' }
+
+// Columns for the course's analysis instances (Analyses tab).
+const analysisCols = [
+  { title: '#', key: 'number', render: (row) => `#${row.number}`, width: 56 },
+  { title: 'Type', key: 'type' },
+  {
+    title: 'Window',
+    key: 'window',
+    render: (row) => `${fmt(row.window_start)} → ${fmt(row.window_end)}`,
+  },
+  { title: 'Status', key: 'status', render: (row) => STATUS_LABEL[windowStatus(row)] ?? windowStatus(row), width: 100 },
+  {
+    title: 'Students',
+    key: 'assigned_students',
+    render: (row) => h('span', { title: row.assigned_students.join(', ') || '—' }, String(row.assigned_students.length)),
+    width: 90,
+  },
+]
 
 onMounted(() => {
   loadCourses()
@@ -1035,6 +1084,21 @@ onMounted(() => {
   font-size: var(--fc-fs-md);
   font-weight: 700;
   color: var(--fc-ink);
+}
+.muted {
+  font-size: var(--fc-fs-sm);
+  font-weight: 400;
+  color: var(--fc-muted);
+}
+/* Course detail view: tab navigation sits between the title and the view. */
+.course-nav {
+  margin-bottom: var(--fc-space-sm);
+}
+/* Selected course row (the detail view below shows its data). Rows render
+   inside the data table, so the selectors need :deep(). */
+:deep(.course-row--selected .n-data-table-td),
+:deep(.course-row--selected:hover .n-data-table-td) {
+  background: var(--fc-flame-soft);
 }
 /* Error / generated-password lists in the CSV import result. */
 .err-list {
