@@ -21,6 +21,16 @@ const routes = [
     meta: { roles: ['student'] },
   },
   {
+    // Same component in "results" mode: the full submission history / result.
+    // Reached only explicitly (card "Results" button, or after the last
+    // allowed submission) - opening a card that still has submissions left
+    // shows the submission view instead.
+    path: '/analysis/:id/results',
+    name: 'analysis-results',
+    component: () => import('../views/AnalysisDetailView.vue'),
+    meta: { roles: ['student'] },
+  },
+  {
     path: '/assistant',
     name: 'assistant',
     component: () => import('../views/AssistantView.vue'),

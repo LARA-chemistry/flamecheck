@@ -42,8 +42,10 @@
           :tabindex="isClickable(a) ? 0 : undefined"
           :aria-label="
             isClickable(a)
-              ? `Open ${a.type} number ${a.number} (${windowLabel(a.window_status)})`
-              : `${a.type} number ${a.number} (${windowLabel(a.window_status)}), no result yet`
+              ? canSubmit(a)
+                ? `Open ${a.type} number ${a.number} to submit (${a.submission_count}/${a.submission_limit} used, ${windowLabel(displayStatus(a))})`
+                : `View result for ${a.type} number ${a.number} (${windowLabel(displayStatus(a))})`
+              : `${a.type} number ${a.number} (${windowLabel(displayStatus(a))}), no result yet`
           "
           @click="openAnalysis(a)"
           @keyup.enter="openAnalysis(a)"
@@ -52,8 +54,8 @@
           <div class="analysis-card">
             <div class="analysis-card__top">
               <span class="analysis-card__num">#{{ a.number }}</span>
-              <n-tag :type="windowTagType(a.window_status)" round size="small">
-                {{ windowLabel(a.window_status) }}
+              <n-tag :type="windowTagType(displayStatus(a))" round size="small">
+                {{ windowLabel(displayStatus(a)) }}
               </n-tag>
             </div>
             <h3 class="analysis-card__title">{{ a.type }}</h3>
@@ -74,16 +76,28 @@
                 <span class="stat__label">submissions</span>
               </div>
             </div>
-            <n-button
-              class="analysis-card__action"
-              type="primary"
-              secondary
-              block
-              :disabled="a.window_status !== 'open' && a.window_status !== 'submitted'"
-              @click.stop="openAnalysis(a)"
-            >
-              {{ a.window_status === 'submitted' ? 'View Result' : 'Open Analysis' }}
-            </n-button>
+            <div class="analysis-card__actions">
+              <n-button
+                class="analysis-card__action"
+                type="primary"
+                secondary
+                block
+                :disabled="!canSubmit(a) && a.submission_count === 0"
+                @click.stop="openAnalysis(a)"
+              >
+                {{ actionLabel(a) }}
+              </n-button>
+              <!-- Explicit results access, shown while the card click still
+                   opens a new submission. -->
+              <n-button
+                v-if="canSubmit(a) && a.submission_count > 0"
+                size="small"
+                tertiary
+                @click.stop="openResults(a)"
+              >
+                Results
+              </n-button>
+            </div>
           </div>
         </div>
       </div>
@@ -195,20 +209,52 @@ function windowInterval(a) {
 function initial(u) {
   return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
 }
-// An analysis is shown (not greyed out) while its window is open or a
-// submission already exists.
-function isActive(a) {
-  return a.window_status === 'open' || a.window_status === 'submitted'
+// Is the submission window still open right now? Derived from the raw window
+// timestamps: the window_status payload already says "submitted" as soon as
+// ANY submission exists, even while the window is still open and further
+// submissions are possible.
+function windowStillOpen(a) {
+  if (!a?.window_start || !a?.window_end) return false
+  const now = Date.now()
+  return new Date(a.window_start).getTime() <= now && now <= new Date(a.window_end).getTime()
 }
-// A card can be opened when the window is open (to submit) or when a result
+// A (further) submission is possible while the window is open and the limit
+// has not been reached yet.
+function canSubmit(a) {
+  return windowStillOpen(a) && a.submission_count < a.submission_limit
+}
+// An analysis is shown (not greyed out) while it still accepts submissions or
+// a submission already exists (a result to look at).
+function isActive(a) {
+  return canSubmit(a) || a.submission_count > 0
+}
+// Card tag: "Open" while (further) submissions are possible, "Submitted" once
+// the window closed or the limit was reached, otherwise the raw window status.
+function displayStatus(a) {
+  if (a.submission_count > 0) return canSubmit(a) ? 'open' : 'submitted'
+  return a.window_status
+}
+// A card can be opened when it still accepts a submission or when a result
 // (submission) exists to show. A greyed-out card without a result is inert:
 // clicking it does nothing.
 function isClickable(a) {
-  return a.window_status === 'open' || a.submission_count > 0
+  return canSubmit(a) || a.submission_count > 0
 }
+// Card click: the submission view while (further) submissions are possible,
+// otherwise the result view. Only the explicit "Results" button shows the
+// result while the card still opens a submission.
 function openAnalysis(a) {
-  if (!isClickable(a)) return // no result yet (e.g. not submitted): no action
-  router.push(`/analysis/${a.id}`)
+  if (canSubmit(a)) {
+    router.push(`/analysis/${a.id}`)
+  } else if (a.submission_count > 0) {
+    openResults(a)
+  }
+}
+function openResults(a) {
+  router.push(`/analysis/${a.id}/results`)
+}
+function actionLabel(a) {
+  return canSubmit(a) ? 'Open Analysis' : a.submission_count > 0 ? 'View Result' : 'Open Analysis'
 }
 
 async function load() {
@@ -481,8 +527,16 @@ onMounted(load)
   letter-spacing: 0.04em;
 }
 
-.analysis-card__action {
+/* Action row: the main submit/result button plus (while further submissions
+   are possible) an explicit "Results" button. */
+.analysis-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-xs);
   margin-top: var(--fc-space-xs);
+}
+.analysis-card__action {
+  flex: 1 1 auto;
 }
 
 /* Inactive (not yet open / closed) analyses: greyed out and inert. They only
