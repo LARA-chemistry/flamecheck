@@ -230,7 +230,7 @@ async function handleLogin() {
 }
 @media (min-width: 1025px) {
   .login-qr {
-    margin-top: var(--fc-space-md);
+    margin-top: var(--fc-space-lg);
     z-index: 2;
     display: flex;
     flex-direction: column;
@@ -243,8 +243,8 @@ async function handleLogin() {
     box-shadow: var(--fc-shadow);
   }
   .login-qr__img {
-    width: 120px;
-    height: 120px;
+    width: 136px;
+    height: 136px;
     object-fit: contain;
   }
   .login-qr__hint {
