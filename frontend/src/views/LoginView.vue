@@ -213,6 +213,13 @@ async function handleLogin() {
   pointer-events: none;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
 }
+/* A slightly larger logo where the page has room (wide screens). */
+@media (min-width: 1025px) {
+  .login-institution-logo {
+    max-height: 110px;
+    max-width: min(272px, 36vw);
+  }
+}
 
 /* Login QR code, below the card and horizontally centered. Shown only on wide
    screens (> 1024px); hidden on smaller ones. It sits in normal flow inside the
