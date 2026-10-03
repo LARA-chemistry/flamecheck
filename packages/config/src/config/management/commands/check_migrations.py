@@ -86,7 +86,8 @@ class Command(BaseCommand):
             raise CommandError("Schema out of sync with recorded migrations (re-run without --check to repair).")
 
         self.stdout.write(self.style.WARNING("Unapplying the out-of-date records and re-running `migrate`..."))
-        self._unapply_records(missing)
+        for app_label, name in missing:
+            self._unapply_record(app_label, name)
         self._remigrate()
         self.stdout.write(self.style.SUCCESS("Re-applied pending migrations; schema is now in sync."))
 
@@ -109,6 +110,15 @@ class Command(BaseCommand):
         finally:
             if supports:
                 connection.enable_constraint_checking()
+
+    @staticmethod
+    def _column_for_field(operation: AddField) -> str | None:
+        """DB column name for an ``AddField`` (FK/1-1 -> ``<name>_id``)."""
+        if isinstance(operation.field, ManyToManyField):
+            return None
+        if isinstance(operation.field, (ForeignKey, OneToOneField)):
+            return f"{operation.name}_id"
+        return operation.name
 
     # -- helpers -------------------------------------------------------------
     def _all_db_columns(self) -> set[str]:
@@ -134,18 +144,10 @@ class Command(BaseCommand):
             # ``RemoveField`` also subclass FieldOperation but do not add one.
             if not isinstance(operation, AddField):
                 continue
-            field_name = operation.name
-            field = operation.field
-            if isinstance(field, ManyToManyField):
-                columns.add(None)  # intermediate table; no parent column to check
-            elif isinstance(field, (ForeignKey, OneToOneField)):
-                columns.add(f"{field_name}_id")
-            else:
-                columns.add(field_name)
+            columns.add(self._column_for_field(operation))
         return columns
 
-    def _unapply_records(self, missing: dict[tuple[str, str], list[str]]) -> None:
-        """Delete the ``django_migrations`` rows for the out-of-date migrations."""
+    def _unapply_record(self, app_label: str, name: str) -> None:
+        """Delete one ``django_migrations`` row (so the migration looks unapplied)."""
         with connection.cursor() as cursor:
-            for app_label, name in missing:
-                cursor.execute("DELETE FROM django_migrations WHERE app = %s AND name = %s", [app_label, name])
+            cursor.execute("DELETE FROM django_migrations WHERE app = %s AND name = %s", [app_label, name])
