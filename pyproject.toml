@@ -96,6 +96,9 @@ members = [
 
 [tool.ruff]
 line-length = 120
+# Django auto-generates migration files (long lines, no class docstrings);
+# keep them out of both lint and format so generated code stays untouched.
+extend-exclude = [ "*/migrations/*" ]
 lint.select = [
   "B",   # flake8-bugbear
   "D",   # flake8-docstrings

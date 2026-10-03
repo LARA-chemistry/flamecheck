@@ -268,7 +268,9 @@ coverage.xml
 staticfiles/
 *.log
 local_settings.py
-migrations/
+# NOTE: app migration files (packages/*/src/*/migrations/*.py) are tracked on
+# purpose - CI and the Docker images need them to build/migrate a fresh
+# database. Only byte-compiled artifacts stay ignored via __pycache__/.
 
 # Sphinx documentation
 docs/_build/
