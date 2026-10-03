@@ -6,7 +6,10 @@ All mutating endpoints are admin-only and logged to the audit logger.
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
+import secrets
 from datetime import UTC, datetime
 
 from analyses.api.schemas import (
@@ -23,7 +26,11 @@ from analyses.api.schemas import (
     RandomizeSubstancesOut,
     RandomizeSubstancesStudentOut,
     StudentCourseAssignIn,
+    StudentCreatedOut,
+    StudentImportOut,
+    StudentIn,
     StudentOut,
+    StudentUpdateIn,
 )
 from analyses.models import AnalysisInstance, AnalysisType
 from analyses.services import InsufficientIonsError, randomize_substances_for_announcement
@@ -35,9 +42,11 @@ from analyses.services.csv_import import (
 )
 from config import db_backup
 from config.models import AppSettings, Course, GradingConfig
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import HttpResponse
 from ninja import File, Form, Router
-from ninja.errors import AuthenticationError, HttpError
+from ninja.errors import AuthenticationError, HttpError, ValidationError
 from ninja.files import UploadedFile
 from substances.api.schemas import ion_to_schema, substance_to_schema
 from substances.models import Ion, Substance
@@ -120,6 +129,78 @@ def delete_course(request, course_id: int):
 
 
 # ---- students ------------------------------------------------------------------
+# Header row for the student CSV import format (also used for the downloadable
+# template). Columns are separated by ``;`` (a comma is accepted as well).
+STUDENT_CSV_HEADER = [
+    "username",
+    "name",
+    "email",
+    "matriculation_no",
+    "lab",
+    "labspace_id",
+    "telephone",
+    "course",
+    "password",
+]
+
+
+def _student_to_out(s: User) -> dict:
+    """Serialize a student :class:`~users.models.User` into the API payload."""
+    return {
+        "id": s.id,
+        "username": s.username,
+        "name": s.name or None,
+        "email": s.email or "",
+        "matriculation_no": s.matriculation_no or "",
+        "lab": s.lab or "",
+        "labspace_id": s.labspace_id or "",
+        "telephone": s.telephone or "",
+        "course_id": s.course_id,
+        "course_name": s.course.name if s.course else None,
+        "is_active": s.is_active,
+    }
+
+
+def _generate_student_password() -> str:
+    """
+    Generate a random initial password for a new student account.
+
+    Guaranteed to mix upper/lower case and a digit so it passes the configured
+    password validators; re-validated with ``validate_password`` just in case.
+    """
+    lower = "abcdefghijkmnopqrstuvwxyz"
+    upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    digits = "23456789"
+    while True:
+        chars = [secrets.choice(lower), secrets.choice(upper), secrets.choice(digits)]
+        chars += [secrets.choice(lower + upper + digits) for _ in range(9)]
+        secrets.SystemRandom().shuffle(chars)
+        candidate = "".join(chars)
+        try:
+            validate_password(candidate)
+            return candidate
+        except DjangoValidationError:  # pragma: no cover - effectively impossible
+            continue
+
+
+def _validate_or_raise(password: str) -> None:
+    """Raise an API validation error when ``password`` fails the validators."""
+    try:
+        validate_password(password)
+    except DjangoValidationError as exc:
+        raise ValidationError({"password": list(exc.messages)}) from exc
+
+
+def _set_student_fields(student: User, row: dict) -> None:
+    """Copy the editable info columns from a CSV row onto ``student``."""
+    student.name = (row.get("name") or "").strip()
+    student.email = (row.get("email") or "").strip()
+    student.matriculation_no = (row.get("matriculation_no") or "").strip()
+    student.lab = (row.get("lab") or "").strip()
+    student.labspace_id = (row.get("labspace_id") or "").strip()
+    student.telephone = (row.get("telephone") or "").strip()
+
+
 @router.get("/students", response=list[StudentOut])
 def list_students(request, course_id: int | None = None):
     """List students (admin), optionally filtered by their course."""
@@ -127,17 +208,217 @@ def list_students(request, course_id: int | None = None):
     qs = User.objects.filter(role=User.Role.STUDENT).select_related("course")
     if course_id is not None:
         qs = qs.filter(course_id=course_id)
-    return [
-        {
-            "id": s.id,
-            "username": s.username,
-            "name": s.name or None,
-            "course_id": s.course_id,
-            "course_name": s.course.name if s.course else None,
-            "is_active": s.is_active,
-        }
-        for s in qs
-    ]
+    return [_student_to_out(s) for s in qs]
+
+
+# NOTE: the literal ``/students/import-*`` routes must be registered before the
+# ``/students/{student_id}`` routes below.
+@router.get("/students/import-template", response=None, operation_id="student_import_template")
+def student_import_template(request):
+    """Return a sample CSV showing the expected student import format (admin)."""
+    _admin_user(request)
+    sample = "\n".join(
+        [
+            ";".join(STUDENT_CSV_HEADER),
+            # username;name;email;matriculation_no;lab;labspace_id;telephone;course;password
+            "jdoe;Jane Doe;jane.doe@example.com;M123456;Inorganic, Biology track;LS-000123;"
+            "+49 151 2345678;Inorganic Chemistry WS 2026;Welcome123!",
+            "asmith;Ann Smith;;M765432;;;;Inorganic Chemistry WS 2026;",
+        ]
+    )
+    response = HttpResponse(sample, content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="students_import_template.csv"'
+    return response
+
+
+@router.post("/students/import-csv", response=StudentImportOut)
+def import_students_csv(request, file: UploadedFile = File(...)):  # noqa: B008
+    """
+    Bulk-create/update students from an uploaded CSV file (admin).
+
+    Columns (first row is a header): ``username`` (required, unique key),
+    ``name``, ``email``, ``matriculation_no``, ``lab``, ``labspace_id``,
+    ``telephone``, ``course`` (course *name*, empty for no course), ``password``
+    (only used for new students; leave empty to auto-generate one, which is
+    then reported in ``generated_passwords``). Columns are separated by ``;``
+    (a comma is accepted as well). Rows are matched by username: a match
+    updates the existing student (the ``password`` column is ignored for
+    updates, and an empty ``course`` keeps the current course), otherwise a
+    new student account is created.
+    """
+    _admin_user(request)
+    raw = file.read()
+    if not raw:
+        raise ValidationError({"file": ["The uploaded file is empty."]})
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise ValidationError({"file": [f"File too large (max {MAX_UPLOAD_BYTES // 1024} KB)."]})
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValidationError({"file": [f"File is not valid UTF-8: {exc}"]}) from exc
+
+    delim = ";" if ";" in text.splitlines()[0] else ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delim)
+    fieldnames = [(f or "").strip().lower() for f in (reader.fieldnames or [])]
+    if "username" not in fieldnames:
+        raise ValidationError({"file": ["CSV must have a header row with a 'username' column."]})
+
+    courses = {c.name.lower(): c for c in Course.objects.all()}
+    created = updated = skipped = 0
+    errors: list[str] = []
+    generated_passwords: list[dict] = []
+
+    for line_no, row in enumerate(reader, start=2):
+        row = {(k or "").strip().lower(): v for k, v in row.items()}
+        username = (row.get("username") or "").strip()
+        if not username:
+            skipped += 1
+            errors.append(f"Line {line_no}: missing 'username' - skipped.")
+            continue
+        course_name = (row.get("course") or "").strip()
+        course = courses.get(course_name.lower()) if course_name else None
+        if course_name and course is None:
+            skipped += 1
+            errors.append(f"Line {line_no} ({username}): unknown course '{course_name}' - skipped.")
+            continue
+        existing = User.objects.filter(username__iexact=username, role=User.Role.STUDENT).first()
+        if existing is not None:
+            _set_student_fields(existing, row)
+            if course is not None:
+                existing.course = course
+            existing.save()
+            updated += 1
+            continue
+        if User.objects.filter(username__iexact=username).exists():
+            skipped += 1
+            errors.append(f"Line {line_no}: username '{username}' is already taken by a non-student - skipped.")
+            continue
+        password = (row.get("password") or "").strip()
+        if password:
+            try:
+                validate_password(password)
+            except DjangoValidationError as exc:
+                skipped += 1
+                errors.append(f"Line {line_no} ({username}): invalid password ({'; '.join(exc.messages)}) - skipped.")
+                continue
+        else:
+            password = _generate_student_password()
+            generated_passwords.append({"username": username, "password": password})
+        student = User(username=username, role=User.Role.STUDENT, is_active=True)
+        student.set_password(password)
+        _set_student_fields(student, row)
+        student.course = course
+        student.save()
+        created += 1
+
+    logger.info(
+        "Admin %s imported students CSV: %d created, %d updated, %d skipped",
+        request.user.username,
+        created,
+        updated,
+        skipped,
+    )
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "total_rows": created + updated + skipped,
+        "errors": errors[:50],
+        "generated_passwords": generated_passwords,
+    }
+
+
+@router.post("/students", response=StudentCreatedOut)
+def create_student(request, payload: StudentIn):
+    """Create a student account (admin). An empty ``password`` is auto-generated."""
+    _admin_user(request)
+    if User.objects.filter(username__iexact=payload.username).exists():
+        raise HttpError(409, f"Username '{payload.username}' is already taken.")
+    if payload.course_id is not None and not Course.objects.filter(pk=payload.course_id).exists():
+        raise HttpError(404, "Course not found.")
+    password = payload.password
+    generated = False
+    if password:
+        _validate_or_raise(password)
+    else:
+        password = _generate_student_password()
+        generated = True
+    student = User(username=payload.username, role=User.Role.STUDENT, is_active=True)
+    student.set_password(password)
+    student.name = payload.name
+    student.email = payload.email
+    student.matriculation_no = payload.matriculation_no
+    student.lab = payload.lab
+    student.labspace_id = payload.labspace_id
+    student.telephone = payload.telephone
+    student.course_id = payload.course_id
+    student.save()
+    logger.info(
+        "Admin %s created student %s (auto password: %s)",
+        request.user.username,
+        payload.username,
+        generated,
+    )
+    out = _student_to_out(student)
+    if generated:
+        out["password"] = password
+    return out
+
+
+@router.put("/students/{student_id}", response=StudentCreatedOut)
+def update_student(request, student_id: int, payload: StudentUpdateIn):
+    """Update a student account (admin); only provided fields are changed."""
+    _admin_user(request)
+    student = User.objects.filter(pk=student_id, role=User.Role.STUDENT).first()
+    if student is None:
+        raise HttpError(404, "Student not found.")
+    if payload.username is not None and payload.username != student.username:
+        if User.objects.filter(username__iexact=payload.username).exclude(pk=student.pk).exists():
+            raise HttpError(409, f"Username '{payload.username}' is already taken.")
+        student.username = payload.username
+    if payload.password:
+        _validate_or_raise(payload.password)
+        student.set_password(payload.password)
+    if payload.name is not None:
+        student.name = payload.name
+    if payload.email is not None:
+        student.email = payload.email
+    if payload.matriculation_no is not None:
+        student.matriculation_no = payload.matriculation_no
+    if payload.lab is not None:
+        student.lab = payload.lab
+    if payload.labspace_id is not None:
+        student.labspace_id = payload.labspace_id
+    if payload.telephone is not None:
+        student.telephone = payload.telephone
+    if payload.is_active is not None:
+        student.is_active = payload.is_active
+    student.save()
+    logger.info("Admin %s updated student %s", request.user.username, student.username)
+    out = _student_to_out(student)
+    if payload.password:
+        out["password"] = payload.password
+    return out
+
+
+@router.delete("/students/{student_id}", response=dict)
+def delete_student(request, student_id: int):
+    """
+    Delete a student account (admin).
+
+    Refused with 409 while the student still has submissions (their results
+    must be preserved); course assignments and barcodes are removed.
+    """
+    _admin_user(request)
+    student = User.objects.filter(pk=student_id, role=User.Role.STUDENT).first()
+    if student is None:
+        raise HttpError(404, "Student not found.")
+    if student.submissions.exists():
+        raise HttpError(409, "Student has submissions and cannot be deleted.")
+    username = student.username
+    student.delete()
+    logger.info("Admin %s deleted student %s", request.user.username, username)
+    return {"id": student_id, "deleted": True}
 
 
 @router.put("/students/{student_id}/course", response=dict)

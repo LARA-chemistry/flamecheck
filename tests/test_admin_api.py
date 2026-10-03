@@ -1,5 +1,6 @@
 """Tests for the admin API endpoints (types, instances, assignments, config)."""
 
+import io
 import uuid
 from datetime import timedelta
 
@@ -381,4 +382,262 @@ class TestStudentCourse:
 
     def test_student_cannot_manage_students(self, client, student, course, auth_headers):
         resp = client.get("/api/v1/admin/students", **auth_headers(student))
+        assert resp.status_code == 403
+
+
+class TestStudentManagement:
+    """Student account CRUD + CSV import (admin)."""
+
+    def test_list_students_includes_info_fields(self, client, admin_user, student, auth_headers):
+        student.matriculation_no = "M123"
+        student.labspace_id = "LS-1"
+        student.telephone = "+49 151 1"
+        student.save()
+        resp = client.get("/api/v1/admin/students", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        row = next(r for r in resp.json() if r["username"] == student.username)
+        assert row["matriculation_no"] == "M123"
+        assert row["labspace_id"] == "LS-1"
+        assert row["telephone"] == "+49 151 1"
+        assert row["email"] == student.email
+
+    def test_create_student_with_password(self, client, admin_user, course, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students",
+            {
+                "username": "jdoe",
+                "password": "FlameCheck32!",
+                "name": "Jane Doe",
+                "email": "jane@example.com",
+                "matriculation_no": "M123456",
+                "lab": "Inorganic",
+                "labspace_id": "LS-000123",
+                "telephone": "+49 151 2345678",
+                "course_id": course.id,
+            },
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["username"] == "jdoe"
+        assert body["course_id"] == course.id
+        assert body["password"] is None  # explicit password is not echoed back
+        from users.models import User
+
+        created = User.objects.get(username="jdoe")
+        assert created.is_student
+        assert created.check_password("FlameCheck32!")
+        assert created.course_id == course.id
+
+    def test_create_student_generates_password_when_empty(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students",
+            {"username": "anon-student", "name": "Anonymous"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        generated = resp.json()["password"]
+        assert generated and len(generated) >= 8
+        from users.models import User
+
+        assert User.objects.get(username="anon-student").check_password(generated)
+
+    def test_create_student_rejects_weak_password(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students",
+            {"username": "weakpw", "password": "123"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+
+    def test_create_student_duplicate_username_409(self, client, admin_user, student, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students",
+            {"username": student.username, "password": "FlameCheck32!"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 409
+
+    def test_create_student_unknown_course_404(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students",
+            {"username": "nocourse", "course_id": 99999},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_update_student_fields(self, client, admin_user, student, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/students/{student.id}",
+            {"name": "Renamed Student", "telephone": "+49 151 999", "matriculation_no": "M777"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        student.refresh_from_db()
+        assert student.name == "Renamed Student"
+        assert student.telephone == "+49 151 999"
+        assert student.matriculation_no == "M777"
+
+    def test_update_student_resets_password(self, client, admin_user, student, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/students/{student.id}",
+            {"password": "NewPass123!"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        # the reset password is echoed back to the admin (once, for handover)
+        assert resp.json()["password"]
+        from users.models import User
+
+        refreshed = User.objects.get(pk=student.pk)
+        assert refreshed.check_password("NewPass123!")
+
+    def test_update_student_username_conflict_409(self, client, admin_user, student, student2, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/students/{student.id}",
+            {"username": student2.username},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 409
+
+    def test_update_unknown_student_404(self, client, admin_user, auth_headers):
+        resp = client.put(
+            "/api/v1/admin/students/99999",
+            {"name": "x"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_delete_student(self, client, admin_user, student, auth_headers):
+        resp = client.delete(f"/api/v1/admin/students/{student.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        from users.models import User
+
+        assert not User.objects.filter(pk=student.pk).exists()
+
+    def test_delete_student_with_submissions_409(self, client, admin_user, student, course, auth_headers):
+        from analyses.factory import SubmissionFactory
+
+        SubmissionFactory(student=student)
+        resp = client.delete(f"/api/v1/admin/students/{student.id}", **auth_headers(admin_user))
+        assert resp.status_code == 409
+        from users.models import User
+
+        assert User.objects.filter(pk=student.pk).exists()
+
+    def test_student_cannot_create_student(self, client, student, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students",
+            {"username": "sneaky", "password": "FlameCheck32!"},
+            content_type="application/json",
+            **auth_headers(student),
+        )
+        assert resp.status_code == 403
+
+    # -- CSV import -----------------------------------------------------------
+    def test_import_template(self, client, admin_user, auth_headers):
+        resp = client.get("/api/v1/admin/students/import-template", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert "text/csv" in resp["Content-Type"]
+        header = resp.content.decode().splitlines()[0]
+        assert header.startswith("username;")
+        for col in ("name", "email", "matriculation_no", "lab", "labspace_id", "telephone", "course", "password"):
+            assert col in header
+
+    def test_import_csv_creates_and_updates(self, client, admin_user, student, course, auth_headers):
+        body = (
+            "username;name;email;matriculation_no;lab;labspace_id;telephone;course;password\n"
+            f"csv-new;New Person;new@example.com;M001;Lab;LS-1;+49 151 1;{course.name};CsvPass123!\n"
+            f"{student.username};Updated Person;u@example.com;M002;;;;\n"
+        )
+        resp = client.post(
+            "/api/v1/admin/students/import-csv",
+            {"file": io.BytesIO(body.encode())},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert (data["created"], data["updated"], data["skipped"]) == (1, 1, 0)
+        from users.models import User
+
+        new = User.objects.get(username="csv-new")
+        assert new.check_password("CsvPass123!")
+        assert new.course_id == course.id
+        assert new.matriculation_no == "M001"
+        student.refresh_from_db()
+        assert student.name == "Updated Person"
+        assert student.matriculation_no == "M002"
+        # empty course cell keeps the existing course
+        assert student.course_id is None or student.course_id == course.id
+
+    def test_import_csv_generates_passwords(self, client, admin_user, auth_headers):
+        body = "username;name\nno-pw;No Password\n"
+        resp = client.post(
+            "/api/v1/admin/students/import-csv",
+            {"file": io.BytesIO(body.encode())},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 1
+        assert data["generated_passwords"] == [
+            {"username": "no-pw", "password": data["generated_passwords"][0]["password"]}
+        ]
+        from users.models import User
+
+        assert User.objects.get(username="no-pw").check_password(data["generated_passwords"][0]["password"])
+
+    def test_import_csv_collects_errors(self, client, admin_user, student, auth_headers):
+        body = (
+            "username;name;course;password\n"
+            "err-course;Bad Course;NoSuchCourse;\n"
+            ";missing username\n"
+            f"{student.username};Existing student;;;short\n"
+            "err-pw;Bad Password;;123\n"
+        )
+        resp = client.post(
+            "/api/v1/admin/students/import-csv",
+            {"file": io.BytesIO(body.encode())},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # The existing-student row is an update (the password column is ignored
+        # for updates); the other two rows are skipped with errors.
+        assert data["created"] == 0
+        assert data["updated"] == 1
+        assert data["skipped"] == 3
+        assert any("unknown course" in e for e in data["errors"])
+        assert any("missing 'username'" in e for e in data["errors"])
+        assert any("invalid password" in e for e in data["errors"])
+        from users.models import User
+
+        # the weak-password row must not have created a student
+        assert not User.objects.filter(username="err-pw").exists()
+        # the existing student was updated (password untouched)
+        assert User.objects.get(username__iexact=student.username).name == "Existing student"
+
+    def test_import_csv_requires_username_header(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students/import-csv",
+            {"file": io.BytesIO(b"name;email\nx;y\n")},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+
+    def test_student_cannot_import_csv(self, client, student, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/students/import-csv",
+            {"file": io.BytesIO(b"username\nx\n")},
+            **auth_headers(student),
+        )
         assert resp.status_code == 403

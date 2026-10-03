@@ -282,9 +282,70 @@ class StudentOut(Schema):
     id: int
     username: str
     name: str | None = None
+    email: str = ""
+    matriculation_no: str = ""
+    lab: str = ""
+    labspace_id: str = ""
+    telephone: str = ""
     course_id: int | None = None
     course_name: str | None = None
     is_active: bool = True
+
+
+class StudentIn(Schema):
+    """Payload for creating a student account (admin)."""
+
+    username: str
+    password: str = ""  # empty => a random password is generated and reported
+    name: str = ""
+    email: str = ""
+    matriculation_no: str = ""
+    lab: str = ""
+    labspace_id: str = ""
+    telephone: str = ""
+    course_id: int | None = None
+
+
+class StudentUpdateIn(Schema):
+    """
+    Payload for updating a student account (admin).
+
+    All fields are optional; only the provided ones are changed. ``password``,
+    when non-empty, replaces the student's password. The course assignment is
+    managed by the dedicated ``PUT /students/{id}/course`` endpoint.
+    """
+
+    username: str | None = None
+    password: str | None = None
+    name: str | None = None
+    email: str | None = None
+    matriculation_no: str | None = None
+    lab: str | None = None
+    labspace_id: str | None = None
+    telephone: str | None = None
+    is_active: bool | None = None
+
+
+class StudentCreatedOut(StudentOut):
+    """
+    :class:`StudentOut` plus the password.
+
+    ``password`` is set when a password was generated for a new account (empty
+    ``password`` on create) or when the admin just reset it; ``None`` otherwise.
+    """
+
+    password: str | None = None
+
+
+class StudentImportOut(Schema):
+    """Summary of a student CSV import run (admin)."""
+
+    created: int
+    updated: int
+    skipped: int
+    total_rows: int
+    errors: list[str]
+    generated_passwords: list[dict]
 
 
 class StudentCourseAssignIn(Schema):

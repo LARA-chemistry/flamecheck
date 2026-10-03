@@ -13,17 +13,14 @@
     <n-card v-if="selected" size="small" :bordered="false">
       <div class="page-head">
         <h2 class="page-title">Students — {{ selected.name }}</h2>
-        <n-button size="small" @click="loadStudents(selected.id)">Refresh</n-button>
+        <n-space size="small">
+          <n-button type="primary" size="small" @click="openAddStudent">+ Add Student</n-button>
+          <n-button size="small" @click="openImport">Import CSV</n-button>
+          <n-button size="small" @click="loadStudents(selected.id)">Refresh</n-button>
+        </n-space>
       </div>
-      <n-space vertical size="small">
-        <n-empty v-if="!loadingStudents && courseStudents.length === 0" description="No students in this course yet." size="small" />
-        <div v-for="s in courseStudents" :key="s.id" class="student-row">
-          <span class="student-row__name">{{ s.name || s.username }}</span>
-          <n-tag size="small" :bordered="false" type="info">{{ s.username }}</n-tag>
-          <span class="student-row__spacer" />
-          <n-button size="tiny" tertiary type="error" @click="detachStudent(s)">Remove</n-button>
-        </div>
-      </n-space>
+      <n-empty v-if="!loadingStudents && courseStudents.length === 0" description="No students in this course yet." size="small" />
+      <n-data-table v-else :columns="studentCols" :data="courseStudents" size="small" :loading="loadingStudents" />
     </n-card>
 
     <!-- Create / edit modal -->
@@ -132,6 +129,106 @@
             @click="saveAssign"
           >
             Assign {{ assign.studentIds.length || '' }} Student{{ assign.studentIds.length === 1 ? '' : 's' }}
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- Add / edit a student account -->
+    <n-modal v-model:show="studentModal.show" preset="card" :title="studentModal.editing ? `Edit student — ${studentModal.form.username}` : 'Add student'" style="width: 520px; max-width: 94vw">
+      <n-space vertical>
+        <n-alert v-if="studentModal.generatedPassword" type="success" title="Student created">
+          The initial (auto-generated) password is
+          <code style="font-weight: 700">{{ studentModal.generatedPassword }}</code> — share it with the student and have them change it after first login.
+        </n-alert>
+        <n-form label-placement="left" label-width="130">
+          <n-form-item label="Username">
+            <n-input v-model:value="studentModal.form.username" placeholder="e.g. jdoe" />
+          </n-form-item>
+          <n-form-item :label="studentModal.editing ? 'New password' : 'Password'">
+            <n-input
+              v-model:value="studentModal.form.password"
+              :placeholder="studentModal.editing ? 'Leave blank to keep the current password' : 'Leave blank to auto-generate'"
+            />
+          </n-form-item>
+          <n-form-item label="Name">
+            <n-input v-model:value="studentModal.form.name" placeholder="e.g. Jane Doe" />
+          </n-form-item>
+          <n-form-item label="Email">
+            <n-input v-model:value="studentModal.form.email" placeholder="e.g. jane.doe@example.com" />
+          </n-form-item>
+          <n-form-item label="Matriculation no.">
+            <n-input v-model:value="studentModal.form.matriculation_no" placeholder="e.g. M123456" />
+          </n-form-item>
+          <n-form-item label="Lab">
+            <n-input v-model:value="studentModal.form.lab" placeholder="e.g. Inorganic Chemistry, Biology track" />
+          </n-form-item>
+          <n-form-item label="Labspace ID">
+            <n-input v-model:value="studentModal.form.labspace_id" placeholder="e.g. LS-000123" />
+          </n-form-item>
+          <n-form-item label="Telephone">
+            <n-input v-model:value="studentModal.form.telephone" placeholder="e.g. +49 151 2345678" />
+          </n-form-item>
+          <n-form-item v-if="!studentModal.editing" label="Course">
+            <n-select v-model:value="studentModal.form.course_id" :options="courseOptions" clearable placeholder="No course" />
+          </n-form-item>
+          <n-form-item v-else label="Active">
+            <n-switch v-model:value="studentModal.form.is_active" />
+          </n-form-item>
+        </n-form>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="studentModal.show = false">Close</n-button>
+          <n-button type="primary" :loading="studentModal.saving" @click="saveStudent">
+            {{ studentModal.editing ? 'Save' : 'Create' }}
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- Bulk student import (CSV) -->
+    <n-modal v-model:show="importModal.show" preset="card" title="Import students (CSV)" style="width: 640px; max-width: 94vw">
+      <n-space vertical>
+        <n-text depth="3" style="font-size: 13px; display: block">
+          Columns: username; name; email; matriculation_no; lab; labspace_id; telephone; course (course name);
+          password (new students only — leave blank to auto-generate). Rows are matched by username: a match
+          updates the existing student (password and an empty course are ignored), otherwise a new account is created.
+        </n-text>
+        <n-space align="center">
+          <n-upload :file-list="importModal.fileList" :max="1" accept=".csv,text/csv" @update:file-list="onImportFileChange">
+            <n-button size="small" :disabled="!!importModal.file">Choose CSV file</n-button>
+          </n-upload>
+          <n-button size="small" tertiary @click="downloadStudentTemplate">Download template</n-button>
+        </n-space>
+        <n-alert v-if="importModal.result" :type="importModal.result.errors.length ? 'warning' : 'success'" title="Import result" closable @close="importModal.result = null">
+          <n-space vertical size="small">
+            <n-text>
+              {{ importModal.result.created }} created, {{ importModal.result.updated }} updated, {{ importModal.result.skipped }} skipped
+              ({{ importModal.result.total_rows }} rows).
+            </n-text>
+            <template v-if="importModal.result.generated_passwords.length">
+              <n-text depth="3">Auto-generated initial passwords:</n-text>
+              <ul class="err-list">
+                <li v-for="p in importModal.result.generated_passwords" :key="p.username">
+                  <code style="font-weight: 700">{{ p.username }}: {{ p.password }}</code>
+                </li>
+              </ul>
+            </template>
+            <template v-if="importModal.result.errors.length">
+              <n-text depth="3">Issues:</n-text>
+              <ul class="err-list">
+                <li v-for="(e, i) in importModal.result.errors" :key="i">{{ e }}</li>
+              </ul>
+            </template>
+          </n-space>
+        </n-alert>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="importModal.show = false">Close</n-button>
+          <n-button type="primary" :loading="importModal.uploading" :disabled="!importModal.file" @click="doImport">
+            Upload &amp; import
           </n-button>
         </n-space>
       </template>
@@ -264,7 +361,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
-  NModal, NSwitch, NTag, NEmpty, NAlert, NRadioGroup, NRadioButton,
+  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload,
 } from 'naive-ui'
 
 const router = useRouter()
@@ -350,6 +447,197 @@ const assignableStudentOptions = computed(() =>
 const alreadyInCourseCount = computed(
   () => students.value.filter((s) => s.course_id === assign.value.courseId).length,
 )
+
+// ---- add / edit a student account -------------------------------------------
+const studentModal = ref({
+  show: false,
+  editing: false,
+  saving: false,
+  generatedPassword: null,
+  form: {
+    id: null,
+    username: '',
+    password: '',
+    name: '',
+    email: '',
+    matriculation_no: '',
+    lab: '',
+    labspace_id: '',
+    telephone: '',
+    course_id: null,
+    is_active: true,
+  },
+})
+
+// ---- bulk student import (CSV) ------------------------------------------------
+const importModal = ref({
+  show: false,
+  uploading: false,
+  file: null,
+  fileList: [],
+  result: null,
+})
+
+const courseOptions = computed(() => courses.value.map((c) => ({ label: c.name, value: c.id })))
+
+// Student table for the "Students — <course>" panel.
+const studentCols = [
+  { title: 'Name', key: 'name', render: (row) => row.name || '—' },
+  { title: 'Username', key: 'username' },
+  { title: 'Matriculation no.', key: 'matriculation_no', render: (row) => row.matriculation_no || '—' },
+  { title: 'Labspace', key: 'labspace_id', render: (row) => row.labspace_id || '—' },
+  { title: 'Telephone', key: 'telephone', render: (row) => row.telephone || '—' },
+  { title: 'Active', key: 'is_active', render: (row) => (row.is_active ? '✓' : '—') },
+  {
+    title: 'Actions',
+    key: 'actions',
+    render: (row) =>
+      h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditStudent(row) }, () => 'Edit'),
+        h(NButton, { size: 'tiny', tertiary: true, onClick: () => detachStudent(row) }, () => 'Detach'),
+        h(NButton, { size: 'tiny', tertiary: true, type: 'error', onClick: () => deleteStudent(row) }, () => 'Delete'),
+      ]),
+  },
+]
+
+function openAddStudent() {
+  studentModal.value = {
+    show: true,
+    editing: false,
+    saving: false,
+    generatedPassword: null,
+    form: {
+      id: null,
+      username: '',
+      password: '',
+      name: '',
+      email: '',
+      matriculation_no: '',
+      lab: '',
+      labspace_id: '',
+      telephone: '',
+      course_id: selected.value?.id ?? null,
+      is_active: true,
+    },
+  }
+}
+
+function openEditStudent(s) {
+  studentModal.value = {
+    show: true,
+    editing: true,
+    saving: false,
+    generatedPassword: null,
+    form: {
+      id: s.id,
+      username: s.username,
+      password: '',
+      name: s.name || '',
+      email: s.email || '',
+      matriculation_no: s.matriculation_no || '',
+      lab: s.lab || '',
+      labspace_id: s.labspace_id || '',
+      telephone: s.telephone || '',
+      course_id: s.course_id,
+      is_active: s.is_active,
+    },
+  }
+}
+
+async function saveStudent() {
+  const f = studentModal.value.form
+  if (!f.username) {
+    message.value = 'Username is required.'
+    msgType.value = 'error'
+    return
+  }
+  studentModal.value.saving = true
+  try {
+    if (studentModal.value.editing) {
+      const payload = {
+        username: f.username,
+        name: f.name,
+        email: f.email,
+        matriculation_no: f.matriculation_no,
+        lab: f.lab,
+        labspace_id: f.labspace_id,
+        telephone: f.telephone,
+        is_active: f.is_active,
+      }
+      if (f.password) payload.password = f.password
+      const res = await api.put(`/admin/students/${f.id}`, payload)
+      message.value = f.password
+        ? `Student ${res.username} updated (password reset).`
+        : `Student ${res.username} updated.`
+      studentModal.value.show = false
+    } else {
+      const res = await api.post('/admin/students', {
+        username: f.username,
+        password: f.password,
+        name: f.name,
+        email: f.email,
+        matriculation_no: f.matriculation_no,
+        lab: f.lab,
+        labspace_id: f.labspace_id,
+        telephone: f.telephone,
+        course_id: f.course_id,
+      })
+      // Keep the modal open so an auto-generated initial password can be copied.
+      if (res.password) studentModal.value.generatedPassword = res.password
+      message.value = `Student ${res.username} created.`
+    }
+    msgType.value = 'success'
+    await loadStudents()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    studentModal.value.saving = false
+  }
+}
+
+async function deleteStudent(s) {
+  if (!confirm(`Delete student ${s.username} (including assignments and barcodes)? This cannot be undone.`)) return
+  try {
+    await api.delete(`/admin/students/${s.id}`)
+    message.value = `Student ${s.username} deleted.`
+    msgType.value = 'success'
+    await loadStudents()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  }
+}
+
+function openImport() {
+  importModal.value = { show: true, uploading: false, file: null, fileList: [], result: null }
+}
+
+function onImportFileChange(list) {
+  importModal.value.fileList = list
+  importModal.value.file = list.length ? list[0].file : null
+}
+
+function downloadStudentTemplate() {
+  api.download('/admin/students/import-template', 'students_import_template.csv').catch((e) => {
+    message.value = e.message
+    msgType.value = 'error'
+  })
+}
+
+async function doImport() {
+  if (!importModal.value.file) return
+  importModal.value.uploading = true
+  try {
+    importModal.value.result = await api.upload('/admin/students/import-csv', importModal.value.file)
+    await loadStudents()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    importModal.value.uploading = false
+  }
+}
 
 // ---- window calendar (week view) ---------------------------------------------
 // Sort the course's analyses by their window start so the rows read in
@@ -748,20 +1036,10 @@ onMounted(() => {
   font-weight: 700;
   color: var(--fc-ink);
 }
-.student-row {
-  display: flex;
-  align-items: center;
-  gap: var(--fc-space-xs);
-  padding: var(--fc-space-xs) var(--fc-space-sm);
-  border: 1px solid var(--fc-border);
-  border-radius: var(--fc-radius-sm);
-  background: var(--fc-surface);
-}
-.student-row__name {
-  font-weight: 600;
-}
-.student-row__spacer {
-  flex: 1;
+/* Error / generated-password lists in the CSV import result. */
+.err-list {
+  margin: 4px 0 0 18px;
+  font-size: var(--fc-fs-sm);
 }
 
 /* ---- window calendar (week view) -------------------------------------- */
