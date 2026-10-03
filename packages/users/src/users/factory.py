@@ -52,6 +52,7 @@ class UserFactory(DjangoModelFactory):
     matriculation_no = Faker("bothify", text="#####")
     lab = Faker("company")
     labspace_id = Sequence(lambda n: f"LS-{n:06d}")
+    telephone = Faker("phone_number")
 
     # -- password / auth ---------------------------------------------------
     # Use Django's create_user()/create_superuser() so the password is hashed

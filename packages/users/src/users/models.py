@@ -43,6 +43,12 @@ class User(AbstractUser):
         default="",
         help_text=_("Labspace identification (institutional user id)."),
     )
+    telephone = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_("Telephone / mobile number (e.g. for practical contact)."),
+    )
     course = models.ForeignKey(
         "config.Course",
         null=True,
