@@ -340,6 +340,17 @@ async function load() {
   lastSubmissionMsg.value = ''
   try {
     detail.value = await api.get(`/analyses/${id.value}`)
+    // Once the submission limit is reached, the result is always shown -
+    // regardless of which route the student landed on (the submission view
+    // has nothing left to offer).
+    if (
+      !isResultMode.value &&
+      detail.value.submission_count > 0 &&
+      detail.value.submission_count >= detail.value.submission_limit
+    ) {
+      router.replace({ name: 'analysis-results', params: { id: id.value } })
+      return
+    }
     if (isResultMode.value && detail.value.submission_count > 0) {
       const payload = await api.get(`/analyses/${id.value}/result`)
       result.value = normalizeResult(payload)
