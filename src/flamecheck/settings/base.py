@@ -154,6 +154,14 @@ LOGIN_MAX_ATTEMPTS = env.int("LOGIN_MAX_ATTEMPTS", default=5)
 LOGIN_LOCKOUT_SECONDS = env.int("LOGIN_LOCKOUT_SECONDS", default=300)
 
 # ---------------------------------------------------------------------------
+# External reference links
+# ---------------------------------------------------------------------------
+# Base URL for PubChem compound pages. A substance's PubChem CID is appended to
+# this to form the page URL, e.g. ``PUBCHEM_BASE_URL + "238914022"``. Stored
+# centrally so every app that links to PubChem reuses the same base.
+PUBCHEM_BASE_URL = env.str("PUBCHEM_BASE_URL", default="https://pubchem.ncbi.nlm.nih.gov/compound/")
+
+# ---------------------------------------------------------------------------
 # Internationalisation
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE = "en-us"

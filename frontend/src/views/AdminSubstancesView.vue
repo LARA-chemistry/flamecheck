@@ -84,6 +84,13 @@ const createMissingIons = ref(false)
 const file = ref(null)
 const fileList = ref([])
 
+// External reference links (PubChem / Wikipedia) render as real hyperlinks that
+// open in a new tab; a dash is shown when the substance has no such reference.
+function extLink(label, href) {
+  if (!href) return '-'
+  return h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, label)
+}
+
 const subCols = [
   { title: 'Name', key: 'name', render: (row) => row.name },
   { title: 'Formula', key: 'formula', render: (row) => row.formula || '-' },
@@ -95,7 +102,16 @@ const subCols = [
         ? h(NSpace, { size: 'small', wrap: true }, row.ions.map((ion) => h(NTag, { size: 'small', bordered: false, type: 'info' }, () => ion.symbol)))
         : '-',
   },
-  { title: 'PubChem', key: 'pubchem_id', render: (row) => row.pubchem_id || '-' },
+  {
+    title: 'PubChem',
+    key: 'pubchem_id',
+    render: (row) => extLink(row.pubchem_id || 'PubChem', row.pubchem_url),
+  },
+  {
+    title: 'Wikipedia',
+    key: 'wikipedia_link',
+    render: (row) => extLink('Wikipedia', row.wikipedia_link),
+  },
 ]
 
 function onFileChange(list) {

@@ -410,7 +410,14 @@ const overviewAnalysisCols = [
   {
     title: 'Substances used',
     key: 'substances',
-    render: (row) => row.substances.map((s) => s.name).join(', '),
+    // Each substance name links to its PubChem page when the CID is known.
+    render: (row) =>
+      row.substances.length
+        ? h(NSpace, { size: 'small', wrap: true }, row.substances.map((s, i) =>
+            s.pubchem_url
+              ? h('a', { key: i, href: s.pubchem_url, target: '_blank', rel: 'noopener noreferrer' }, s.name)
+              : h('span', { key: i }, s.name)))
+        : '—',
   },
 ]
 

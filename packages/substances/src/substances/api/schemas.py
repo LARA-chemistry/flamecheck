@@ -37,6 +37,7 @@ class SubstanceOut(Schema):
     formula: str
     ions: list[IonOut]
     pubchem_id: str
+    pubchem_url: str | None = None
     wikipedia_link: str
 
 
@@ -83,5 +84,6 @@ def substance_to_schema(substance: Any) -> dict:
         "formula": substance.formula or "",
         "ions": [ion_to_schema(i) for i in substance.ions.all()],
         "pubchem_id": substance.pubchem_id or "",
+        "pubchem_url": substance.pubchem_url,
         "wikipedia_link": substance.wikipedia_link or "",
     }

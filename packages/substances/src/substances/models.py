@@ -93,3 +93,17 @@ class Substance(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def pubchem_url(self) -> str | None:
+        """
+        URL of this substance's PubChem compound page, or ``None`` if unknown.
+
+        The base URL comes from ``settings.PUBCHEM_BASE_URL`` so every app
+        reuses the same base; the PubChem CID is appended to it.
+        """
+        if not self.pubchem_id:
+            return None
+        from django.conf import settings
+
+        return f"{settings.PUBCHEM_BASE_URL.rstrip('/')}/{self.pubchem_id}"

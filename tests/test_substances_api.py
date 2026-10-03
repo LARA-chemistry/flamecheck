@@ -45,6 +45,44 @@ class TestReadEndpoints:
         assert data["formula"] == "PtI"
         assert {i["symbol"] for i in data["ions"]} == {"Pt+", "I-"}
 
+    def test_substance_exposes_pubchem_url(self, client, student, populated, auth_headers):
+        """The substance payload carries a PubChem page URL built from the setting."""
+        from django.conf import settings
+
+        _, _, substance = populated
+        substance.pubchem_id = "238914022"
+        substance.save(update_fields=["pubchem_id"])
+        resp = client.get(f"/api/v1/substances/{substance.id}", **auth_headers(student))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pubchem_url"] == f"{settings.PUBCHEM_BASE_URL.rstrip('/')}/238914022"
+
+    def test_substance_pubchem_url_none_without_cid(self, client, student, auth_headers):
+        """A substance without a PubChem CID has a null pubchem_url."""
+        substance = SubstanceFactory(name="No CID salt", pubchem_id="")
+        resp = client.get(f"/api/v1/substances/{substance.id}", **auth_headers(student))
+        assert resp.status_code == 200
+        assert resp.json()["pubchem_url"] is None
+
+
+class TestPubChemUrl:
+    """The reusable Substance.pubchem_url helper (settings-driven base)."""
+
+    def test_builds_url_from_setting(self, db):
+        from django.conf import settings
+
+        substance = SubstanceFactory(pubchem_id="111")
+        assert substance.pubchem_url == f"{settings.PUBCHEM_BASE_URL.rstrip('/')}/111"
+
+    def test_none_when_no_cid(self, db):
+        substance = SubstanceFactory(pubchem_id="")
+        assert substance.pubchem_url is None
+
+    def test_ignores_trailing_slash_in_setting(self, db, settings):
+        settings.PUBCHEM_BASE_URL = "https://pubchem.ncbi.nlm.nih.gov/compound/"
+        substance = SubstanceFactory(pubchem_id="222")
+        assert substance.pubchem_url == "https://pubchem.ncbi.nlm.nih.gov/compound/222"
+
 
 class TestAdminMutations:
     def test_student_cannot_create_ion(self, client, student, auth_headers):
