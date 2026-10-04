@@ -181,6 +181,9 @@
                 <div class="analysis-card__head">
                   <span class="analysis-card__title">{{ a.analysis }}</span>
                   <n-tag :type="submittedTagType(a)" round size="small">{{ a.submissions.length ? 'Submitted' : 'Pending' }}</n-tag>
+                  <span v-if="lastSubmittedAt(a)" class="analysis-card__submitted-at" :title="`Last submitted ${lastSubmittedAt(a)} (UTC)`">
+                    {{ lastSubmittedAt(a) }}
+                  </span>
                 </div>
               </template>
               <template #header-extra>
@@ -423,6 +426,20 @@ function submittedTagType(a) {
   return a.submissions.length ? 'success' : 'default'
 }
 
+// Render a UTC ISO timestamp as an exact "YYYY-MM-DD HH:MM:SS" string.
+function fmtSubmittedAt(iso) {
+  if (!iso) return ''
+  return iso.slice(0, 19).replace('T', ' ')
+}
+
+// The exact datetime of the student's most recent submission for this analysis
+// (empty while the analysis is still pending). Submissions arrive ordered by
+// `submitted_at`, so the last entry is the latest.
+function lastSubmittedAt(a) {
+  if (!a.submissions.length) return ''
+  return fmtSubmittedAt(a.submissions[a.submissions.length - 1].submitted_at)
+}
+
 const submissionCols = [
   { title: '#', key: 'submission_number', width: 44 },
   { title: 'Submitted', key: 'submitted_at', render: (row) => row.submitted_at.replace('T', ' ').slice(0, 16) },
@@ -605,6 +622,11 @@ onMounted(load)
 .analysis-card__score {
   font-size: var(--fc-fs-sm);
   color: var(--fc-text-soft);
+}
+.analysis-card__submitted-at {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-muted);
+  font-variant-numeric: tabular-nums;
 }
 .analysis-card__correct {
   display: flex;
