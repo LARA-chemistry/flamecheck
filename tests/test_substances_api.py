@@ -264,3 +264,63 @@ class TestCsvImport:
     def test_template_forbidden_for_student(self, client, student, auth_headers):
         resp = client.get("/api/v1/substances/import-template", **auth_headers(student))
         assert resp.status_code == 403
+
+
+class TestCsvExport:
+    """Tests for the admin-only CSV export endpoint."""
+
+    @staticmethod
+    def _csv_upload(csv_text: str):
+        """Build a multipart file upload payload from CSV text."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile("substances.csv", csv_text.encode("utf-8"), content_type="text/csv")
+
+    def test_export_format(self, client, admin_user, populated, auth_headers):
+        cation, anion, substance = populated
+        resp = client.get("/api/v1/substances/export-csv", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert resp["Content-Type"] == "text/csv"
+        assert "substances.csv" in resp["Content-Disposition"]
+        lines = resp.content.decode().strip().splitlines()
+        # Header plus one row for the populated substance.
+        assert lines[0] == "name;synonyms;formula;ions;pubchem_id;wikipedia_link"
+        assert len(lines) == 2
+        # Every row has 6 ``;``-separated columns.
+        assert all(len(line.split(";")) == 6 for line in lines)
+        name, synonyms, formula, ions_cell, pubchem, wiki = lines[1].split(";")
+        assert name == substance.name
+        assert formula == substance.formula
+        # The ions cell lists the ion symbols, comma-separated.
+        assert set(ions_cell.split(",")) == {cation.symbol, anion.symbol}
+        # The remaining cells round-trip the substance's own field values.
+        assert synonyms == ",".join(substance.synonyms)
+        assert pubchem == substance.pubchem_id
+        assert wiki == substance.wikipedia_link
+
+    def test_export_round_trip(self, client, admin_user, populated, auth_headers):
+        existing = populated[2]
+        exported = client.get("/api/v1/substances/export-csv", **auth_headers(admin_user)).content.decode()
+        # Re-importing the exported file matches by name and updates (no duplicate).
+        resp = client.post(
+            "/api/v1/substances/import-csv",
+            {"file": self._csv_upload(exported)},
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200, resp.content
+        data = resp.json()
+        assert data["created"] == 0
+        assert data["updated"] == 1
+        assert data["missing_ions"] == []
+        assert Substance.objects.filter(name=existing.name).count() == 1
+
+    def test_export_empty_catalog(self, client, admin_user, auth_headers):
+        resp = client.get("/api/v1/substances/export-csv", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        lines = resp.content.decode().strip().splitlines()
+        # Only the header row when no substance exists.
+        assert lines == ["name;synonyms;formula;ions;pubchem_id;wikipedia_link"]
+
+    def test_export_forbidden_for_student(self, client, student, auth_headers):
+        resp = client.get("/api/v1/substances/export-csv", **auth_headers(student))
+        assert resp.status_code == 403

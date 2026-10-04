@@ -57,7 +57,12 @@
     <n-card size="small" :bordered="false">
       <div class="page-head">
         <h2 class="page-title">Substances</h2>
-        <n-button size="small" @click="loadSubstances">Refresh</n-button>
+        <n-space size="small">
+          <n-button size="small" @click="loadSubstances">Refresh</n-button>
+          <n-button size="small" secondary :disabled="!substances.length" @click="doExport">
+            Export to CSV
+          </n-button>
+        </n-space>
       </div>
       <n-data-table :columns="subCols" :data="substances" size="small" :loading="loading" />
     </n-card>
@@ -122,6 +127,17 @@ function onFileChange(list) {
 function downloadTemplate() {
   api
     .download('/substances/import-template', 'substances_import_template.csv')
+    .catch((e) => {
+      message.value = e.message
+      msgType.value = 'error'
+    })
+}
+
+// Download the full catalog as a ";"-separated CSV in the import format, so the
+// file can be edited and re-imported directly.
+function doExport() {
+  api
+    .download('/substances/export-csv', 'substances.csv')
     .catch((e) => {
       message.value = e.message
       msgType.value = 'error'

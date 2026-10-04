@@ -69,8 +69,9 @@ def list_substances(request, ion_id: int | None = None):
     return [substance_to_schema(s) for s in qs]
 
 
-# NOTE: the literal ``/substances/import-*`` routes must be registered before the
-# ``/substances/{substance_id}`` routes, otherwise the parameterized route shadows them.
+# NOTE: the literal ``/substances/import-*`` and ``/substances/export-csv``
+# routes must be registered before the ``/substances/{substance_id}`` routes,
+# otherwise the parameterized route shadows them.
 @router.get("/substances/import-template", response=None, operation_id="substance_import_template")
 def substance_import_template(request):
     """
@@ -89,7 +90,34 @@ def substance_import_template(request):
             "Potassium sulfate;;K2SO4;K+,SO4^2-;;",
         ]
     )
-    return _csv_response(sample)
+    return _csv_response(sample, filename="substances_import_template.csv")
+
+
+@router.get("/substances/export-csv", response=None, operation_id="substance_export_csv")
+def export_substances_csv(request):
+    """
+    Export the full substance catalog as a CSV in the import format (admin only).
+
+    Columns are separated by ``;`` and the multi-value cells (``ions``,
+    ``synonyms``) are separated by ``,``, so the file can be re-imported directly
+    with the CSV import. The ``ions`` cell holds the ion symbols.
+    """
+    _require_admin(request)
+    rows = [FIELD_SEP.join(CSV_HEADER)]
+    for substance in Substance.objects.all().prefetch_related("ions"):
+        rows.append(
+            FIELD_SEP.join(
+                [
+                    substance.name,
+                    ",".join(substance.synonyms or []),
+                    substance.formula or "",
+                    ",".join(ion.symbol for ion in substance.ions.all()),
+                    substance.pubchem_id or "",
+                    substance.wikipedia_link or "",
+                ]
+            )
+        )
+    return _csv_response("\n".join(rows) + "\n", filename="substances.csv")
 
 
 @router.post("/substances/import-csv", response=ImportCsvOut)
@@ -304,8 +332,8 @@ def _create_ion_from_symbol(symbol: str) -> Ion:
     return ion
 
 
-def _csv_response(body: str) -> HttpResponse:
-    """Build a ``text/csv`` response for the downloadable import template."""
+def _csv_response(body: str, filename: str) -> HttpResponse:
+    """Build a ``text/csv`` attachment response with the given file name."""
     response = HttpResponse(body, content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="substances_import_template.csv"'
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
