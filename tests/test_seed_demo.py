@@ -8,8 +8,8 @@ Covers:
   account,
 - the announcement windows span the open / too_early / too_late / submitted
   states,
-- the per-course grading override (Biology) is present alongside the global
-  default,
+- the per-course grading overrides (Biology, Pharmacy) are present alongside
+  the global default,
 - idempotency (re-running does not duplicate rows),
 - ``--reset`` wiping the seeded domain before re-seeding.
 """
@@ -75,11 +75,15 @@ class TestSeedCounts:
         assert Substance.objects.count() >= 10
 
     def test_grading_configs_global_plus_per_course(self):
-        # One global default + one per-course override (Biology).
-        assert GradingConfig.objects.count() == 2
+        # One global default + per-course overrides (Biology, Pharmacy).
+        assert GradingConfig.objects.count() == 3
         assert GradingConfig.objects.filter(course__isnull=True).count() == 1
         biology = Course.objects.get(name="Inorganic Chemistry WS 2026 - Biology")
         assert GradingConfig.objects.filter(course=biology).exists()
+        pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
+        # The Pharmacy override is the all-or-nothing MC grading (penalty == points).
+        pharma_cfg = GradingConfig.objects.get(course=pharmacy)
+        assert pharma_cfg.mc_penalty_per_wrong == pharma_cfg.mc_points_per_card
 
     def test_app_settings_active_course(self):
         # Chemistry is the default (active) course.

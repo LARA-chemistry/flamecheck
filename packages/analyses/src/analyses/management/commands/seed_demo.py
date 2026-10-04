@@ -267,6 +267,7 @@ class Command(BaseCommand):
             self._seed_singletons(courses)
             self._seed_submissions(users, instances)
             self._seed_multichoice(courses, users)
+            self._seed_pharma_monograph(courses, users)
 
             self._print_summary(courses, users, instances)
 
@@ -665,6 +666,105 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"  multichoice:    1 card, {len(questions)} questions, sheet for {len(students)} students"
+            )
+        )
+
+    # -- pharma monograph example -------------------------------------------
+    def _seed_pharma_monograph(self, courses: dict[str, Course], users: dict[str, User]) -> None:
+        """
+        Seed the European-Pharmacopoeia monograph example for the Pharmacy course.
+
+        One card models a monograph analysis on a salt (sodium chloride) with
+        three binary sub-tests: identity (true/false), purity (true/false) and
+        monograph compliance (complies / does not comply). The course is graded
+        all-or-nothing - the penalty equals the points, so any single wrong
+        answer drops the card to zero, i.e. the strict "complies / does not
+        comply" reading. Two worked submissions exercise the real grading logic
+        (one compliant, one not); the remaining student is left unsubmitted.
+        """
+        from datetime import timedelta
+
+        from config.models import GradingConfig
+        from django.utils import timezone
+        from multichoice.models import MCCard, MCCardQuestion, MCOption, MCQuestion, MCSheet, MCStudentAssignment
+
+        course_name = "Inorganic Chemistry WS 2026 - Pharmacy"
+        course = courses.get(course_name)
+        if course is None:
+            return
+        students = [u for u in users.values() if u.is_student and u.course_id == course.id]
+        if not students:
+            return
+
+        # Per-course all-or-nothing MC grading: penalty equals the points, so a
+        # single wrong answer scores zero. (The other fields keep their defaults,
+        # which match the global row, so analysis grading is unchanged.)
+        GradingConfig.objects.update_or_create(
+            course=course,
+            defaults={"mc_points_per_card": 10, "mc_penalty_per_wrong": 10},
+        )
+
+        def make_question(text: str, correct_text: str, other_text: str) -> MCQuestion:
+            q = MCQuestion.objects.create(
+                course=course,
+                text=text,
+                description="European Pharmacopoeia monograph sub-test (demo).",
+                remarks="Strict binary outcome; the course grades MC cards all-or-nothing.",
+            )
+            MCOption.objects.create(question=q, text=correct_text, is_correct=True, sort_order=0)
+            MCOption.objects.create(question=q, text=other_text, is_correct=False, sort_order=1)
+            return q
+
+        questions = [
+            make_question("Identity test: is the identity of the salt confirmed?", "true", "false"),
+            make_question("Purity test: does the salt meet the purity requirements?", "true", "false"),
+            make_question(
+                "Monograph test: does the salt comply with the European Pharmacopoeia monograph?",
+                "complies",
+                "does not comply",
+            ),
+        ]
+        card = MCCard.objects.create(
+            course=course,
+            title="EP Monograph - Sodium chloride (NaCl)",
+            description=(
+                "European Pharmacopoeia monograph analysis on sodium chloride: one identity test, a "
+                "purity test and a monograph compliance test."
+            ),
+            remarks=(
+                "Results are stated as identity true/false, pure true/false, and complies / does not "
+                "comply. Graded all-or-nothing (complies only when every sub-test is correct)."
+            ),
+        )
+        for i, q in enumerate(questions):
+            MCCardQuestion.objects.create(card=card, question=q, order=i)
+
+        now = timezone.now().replace(microsecond=0)
+        sheet = MCSheet.objects.create(
+            card=card,
+            course=course,
+            window_start=now - timedelta(hours=1),
+            window_end=now + timedelta(hours=23),
+            number=1,
+        )
+        for student in students:
+            MCStudentAssignment.objects.create(course=course, student=student, sheet=sheet, number=1)
+
+        # Two worked examples through the real submit()/grading logic:
+        #  - student-david answers every sub-test correctly -> complies (full points)
+        #  - student-emma gets the purity sub-test wrong -> does not comply (zero)
+        correct = {q.id: q.options_set.get(is_correct=True).id for q in questions}
+        for username, wrong_question in (("student-david", None), ("student-emma", questions[1])):
+            student = users.get(username)
+            if student is None:
+                continue
+            answers = dict(correct)
+            if wrong_question is not None:
+                answers[wrong_question.id] = wrong_question.options_set.get(is_correct=False).id
+            sheet.submit(student, answers, idempotency_key=f"seed-pharma-mc-{student.id}")
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  pharma monograph: 1 card, 3 sub-tests (all-or-nothing), sheet for {len(students)} students"
             )
         )
 
