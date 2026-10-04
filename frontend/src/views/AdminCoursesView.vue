@@ -38,6 +38,7 @@
         <n-radio-button value="assign">Assign</n-radio-button>
         <n-radio-button value="members">Members</n-radio-button>
         <n-radio-button value="analyses">Analyses</n-radio-button>
+        <n-radio-button value="multichoice">Multiple Choice</n-radio-button>
         <n-radio-button value="grading">Grading</n-radio-button>
         <n-radio-button value="calendar">Calendar</n-radio-button>
       </n-radio-group>
@@ -108,6 +109,11 @@
             :loading="loadingInstances"
             :row-props="analysisRowProps"
           />
+        </template>
+
+        <!-- Multiple Choice: per-course questions, cards, sheets and grading. -->
+        <template v-else-if="courseView === 'multichoice'">
+          <MCDesigner :course-id="selected.id" />
         </template>
 
         <!-- Grading: per-course grading configuration. -->
@@ -484,6 +490,7 @@ import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
   NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload, NSpin, NDatePicker,
 } from 'naive-ui'
+import MCDesigner from '../components/MCDesigner.vue'
 
 const router = useRouter()
 
@@ -506,7 +513,7 @@ const modal = ref({
 })
 
 // Active tab of the course detail view: 'assign' | 'members' | 'analyses'
-// | 'grading' | 'calendar'.
+// | 'multichoice' | 'grading' | 'calendar'.
 const courseView = ref('members')
 
 // Per-course analysis instances (shared by the Analyses and Calendar tabs).

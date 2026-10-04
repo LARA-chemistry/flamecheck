@@ -82,11 +82,13 @@
       <HelpSection title="Multiple choice">
         <p>
           In addition to the analyses, students can answer <em>multiple-choice
-          cards</em>. The <strong>Multiple Choice</strong> page (per course) is
-          the designer: define <em>questions</em> (text, options, one correct
-          answer, plus a description and remarks for your own documentation),
-          group up to three questions into a <em>card</em>, and present a
-          time-windowed <em>sheet</em> to chosen students.
+          cards</em>. The designer is reachable from the <strong>Multiple
+          Choice</strong> page (pick a course) or per course under
+          <strong>Courses → Multiple Choice</strong>: define <em>questions</em>
+          (text, options, one correct answer, plus a description and remarks for
+          your own documentation), group up to three questions into a
+          <em>card</em>, and present a time-windowed <em>sheet</em> to chosen
+          students.
         </p>
         <p>
           Grading is per course (on the same page): points awarded for a fully
