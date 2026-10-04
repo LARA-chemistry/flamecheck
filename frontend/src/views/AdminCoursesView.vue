@@ -54,7 +54,14 @@
             <n-button size="small" @click="loadMembers()">Refresh</n-button>
           </n-space>
           <n-empty v-if="!loadingMembers && courseMembers.length === 0" description="No members in this course yet." size="small" />
-          <n-data-table v-else :columns="memberCols" :data="courseMembers" size="small" :loading="loadingMembers" />
+          <n-data-table
+            v-else
+            :columns="memberCols"
+            :data="courseMembers"
+            size="small"
+            :loading="loadingMembers"
+            :row-props="memberRowProps"
+          />
         </template>
 
         <!-- Assign: enroll (or move) members into this course. -->
@@ -99,6 +106,7 @@
             :data="courseInstances"
             size="small"
             :loading="loadingInstances"
+            :row-props="analysisRowProps"
           />
         </template>
 
@@ -406,6 +414,58 @@
       </template>
     </n-modal>
 
+    <!-- Edit a single analysis instance (opened by clicking an Analyses row). -->
+    <n-modal
+      v-model:show="instanceModal.show"
+      preset="card"
+      :title="instanceModal.instance ? `Edit ${instanceModal.instance.type} #${instanceModal.instance.number}` : 'Edit analysis'"
+      style="width: 560px; max-width: 94vw"
+    >
+      <n-space vertical size="medium">
+        <n-form label-placement="left" label-width="130">
+          <n-form-item label="Announcement no.">
+            <n-input-number v-model:value="instanceModal.form.number" :min="1" :max="999" style="width: 120px" />
+          </n-form-item>
+          <n-form-item label="Window opens">
+            <n-date-picker
+              v-model:formatted-value="instanceModal.form.window_start"
+              type="datetime"
+              value-format="yyyy-MM-dd HH:mm"
+              format="yyyy-MM-dd HH:mm"
+              placeholder="yyyy-MM-dd HH:mm"
+            />
+          </n-form-item>
+          <n-form-item label="Window closes">
+            <n-date-picker
+              v-model:formatted-value="instanceModal.form.window_end"
+              type="datetime"
+              value-format="yyyy-MM-dd HH:mm"
+              format="yyyy-MM-dd HH:mm"
+              placeholder="yyyy-MM-dd HH:mm"
+            />
+          </n-form-item>
+          <n-form-item label="Correct ions">
+            <n-select
+              v-model:value="instanceModal.form.correct_ion_ids"
+              :options="instanceModal.possibleIons.map((i) => ({ label: `${i.symbol} — ${i.name}`, value: i.id }))"
+              multiple
+              filterable
+              placeholder="Select the ions present in this analysis"
+            />
+          </n-form-item>
+        </n-form>
+        <n-text depth="3" style="font-size: 12px">
+          The correct ions are the answer key for this analysis; they are chosen from the type's possible ions.
+        </n-text>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="instanceModal.show = false">Cancel</n-button>
+          <n-button type="primary" :loading="instanceModal.saving" @click="saveInstance">Save</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <n-alert v-if="message" :type="msgType">{{ message }}</n-alert>
   </n-space>
 </template>
@@ -416,7 +476,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
-  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload, NSpin,
+  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload, NSpin, NDatePicker,
 } from 'naive-ui'
 
 const router = useRouter()
@@ -446,6 +506,15 @@ const courseView = ref('members')
 // Per-course analysis instances (shared by the Analyses and Calendar tabs).
 const courseInstances = ref([])
 const loadingInstances = ref(false)
+
+// Editor for a single analysis instance (opened by clicking an Analyses row).
+const instanceModal = ref({
+  show: false,
+  saving: false,
+  instance: null,
+  possibleIons: [],
+  form: { number: null, window_start: null, window_end: null, correct_ion_ids: [] },
+})
 
 // Per-course grading settings (overrides the global default for one course).
 const gradingForm = ref({
@@ -635,6 +704,79 @@ function openEditMember(m) {
       telephone: m.telephone || '',
       course_id: m.course_id,
       is_active: m.is_active,
+    },
+  }
+}
+
+// Open the single-instance editor for an analysis instance (Analyses tab row).
+// Fetches the instance's type so the ion picker offers only that type's
+// possible ions, then pre-fills the current answer key and window.
+async function openEditInstance(row) {
+  let possibleIons = []
+  try {
+    const types = await api.get('/admin/analysis-types')
+    const t = types.find((x) => x.id === row.type_id)
+    possibleIons = t ? t.ions : []
+  } catch {
+    /* fall back to the current answer key below */
+  }
+  if (!possibleIons.length) possibleIons = row.correct_ions || []
+  instanceModal.value = {
+    show: true,
+    saving: false,
+    instance: row,
+    possibleIons,
+    form: {
+      number: row.number,
+      window_start: isoToPicker(row.window_start),
+      window_end: isoToPicker(row.window_end),
+      correct_ion_ids: (row.correct_ions || []).map((i) => i.id),
+    },
+  }
+}
+
+async function saveInstance() {
+  const f = instanceModal.value.form
+  const inst = instanceModal.value.instance
+  instanceModal.value.saving = true
+  try {
+    await api.put(`/admin/analysis-instances/${inst.id}`, {
+      number: f.number,
+      window_start: timestampToIso(f.window_start),
+      window_end: timestampToIso(f.window_end),
+      correct_ion_ids: f.correct_ion_ids,
+    })
+    message.value = `Analysis ${inst.type} #${inst.number} updated.`
+    msgType.value = 'success'
+    instanceModal.value.show = false
+    await loadCourseInstances()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    instanceModal.value.saving = false
+  }
+}
+
+// Clickable rows: a member row opens that member's edit dialog; an analysis
+// row opens the instance editor. Clicks on the in-row action buttons are
+// ignored so they keep their own handlers (no double-trigger).
+function memberRowProps(rowData) {
+  return {
+    style: 'cursor: pointer',
+    onClick: (e) => {
+      if (e.target.closest('button')) return
+      openEditMember(rowData)
+    },
+  }
+}
+
+function analysisRowProps(rowData) {
+  return {
+    style: 'cursor: pointer',
+    onClick: (e) => {
+      if (e.target.closest('button')) return
+      openEditInstance(rowData)
     },
   }
 }
@@ -898,6 +1040,21 @@ function fmtShort(iso) {
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
+// Convert an ISO timestamp to the "yyyy-MM-dd HH:mm" string the datetime
+// picker (value-format) understands.
+function isoToPicker(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+// Convert the picker's value back to an ISO string for the API.
+function timestampToIso(v) {
+  if (v == null) return null
+  const d = new Date(typeof v === 'string' ? v.replace(' ', 'T') : v)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
 
 const courseCols = [
   {
@@ -1140,6 +1297,12 @@ const analysisCols = [
     key: 'assigned_students',
     render: (row) => h('span', { title: row.assigned_students.join(', ') || '—' }, String(row.assigned_students.length)),
     width: 90,
+  },
+  {
+    title: '',
+    key: 'actions',
+    render: (row) => h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditInstance(row) }, () => 'Edit'),
+    width: 64,
   },
 ]
 
