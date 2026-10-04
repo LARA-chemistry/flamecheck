@@ -222,6 +222,14 @@
           assignments, submitted, pending and the class average score.
         </p>
       </HelpSection>
+      <HelpSection title="Student login">
+        <p>
+          Students sign in with their username and password, by scanning their
+          personal barcode (listed per student below), or - if your course uses
+          OAuth - via the external identity provider. New OAuth students first
+          pick their course on the registration page.
+        </p>
+      </HelpSection>
       <HelpSection title="Student statistics">
         <p>
           Click any student row to open their per-analysis breakdown: submitted

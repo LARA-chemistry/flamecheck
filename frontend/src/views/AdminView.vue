@@ -86,6 +86,20 @@
           matched by name - a match updates the existing substance.
         </p>
       </HelpSection>
+      <HelpSection title="Authentication &amp; registration">
+        <p>
+          Everyone signs in with a JWT (username/password). Students can
+          additionally scan a personal barcode, or - if your course uses OAuth -
+          sign in via an external identity provider such as Keycloak.
+        </p>
+        <p>
+          How <em>student</em> accounts are created is set in <strong>Settings
+          → Registration</strong>: <code>manual</code> (you create them under
+          Courses → Members), <code>self-registration</code> (they register and
+          confirm their e-mail) or <code>oauth</code> (they sign in via the
+          provider and then complete a registration page).
+        </p>
+      </HelpSection>
       <HelpSection title="Settings">
         <p>
           Global grading settings (points per ion, penalties, submission limit)

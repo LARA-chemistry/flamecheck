@@ -90,3 +90,7 @@ Authentication is via JWT bearer tokens:
 - `POST /api/v1/auth/token/refresh` — rotate the access token.
 - `POST /api/v1/auth/logout` — invalidate the current token version.
 - `GET /api/v1/me` — current user profile.
+
+The full authentication setup — all sign-in methods (password, barcode,
+self-registration, OAuth/Keycloak), the token lifecycle and the registration
+modes — is described on the {ref}`Authentication <authentication>` page.

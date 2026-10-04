@@ -11,6 +11,7 @@
 readme
 installation
 usage
+authentification
 ```
 
 ```{toctree}
