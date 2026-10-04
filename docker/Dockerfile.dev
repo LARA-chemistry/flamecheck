@@ -86,7 +86,7 @@ ENV LANG=C.UTF-8 \
     DJANGO_SETTINGS_MODULE=flamecheck.settings.development
 
 RUN adduser --disabled-password --gecos "" appuser \
-    && mkdir -p /opt/staticfiles /opt/db \
+    && mkdir -p /opt/staticfiles /opt/db /opt/media \
     && chown -R appuser:appuser /opt
 
 WORKDIR /opt
