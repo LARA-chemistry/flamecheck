@@ -36,7 +36,7 @@ async function exchange() {
   try {
     const res = await api.post('/auth/oauth/exchange', {})
     const tokens = res.tokens ?? {}
-    auth.setTokens(tokens.access, tokens.refresh)
+    auth.setTokens(tokens.access, tokens.refresh, tokens.access_expires_in)
     auth.setUser(res.user ?? (await api.get('/me')))
     if (auth.user?.role === 'student' && auth.user?.registered === false) {
       router.replace({ name: 'registration' })
