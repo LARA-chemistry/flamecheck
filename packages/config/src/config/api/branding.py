@@ -42,10 +42,23 @@ def _admin_user(request) -> User:
 
 
 def _storage_url(field) -> str | None:
-    """Public URL for a FileField value, or ``None`` when empty."""
-    if field and field.name:
-        return field.url
-    return None
+    """
+    Public URL for a FileField value, or ``None`` when empty.
+
+    A cache-busting ``?v=<mtime_ms>`` query string is appended so a re-upload
+    to the same stable path (the on-disk name is fixed, see ``_write_upload``)
+    changes the URL and reliably refreshes the browser-cached image in the
+    settings preview and on the public login page. When the file is missing or
+    the storage backend has no local path (e.g. S3), the plain URL is returned.
+    """
+    if not field or not field.name:
+        return None
+    url = field.url
+    try:
+        mtime_ms = os.stat(field.path).st_mtime_ns // 1_000_000
+    except (OSError, NotImplementedError, ValueError):
+        return url
+    return f"{url}?v={mtime_ms}"
 
 
 def _write_upload(instance: AppSettings, attr: str, uploaded: UploadedFile, allowed_ext: set[str]) -> None:
@@ -54,7 +67,8 @@ def _write_upload(instance: AppSettings, attr: str, uploaded: UploadedFile, allo
 
     Only the allowed extensions are accepted; the on-disk filename is fixed to a
     stable name so the URL is constant and the old file is overwritten rather
-    than accumulating.
+    than accumulating. The field's ``upload_to`` ("branding") supplies the
+    directory, so the stored path is ``branding/<attr><ext>``.
     """
     name = uploaded.name or ""
     ext = os.path.splitext(name)[1].lower()
@@ -67,7 +81,7 @@ def _write_upload(instance: AppSettings, attr: str, uploaded: UploadedFile, allo
     current = getattr(instance, attr)
     if current:
         current.delete(save=False)
-    setattr(instance, attr, File(io.BytesIO(data), name=f"branding/{attr}{ext}"))
+    setattr(instance, attr, File(io.BytesIO(data), name=f"{attr}{ext}"))
     instance.save()
 
 

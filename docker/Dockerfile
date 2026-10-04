@@ -99,7 +99,7 @@ ENV LANG=C.UTF-8 \
 
 # Create a non-root user for security.
 RUN adduser --disabled-password --gecos "" appuser \
-    && mkdir -p /opt/staticfiles /opt/db \
+    && mkdir -p /opt/staticfiles /opt/db /opt/media \
     && chown -R appuser:appuser /opt
 
 WORKDIR /opt

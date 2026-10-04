@@ -42,9 +42,11 @@ services:
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
       # DATABASE_URL is taken from .env (SQLite default, or postgres://).
     volumes:
-      # Persist the SQLite database and collected static files.
+      # Persist the SQLite database, collected static files, and uploaded media
+      # (login branding images). /opt/media is MEDIA_ROOT (see settings).
       - flamecheck_db:/opt/db
       - flamecheck_static:/opt/staticfiles
+      - flamecheck_media:/opt/media
     # Only wait on the DB service when it is part of the stack.
     depends_on:
       db:
@@ -74,4 +76,5 @@ services:
 volumes:
   flamecheck_db:
   flamecheck_static:
+  flamecheck_media:
   db_data:
