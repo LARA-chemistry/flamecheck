@@ -308,8 +308,11 @@
               :placeholder="memberModal.editing ? 'Leave blank to keep the current password' : 'Leave blank to auto-generate'"
             />
           </n-form-item>
-          <n-form-item label="Name">
-            <n-input v-model:value="memberModal.form.name" placeholder="e.g. Jane Doe" />
+          <n-form-item label="First name">
+            <n-input v-model:value="memberModal.form.first_name" placeholder="e.g. Jane" />
+          </n-form-item>
+          <n-form-item label="Last name">
+            <n-input v-model:value="memberModal.form.last_name" placeholder="e.g. Doe" />
           </n-form-item>
           <n-form-item label="Email">
             <n-input v-model:value="memberModal.form.email" placeholder="e.g. jane.doe@example.com" />
@@ -515,7 +518,8 @@ const memberModal = ref({
     id: null,
     username: '',
     password: '',
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     matriculation_no: '',
     lab: '',
@@ -551,7 +555,7 @@ const memberCols = [
     render: (row) => (row.member_role === 'assistant' ? 'Assistant' : 'Student'),
     width: 100,
   },
-  { title: 'Name', key: 'name', render: (row) => row.name || '—' },
+  { title: 'Name', key: 'full_name', render: (row) => row.full_name || '—' },
   { title: 'Username', key: 'username' },
   {
     title: 'Matriculation no.',
@@ -584,7 +588,8 @@ function openAddMember(role) {
       id: null,
       username: '',
       password: '',
-      name: '',
+      first_name: '',
+      last_name: '',
       email: '',
       matriculation_no: '',
       lab: '',
@@ -607,7 +612,8 @@ function openEditMember(m) {
       id: m.id,
       username: m.username,
       password: '',
-      name: m.name || '',
+      first_name: m.first_name || '',
+      last_name: m.last_name || '',
       email: m.email || '',
       matriculation_no: m.matriculation_no || '',
       lab: m.lab || '',
@@ -632,7 +638,8 @@ async function saveMember() {
     if (memberModal.value.editing) {
       const payload = {
         username: f.username,
-        name: f.name,
+        first_name: f.first_name,
+        last_name: f.last_name,
         email: f.email,
         lab: f.lab,
         labspace_id: f.labspace_id,
@@ -650,7 +657,8 @@ async function saveMember() {
       const payload = {
         username: f.username,
         password: f.password,
-        name: f.name,
+        first_name: f.first_name,
+        last_name: f.last_name,
         email: f.email,
         lab: f.lab,
         labspace_id: f.labspace_id,

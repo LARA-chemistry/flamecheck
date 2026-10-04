@@ -2,7 +2,7 @@
   <div class="onboarding-container">
     <n-card class="onboarding-card" size="small">
       <div class="onboarding-head">
-        <h1 class="onboarding-title">Welcome, {{ auth.user?.name || auth.user?.username }}</h1>
+        <h1 class="onboarding-title">Welcome, {{ auth.user?.full_name || auth.user?.username }}</h1>
         <p class="onboarding-sub">
           Almost there. Choose your course and add any details your sign-in provider
           did not supply. Your analyses for the course are generated for you.
@@ -21,8 +21,11 @@
             style="width: 100%"
           />
         </n-form-item>
-        <n-form-item label="Name">
-          <n-input v-model:value="form.name" placeholder="Your full name" />
+        <n-form-item label="First name">
+          <n-input v-model:value="form.first_name" placeholder="First name" />
+        </n-form-item>
+        <n-form-item label="Last name">
+          <n-input v-model:value="form.last_name" placeholder="Last name" />
         </n-form-item>
         <n-form-item label="Matriculation no.">
           <n-input v-model:value="form.matriculation_no" placeholder="e.g. M123456" />
@@ -67,7 +70,8 @@ const error = ref('')
 const u = auth.user || {}
 const form = ref({
   course_id: null,
-  name: u.name || '',
+  first_name: u.first_name || '',
+  last_name: u.last_name || '',
   matriculation_no: u.matriculation_no || '',
   labspace_id: u.labspace_id || '',
   lab: u.lab || '',

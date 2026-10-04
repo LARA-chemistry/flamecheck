@@ -111,7 +111,7 @@
     <n-modal
       v-model:show="studentModal.show"
       preset="card"
-      :title="studentModal.student ? `Student: ${studentModal.student.name || studentModal.student.username}` : 'Student'"
+      :title="studentModal.student ? `Student: ${studentModal.student.full_name || studentModal.student.username}` : 'Student'"
       style="width: 860px; max-width: 96vw"
       :segmented="{ content: true }"
     >
@@ -267,7 +267,7 @@ const SubstanceIcon = {
 const studentModal = ref({ show: false, loading: false, student: null, detail: null })
 
 const cols = [
-  { title: 'Student', key: 'name' },
+  { title: 'Student', key: 'full_name', render: (row) => row.full_name || row.username },
   { title: 'Barcode', key: 'barcode' },
   {
     title: 'Analyses',

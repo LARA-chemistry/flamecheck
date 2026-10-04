@@ -32,9 +32,8 @@ class User(AbstractUser):
         ASSISTANT = "assistant", _("Assistant")
         ADMIN = "admin", _("Admin")
 
-    name = models.CharField(_("Name of User"), blank=True, max_length=255)
-    first_name = None  # type: ignore[assignment]
-    last_name = None  # type: ignore[assignment]
+    first_name = models.CharField(_("First name of User"), blank=True, max_length=128)
+    last_name = models.CharField(_("Last name of User"), blank=True, max_length=128)
     role = models.CharField(
         max_length=16,
         choices=Role.choices,
@@ -101,6 +100,20 @@ class User(AbstractUser):
     def is_admin(self) -> bool:
         """Return True if the user has the admin role."""
         return self.role == self.Role.ADMIN
+
+    @property
+    def full_name(self) -> str:
+        """
+        Return the user's full name (first + last).
+
+        Empty parts are omitted, so a user with only a first name returns just
+        that. Returns an empty string when both parts are blank.
+
+        Returns:
+            str: The concatenated name, or ``""``.
+
+        """
+        return f"{self.first_name} {self.last_name}".strip()
 
     def get_absolute_url(self) -> str:
         """

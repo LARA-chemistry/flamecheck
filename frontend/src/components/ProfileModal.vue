@@ -123,7 +123,7 @@ function fmtDateTime(iso) {
 const coreRows = computed(() => {
   const u = props.user || {}
   return [
-    ['Name', u.name || u.username || '—'],
+    ['Name', u.full_name || u.username || '—'],
     ['Matriculation no.', u.matriculation_no || '—'],
     ['Labspace id', u.labspace_id || '—'],
     ['Telephone', u.telephone || '—'],
@@ -156,7 +156,7 @@ watch(
       <!-- Core data -------------------------------------------------------- -->
       <section class="profile__core">
         <div class="profile__avatar" aria-hidden="true">
-          {{ (user?.name || user?.username || '?').charAt(0).toUpperCase() }}
+          {{ (user?.full_name || user?.username || '?').charAt(0).toUpperCase() }}
         </div>
         <dl class="profile__rows">
           <div v-for="[label, value] in coreRows" :key="label" class="profile__row">

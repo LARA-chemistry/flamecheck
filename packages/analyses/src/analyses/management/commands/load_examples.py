@@ -175,7 +175,15 @@ class Command(BaseCommand):
             # Always sync the password + profile fields (idempotent).
             user.set_password(default_password)
             user.email = row.get("email", "")
-            user.name = row.get("name", "")
+            # Prefer explicit first/last; fall back to splitting a legacy "name".
+            first_name = row.get("first_name", "")
+            last_name = row.get("last_name", "")
+            if not first_name and not last_name:
+                parts = str(row.get("name", "")).strip().split(None, 1)
+                first_name = parts[0] if parts else ""
+                last_name = parts[1] if len(parts) > 1 else ""
+            user.first_name = first_name
+            user.last_name = last_name
             user.role = row.get("role", User.Role.STUDENT)
             user.matriculation_no = row.get("matriculation_no", "")
             user.lab = row.get("lab", "")

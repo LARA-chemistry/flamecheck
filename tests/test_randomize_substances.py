@@ -54,7 +54,7 @@ def _build_student_instances(analysis_type, course, number, count):
     """Create ``count`` per-student instances + assignments for the announcement."""
     instances = []
     for _ in range(count):
-        student = UserFactory.create(role="student", name=f"Student {len(instances)}")
+        student = UserFactory.create(role="student", first_name="Student", last_name=str(len(instances) + 1))
         inst = AnalysisInstanceFactory(
             type=analysis_type,
             course=course,

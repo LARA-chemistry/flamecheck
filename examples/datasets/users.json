@@ -3,7 +3,8 @@
   "users": [
     {
       "username": "admin",
-      "name": "Ada Admin",
+      "first_name": "Ada",
+      "last_name": "Admin",
       "email": "admin@example.com",
       "role": "admin",
       "is_staff": true,
@@ -11,19 +12,22 @@
     },
     {
       "username": "assistant.bio",
-      "name": "Ben Bio",
+      "first_name": "Ben",
+      "last_name": "Bio",
       "email": "assistant.bio@example.com",
       "role": "assistant"
     },
     {
       "username": "assistant.pharma",
-      "name": "Paula Pharma",
+      "first_name": "Paula",
+      "last_name": "Pharma",
       "email": "assistant.pharma@example.com",
       "role": "assistant"
     },
     {
       "username": "student-anna",
-      "name": "Anna Schulz",
+      "first_name": "Anna",
+      "last_name": "Schulz",
       "email": "anna.schulz@example.com",
       "role": "student",
       "matriculation_no": "2601001",
@@ -34,7 +38,8 @@
     },
     {
       "username": "student-ben",
-      "name": "Ben Weber",
+      "first_name": "Ben",
+      "last_name": "Weber",
       "email": "ben.weber@example.com",
       "role": "student",
       "matriculation_no": "2601002",
@@ -45,7 +50,8 @@
     },
     {
       "username": "student-clara",
-      "name": "Clara Neumann",
+      "first_name": "Clara",
+      "last_name": "Neumann",
       "email": "clara.neumann@example.com",
       "role": "student",
       "matriculation_no": "2601003",
@@ -56,7 +62,8 @@
     },
     {
       "username": "student-david",
-      "name": "David Krause",
+      "first_name": "David",
+      "last_name": "Krause",
       "email": "david.krause@example.com",
       "role": "student",
       "matriculation_no": "2601004",
@@ -67,7 +74,8 @@
     },
     {
       "username": "student-emma",
-      "name": "Emma Fischer",
+      "first_name": "Emma",
+      "last_name": "Fischer",
       "email": "emma.fischer@example.com",
       "role": "student",
       "matriculation_no": "2601005",
@@ -78,7 +86,8 @@
     },
     {
       "username": "student-felix",
-      "name": "Felix Braun",
+      "first_name": "Felix",
+      "last_name": "Braun",
       "email": "felix.braun@example.com",
       "role": "student",
       "matriculation_no": "2601006",
@@ -89,7 +98,8 @@
     },
     {
       "username": "student-greta",
-      "name": "Greta Hoffmann",
+      "first_name": "Greta",
+      "last_name": "Hoffmann",
       "email": "greta.hoffmann@example.com",
       "role": "student",
       "matriculation_no": "2601007",
@@ -100,7 +110,8 @@
     },
     {
       "username": "student-hugo",
-      "name": "Hugo Wagner",
+      "first_name": "Hugo",
+      "last_name": "Wagner",
       "email": "hugo.wagner@example.com",
       "role": "student",
       "matriculation_no": "2601008",

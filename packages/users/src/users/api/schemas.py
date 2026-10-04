@@ -40,7 +40,9 @@ class UserOut(BaseModel):
 
     id: int
     username: str
-    name: str | None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
     role: str
     lab: str | None = None
     matriculation_no: str | None = None
@@ -56,10 +58,13 @@ class UserOut(BaseModel):
         """Build a :class:`UserOut` from a Django user."""
         course = getattr(user, "course", None)
         is_student = user.role == user.Role.STUDENT
+        full = user.full_name
         return cls(
             id=user.id,
             username=user.username,
-            name=user.name or None,
+            first_name=user.first_name or None,
+            last_name=user.last_name or None,
+            full_name=full or None,
             role=user.role,
             lab=user.lab or None,
             matriculation_no=(user.matriculation_no or None) if is_student else None,
@@ -81,7 +86,8 @@ class OnboardingConfigOut(BaseModel):
 class RegisterIn(BaseModel):
     """Payload for the self-registration endpoint (students only)."""
 
-    name: str
+    first_name: str
+    last_name: str = ""
     email: str
     password: str
     matriculation_no: str = ""
@@ -99,7 +105,8 @@ class OnboardingIn(BaseModel):
     """Payload for completing onboarding (course + metadata an OAuth idp lacked)."""
 
     course_id: int
-    name: str = ""
+    first_name: str = ""
+    last_name: str = ""
     matriculation_no: str = ""
     labspace_id: str = ""
     lab: str = ""

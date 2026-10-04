@@ -114,7 +114,9 @@ class AssistantRosterEntry(Schema):
 
     id: int
     username: str
-    name: str | None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
     barcode: str | None
     analyses: list[AnalysisSummary]
 
@@ -282,7 +284,9 @@ class StudentOut(Schema):
 
     id: int
     username: str
-    name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
     email: str = ""
     matriculation_no: str = ""
     lab: str = ""
@@ -298,7 +302,8 @@ class StudentIn(Schema):
 
     username: str
     password: str = ""  # empty => a random password is generated and reported
-    name: str = ""
+    first_name: str = ""
+    last_name: str = ""
     email: str = ""
     matriculation_no: str = ""
     lab: str = ""
@@ -318,7 +323,8 @@ class StudentUpdateIn(Schema):
 
     username: str | None = None
     password: str | None = None
-    name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     email: str | None = None
     matriculation_no: str | None = None
     lab: str | None = None
@@ -361,7 +367,9 @@ class AssistantOut(Schema):
 
     id: int
     username: str
-    name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
     email: str = ""
     matriculation_no: str = ""
     lab: str = ""
@@ -377,7 +385,8 @@ class AssistantIn(Schema):
 
     username: str
     password: str = ""  # empty => a random password is generated and reported
-    name: str = ""
+    first_name: str = ""
+    last_name: str = ""
     email: str = ""
     matriculation_no: str = ""
     lab: str = ""
@@ -397,7 +406,8 @@ class AssistantUpdateIn(Schema):
 
     username: str | None = None
     password: str | None = None
-    name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     email: str | None = None
     matriculation_no: str | None = None
     lab: str | None = None

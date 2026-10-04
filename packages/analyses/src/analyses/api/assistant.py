@@ -57,7 +57,9 @@ def list_courses(request):
             AssistantRosterEntry(
                 id=s.id,
                 username=s.username,
-                name=s.name or None,
+                first_name=s.first_name or None,
+                last_name=s.last_name or None,
+                full_name=(s.full_name or None),
                 barcode=s.barcodes.filter(active=True).first().value
                 if s.barcodes.filter(active=True).exists()
                 else None,
@@ -107,7 +109,9 @@ def course_detail(request, course_id: int):
         AssistantRosterEntry(
             id=s.id,
             username=s.username,
-            name=s.name or None,
+            first_name=s.first_name or None,
+            last_name=s.last_name or None,
+            full_name=(s.full_name or None),
             barcode=s.barcodes.filter(active=True).first().value if s.barcodes.filter(active=True).exists() else None,
             analyses=[
                 AnalysisSummary.from_instance(i)

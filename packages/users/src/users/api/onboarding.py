@@ -25,7 +25,7 @@ import re
 from typing import Any
 
 from django.conf import settings
-from django.contrib.auth import get_user_model, logout
+from django.contrib.auth import logout
 from django.core.mail import send_mail
 from django.urls import reverse
 from ninja import Router
@@ -44,8 +44,6 @@ from users.models import User, generate_labspace_id
 logger = logging.getLogger("flamecheck.audit")
 
 router = Router(tags=["onboarding"])
-
-UserModel = get_user_model()
 
 
 def _onboarding_mode() -> str:
@@ -80,7 +78,7 @@ def _send_verification_email(request: Any, user: User) -> None:
     prefix = getattr(settings, "EMAIL_SUBJECT_PREFIX", "")
     subject = f"{prefix}Confirm your FlameCheck account"
     message = (
-        f"Hi {user.name or user.username},\n\n"
+        f"Hi {user.full_name or user.username},\n\n"
         "your FlameCheck student account has been created. Please confirm your "
         "e-mail address by opening the link below (it stays valid for 48 hours):\n\n"
         f"{url}\n\n"
@@ -112,8 +110,8 @@ def register(request, payload: RegisterIn):
         raise ValidationError({"email": ["Enter a valid e-mail address."]})
     if User.objects.filter(email__iexact=email).exists():
         raise HttpError(409, "An account with this e-mail address already exists.")
-    if not payload.name.strip():
-        raise ValidationError({"name": ["Name is required."]})
+    if not payload.first_name.strip() and not payload.last_name.strip():
+        raise ValidationError({"first_name": ["A first or last name is required."]})
 
     from django.contrib.auth.password_validation import validate_password
     from django.core.exceptions import ValidationError as DjangoValidationError
@@ -127,7 +125,8 @@ def register(request, payload: RegisterIn):
         username=_derive_username(email),
         email=email,
         password=payload.password,
-        name=payload.name.strip(),
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
         role=User.Role.STUDENT,
         matriculation_no=payload.matriculation_no.strip(),
         lab=payload.lab.strip(),
@@ -194,8 +193,10 @@ def onboarding_complete(request, payload: OnboardingIn):
 
     # Preserve values the identity provider already supplied; only override with
     # non-empty onboarding input. The labspace is always set (provided or random).
-    if payload.name.strip():
-        user.name = payload.name.strip()
+    if payload.first_name.strip():
+        user.first_name = payload.first_name.strip()
+    if payload.last_name.strip():
+        user.last_name = payload.last_name.strip()
     if payload.matriculation_no.strip():
         user.matriculation_no = payload.matriculation_no.strip()
     if payload.lab.strip():

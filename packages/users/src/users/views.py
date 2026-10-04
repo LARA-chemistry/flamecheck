@@ -18,7 +18,7 @@ logger = logging.getLogger("flamecheck.audit")
 
 class UserCreateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     model = User
-    fields = ["name"]
+    fields = ["first_name", "last_name"]
     success_message = _("Profile successfully created")
     template_name = "users/create_form.html"
 
@@ -59,7 +59,7 @@ class UserUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     """View to update user information."""
 
     model = User
-    fields = ["name"]
+    fields = ["first_name", "last_name"]
     success_message = _("Information successfully updated")
 
     def get_success_url(self) -> str:

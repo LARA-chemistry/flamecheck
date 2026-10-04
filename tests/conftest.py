@@ -33,25 +33,25 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def student(db) -> User:
     """A student user (the default factory role)."""
-    return UserFactory(username="student1", name="Test Student", matriculation_no="12345")
+    return UserFactory(username="student1", first_name="Test", last_name="Student", matriculation_no="12345")
 
 
 @pytest.fixture
 def student2(db) -> User:
     """A second student user."""
-    return UserFactory(username="student2", name="Second Student")
+    return UserFactory(username="student2", first_name="Second", last_name="Student")
 
 
 @pytest.fixture
 def assistant(db) -> User:
     """An assistant user."""
-    return AssistantUserFactory(username="assistant1", name="Test Assistant")
+    return AssistantUserFactory(username="assistant1", first_name="Test", last_name="Assistant")
 
 
 @pytest.fixture
 def admin_user(db) -> User:
     """An admin user (staff + superuser + admin role)."""
-    return AdminUserFactory(username="admin1", email="admin@example.com", name="Admin")
+    return AdminUserFactory(username="admin1", email="admin@example.com", first_name="Admin")
 
 
 @pytest.fixture

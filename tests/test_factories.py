@@ -51,7 +51,9 @@ class TestUserFactories:
     def test_faker_fields_are_populated(self):
         user = UserFactory()
         assert "@" in user.email
-        assert user.name
+        assert user.first_name
+        assert user.last_name
+        assert user.full_name
         assert user.labspace_id.startswith("LS-")
 
     def test_matriculation_no_is_a_numeric_string(self):

@@ -21,7 +21,7 @@
         >
           <span class="fc-user__avatar">{{ initial(user) }}</span>
           <span class="fc-user__meta">
-            <span class="fc-user__name">{{ user.name || user.username }}</span>
+            <span class="fc-user__name">{{ user.full_name || user.username }}</span>
             <span v-if="user.matriculation_no" class="fc-user__matric">Mat. {{ user.matriculation_no }}</span>
             <span v-if="user.labspace_id" class="fc-user__labspace">Labspace {{ user.labspace_id }}</span>
           </span>
@@ -207,7 +207,7 @@ function windowInterval(a) {
   return sameDay ? `${startLabel} – ${time(end)}` : `${startLabel} – ${day(end)} · ${time(end)}`
 }
 function initial(u) {
-  return ((u?.name || u?.username) || '?').trim().charAt(0).toUpperCase()
+  return ((u?.full_name || u?.username) || '?').trim().charAt(0).toUpperCase()
 }
 // Is the submission window still open right now? Derived from the raw window
 // timestamps: the window_status payload already says "submitted" as soon as

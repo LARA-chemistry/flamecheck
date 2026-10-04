@@ -75,24 +75,26 @@ _COURSES: list[tuple[str, str, str, bool, bool]] = [
     ("Inorganic Chemistry SS 2026 - Materials", "SS 2026", "materials", True, False),
 ]
 
-# Users: (username, role, name, course_name_or_None).
-_USERS: list[tuple[str, str, str, str | None]] = [
-    ("admin", "admin", "Demo Admin", None),
-    ("assistant.chemistry", "assistant", "Chemistry Lab Assistant", "Inorganic Chemistry WS 2026 - Chemistry"),
-    ("assistant.bio", "assistant", "Biology Lab Assistant", "Inorganic Chemistry WS 2026 - Biology"),
-    ("assistant.pharmacy", "assistant", "Pharmacy Lab Assistant", "Inorganic Chemistry WS 2026 - Pharmacy"),
-    ("student-lena", "student", "Lena Hoffmann", "Inorganic Chemistry WS 2026 - Chemistry"),
-    ("student-max", "student", "Max Braun", "Inorganic Chemistry WS 2026 - Chemistry"),
-    ("student-petra", "student", "Petra Novak", "Inorganic Chemistry WS 2026 - Chemistry"),
-    ("student-anna", "student", "Anna Schulz", "Inorganic Chemistry WS 2026 - Biology"),
-    ("student-ben", "student", "Ben Weber", "Inorganic Chemistry WS 2026 - Biology"),
-    ("student-clara", "student", "Clara Novak", "Inorganic Chemistry WS 2026 - Biology"),
-    ("student-david", "student", "David Kim", "Inorganic Chemistry WS 2026 - Pharmacy"),
-    ("student-emma", "student", "Emma Rossi", "Inorganic Chemistry WS 2026 - Pharmacy"),
-    ("student-felix", "student", "Felix Braun", "Inorganic Chemistry WS 2026 - Pharmacy"),
-    ("student-greta", "student", "Greta Schmidt", "Inorganic Chemistry SS 2026 - Materials"),
-    ("student-hugo", "student", "Hugo Fischer", "Inorganic Chemistry SS 2026 - Materials"),
-    ("student-ines", "student", "Ines Costa", "Inorganic Chemistry SS 2026 - Materials"),
+# Users: (username, role, first_name, last_name, course_name_or_None).
+# Students carry real given/surname pairs; the admin and the assistants use a
+# single descriptor kept in ``first_name`` (empty ``last_name``).
+_USERS: list[tuple[str, str, str, str, str | None]] = [
+    ("admin", "admin", "Demo", "Admin", None),
+    ("assistant.chemistry", "assistant", "Chemistry Lab Assistant", "", "Inorganic Chemistry WS 2026 - Chemistry"),
+    ("assistant.bio", "assistant", "Biology Lab Assistant", "", "Inorganic Chemistry WS 2026 - Biology"),
+    ("assistant.pharmacy", "assistant", "Pharmacy Lab Assistant", "", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-lena", "student", "Lena", "Hoffmann", "Inorganic Chemistry WS 2026 - Chemistry"),
+    ("student-max", "student", "Max", "Braun", "Inorganic Chemistry WS 2026 - Chemistry"),
+    ("student-petra", "student", "Petra", "Novak", "Inorganic Chemistry WS 2026 - Chemistry"),
+    ("student-anna", "student", "Anna", "Schulz", "Inorganic Chemistry WS 2026 - Biology"),
+    ("student-ben", "student", "Ben", "Weber", "Inorganic Chemistry WS 2026 - Biology"),
+    ("student-clara", "student", "Clara", "Novak", "Inorganic Chemistry WS 2026 - Biology"),
+    ("student-david", "student", "David", "Kim", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-emma", "student", "Emma", "Rossi", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-felix", "student", "Felix", "Braun", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-greta", "student", "Greta", "Schmidt", "Inorganic Chemistry SS 2026 - Materials"),
+    ("student-hugo", "student", "Hugo", "Fischer", "Inorganic Chemistry SS 2026 - Materials"),
+    ("student-ines", "student", "Ines", "Costa", "Inorganic Chemistry SS 2026 - Materials"),
 ]
 
 # Analysis types: (name, description, possible ion catalog keys).
@@ -318,7 +320,7 @@ class Command(BaseCommand):
         keep the command idempotent.
         """
         result: dict[str, User] = {}
-        for username, role, name, course_name in _USERS:
+        for username, role, first_name, last_name, course_name in _USERS:
             course = courses.get(course_name) if course_name else None
             email = f"{username}@flamecheck.local"
             existing = User.objects.filter(username=username).first()
@@ -333,7 +335,8 @@ class Command(BaseCommand):
                 user = existing
             # Sync profile fields, role flags and the uniform demo password
             # (idempotent).
-            user.name = name
+            user.first_name = first_name
+            user.last_name = last_name
             user.email = email
             user.course = course
             user.role = User.Role(role)
@@ -349,7 +352,7 @@ class Command(BaseCommand):
     # -- assistant → course links -------------------------------------------
     def _seed_assistant_courses(self, users: dict[str, User], courses: dict[str, Course]) -> None:
         """Link each assistant to the course they are named after."""
-        for username, role, _name, course_name in _USERS:
+        for username, role, _first, _last, course_name in _USERS:
             if role != "assistant" or not course_name:
                 continue
             assistant = users.get(username)

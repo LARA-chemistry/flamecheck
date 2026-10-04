@@ -407,7 +407,8 @@ class TestStudentManagement:
             {
                 "username": "jdoe",
                 "password": "FlameCheck32!",
-                "name": "Jane Doe",
+                "first_name": "Jane",
+                "last_name": "Doe",
                 "email": "jane@example.com",
                 "matriculation_no": "M123456",
                 "lab": "Inorganic",
@@ -474,13 +475,13 @@ class TestStudentManagement:
     def test_update_student_fields(self, client, admin_user, student, auth_headers):
         resp = client.put(
             f"/api/v1/admin/students/{student.id}",
-            {"name": "Renamed Student", "telephone": "+49 151 999", "matriculation_no": "M777"},
+            {"first_name": "Renamed", "last_name": "Student", "telephone": "+49 151 999", "matriculation_no": "M777"},
             content_type="application/json",
             **auth_headers(admin_user),
         )
         assert resp.status_code == 200
         student.refresh_from_db()
-        assert student.name == "Renamed Student"
+        assert student.full_name == "Renamed Student"
         assert student.telephone == "+49 151 999"
         assert student.matriculation_no == "M777"
 
@@ -555,9 +556,9 @@ class TestStudentManagement:
 
     def test_import_csv_creates_and_updates(self, client, admin_user, student, course, auth_headers):
         body = (
-            "username;name;email;matriculation_no;lab;labspace_id;telephone;course;password\n"
-            f"csv-new;New Person;new@example.com;M001;Lab;LS-1;+49 151 1;{course.name};CsvPass123!\n"
-            f"{student.username};Updated Person;u@example.com;M002;;;;\n"
+            "username;first_name;last_name;email;matriculation_no;lab;labspace_id;telephone;course;password\n"
+            f"csv-new;New;Person;new@example.com;M001;Lab;LS-1;+49 151 1;{course.name};CsvPass123!\n"
+            f"{student.username};Updated;Person;u@example.com;M002;;;;\n"
         )
         resp = client.post(
             "/api/v1/admin/students/import-csv",
@@ -574,7 +575,7 @@ class TestStudentManagement:
         assert new.course_id == course.id
         assert new.matriculation_no == "M001"
         student.refresh_from_db()
-        assert student.name == "Updated Person"
+        assert student.full_name == "Updated Person"
         assert student.matriculation_no == "M002"
         # empty course cell keeps the existing course
         assert student.course_id is None or student.course_id == course.id
@@ -598,11 +599,11 @@ class TestStudentManagement:
 
     def test_import_csv_collects_errors(self, client, admin_user, student, auth_headers):
         body = (
-            "username;name;course;password\n"
-            "err-course;Bad Course;NoSuchCourse;\n"
-            ";missing username\n"
-            f"{student.username};Existing student;;;short\n"
-            "err-pw;Bad Password;;123\n"
+            "username;first_name;last_name;course;password\n"
+            "err-course;Bad;Course;NoSuchCourse;\n"
+            ";missing;username;;\n"
+            f"{student.username};Existing;;;\n"
+            "err-pw;Bad;Password;;123\n"
         )
         resp = client.post(
             "/api/v1/admin/students/import-csv",
@@ -624,7 +625,7 @@ class TestStudentManagement:
         # the weak-password row must not have created a student
         assert not User.objects.filter(username="err-pw").exists()
         # the existing student was updated (password untouched)
-        assert User.objects.get(username__iexact=student.username).name == "Existing student"
+        assert User.objects.get(username__iexact=student.username).full_name == "Existing"
 
     def test_import_csv_requires_username_header(self, client, admin_user, auth_headers):
         resp = client.post(
@@ -668,7 +669,8 @@ class TestAssistantManagement:
             {
                 "username": "jlab",
                 "password": "FlameCheck32!",
-                "name": "Jane Lab",
+                "first_name": "Jane",
+                "last_name": "Lab",
                 "email": "jane.lab@example.com",
                 "lab": "Inorganic",
                 "labspace_id": "LS-000456",
@@ -736,13 +738,13 @@ class TestAssistantManagement:
     def test_update_assistant_fields(self, client, admin_user, assistant, auth_headers):
         resp = client.put(
             f"/api/v1/admin/assistants/{assistant.id}",
-            {"name": "Renamed Assistant", "telephone": "+49 151 999"},
+            {"first_name": "Renamed", "last_name": "Assistant", "telephone": "+49 151 999"},
             content_type="application/json",
             **auth_headers(admin_user),
         )
         assert resp.status_code == 200
         assistant.refresh_from_db()
-        assert assistant.name == "Renamed Assistant"
+        assert assistant.full_name == "Renamed Assistant"
         assert assistant.telephone == "+49 151 999"
 
     def test_update_assistant_resets_password(self, client, admin_user, assistant, auth_headers):

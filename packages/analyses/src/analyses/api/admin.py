@@ -138,7 +138,8 @@ def delete_course(request, course_id: int):
 # template). Columns are separated by ``;`` (a comma is accepted as well).
 STUDENT_CSV_HEADER = [
     "username",
-    "name",
+    "first_name",
+    "last_name",
     "email",
     "matriculation_no",
     "lab",
@@ -151,10 +152,13 @@ STUDENT_CSV_HEADER = [
 
 def _student_to_out(s: User) -> dict:
     """Serialize a student :class:`~users.models.User` into the API payload."""
+    full = s.full_name
     return {
         "id": s.id,
         "username": s.username,
-        "name": s.name or None,
+        "first_name": s.first_name or None,
+        "last_name": s.last_name or None,
+        "full_name": full or None,
         "email": s.email or "",
         "matriculation_no": s.matriculation_no or "",
         "lab": s.lab or "",
@@ -198,7 +202,8 @@ def _validate_or_raise(password: str) -> None:
 
 def _set_student_fields(student: User, row: dict) -> None:
     """Copy the editable info columns from a CSV row onto ``student``."""
-    student.name = (row.get("name") or "").strip()
+    student.first_name = (row.get("first_name") or "").strip()
+    student.last_name = (row.get("last_name") or "").strip()
     student.email = (row.get("email") or "").strip()
     student.matriculation_no = (row.get("matriculation_no") or "").strip()
     student.lab = (row.get("lab") or "").strip()
@@ -365,7 +370,8 @@ def _create_member(request, role: User.Role, payload) -> dict:
         generated = True
     member = User(username=payload.username, role=role, is_active=True)
     member.set_password(password)
-    member.name = payload.name
+    member.first_name = payload.first_name
+    member.last_name = payload.last_name
     member.email = payload.email
     member.matriculation_no = payload.matriculation_no
     member.lab = payload.lab
@@ -399,8 +405,10 @@ def _update_member(request, role: User.Role, member_id: int, payload) -> dict:
     if payload.password:
         _validate_or_raise(payload.password)
         member.set_password(payload.password)
-    if payload.name is not None:
-        member.name = payload.name
+    if payload.first_name is not None:
+        member.first_name = payload.first_name
+    if payload.last_name is not None:
+        member.last_name = payload.last_name
     if payload.email is not None:
         member.email = payload.email
     if payload.matriculation_no is not None:

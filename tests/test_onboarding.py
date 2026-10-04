@@ -97,7 +97,8 @@ class TestOnboardingConfigEndpoint:
 # Self-registration                                                           #
 # --------------------------------------------------------------------------- #
 _REGISTER = {
-    "name": "New Student",
+    "first_name": "New",
+    "last_name": "Student",
     "email": "new.student@example.com",
     "password": "Str0ngPass!234",
 }
@@ -147,7 +148,7 @@ class TestSelfRegistration:
 
     def test_missing_name_rejected(self, client):
         AppSettingsFactory(onboarding="self_registration")
-        assert self._register(client, name="   ").status_code == 422
+        assert self._register(client, first_name="   ", last_name="   ").status_code == 422
 
     def test_verify_email_activates_account(self, client):
         AppSettingsFactory(onboarding="self_registration")
@@ -220,7 +221,7 @@ class TestOAuthAdapter:
         adapter = self._adapter()
         # A fresh account with no name yet (as allauth would create it), so the
         # adapter's name-population branch runs.
-        base_user = UserFactory(name="")
+        base_user = UserFactory(first_name="", last_name="")
 
         class _FakeSocialLogin:
             user = base_user
@@ -229,7 +230,8 @@ class TestOAuthAdapter:
         assert user is base_user
         assert user.role == User.Role.STUDENT
         assert user.onboarded is False
-        assert user.name == "OAuth Kid"
+        assert user.first_name == "OAuth"
+        assert user.last_name == "Kid"
 
 
 # --------------------------------------------------------------------------- #
@@ -312,13 +314,13 @@ class TestOnboardingComplete:
         student.labspace_id = ""  # the fixture sets one; clear it to test generation
         student.save()
 
-        resp = self._complete(client, student, course, name="OAuth Kid", matriculation_no="M999")
+        resp = self._complete(client, student, course, first_name="OAuth", last_name="Kid", matriculation_no="M999")
         assert resp.status_code == 200
         student.refresh_from_db()
         assert student.course_id == course.id
         assert student.onboarded is True
         assert student.is_active is True
-        assert student.name == "OAuth Kid"
+        assert student.full_name == "OAuth Kid"
         assert student.matriculation_no == "M999"
         assert student.labspace_id.startswith("LS-")  # randomly generated
 
@@ -348,12 +350,13 @@ class TestOnboardingComplete:
         _make_types(db)
         AppSettingsFactory(analyses_per_course=1)
         student.onboarded = False
-        student.name = "From OAuth"
+        student.first_name = "From"
+        student.last_name = "OAuth"
         student.save()
         resp = self._complete(client, student, course)  # no name supplied
         assert resp.status_code == 200
         student.refresh_from_db()
-        assert student.name == "From OAuth"  # not blanked
+        assert student.full_name == "From OAuth"  # not blanked
 
     def test_no_types_returns_400(self, client, student, course, db):
         AppSettingsFactory(analyses_per_course=1)

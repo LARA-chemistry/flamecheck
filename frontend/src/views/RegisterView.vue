@@ -22,8 +22,11 @@
         label-placement="top"
         @keyup.enter="handleRegister"
       >
-        <n-form-item label="Name" path="name">
-          <n-input v-model:value="form.name" placeholder="Your full name" size="large" />
+        <n-form-item label="First name" path="first_name">
+          <n-input v-model:value="form.first_name" placeholder="First name" size="large" />
+        </n-form-item>
+        <n-form-item label="Last name" path="last_name">
+          <n-input v-model:value="form.last_name" placeholder="Last name" size="large" />
         </n-form-item>
         <n-form-item label="E-mail" path="email">
           <n-input v-model:value="form.email" placeholder="you@institution.edu" size="large" />
@@ -65,13 +68,20 @@ const error = ref('')
 const done = ref(false)
 
 const form = ref({
-  name: '',
+  first_name: '',
+  last_name: '',
   email: '',
   password: '',
   matriculation_no: '',
 })
 const rules = {
-  name: { required: true, message: 'Name is required', trigger: 'blur' },
+  first_name: {
+    validator(rule, value) {
+      const hasAny = String(value || '').trim() || String(form.value.last_name || '').trim()
+      return hasAny ? true : new Error('Enter a first or last name')
+    },
+    trigger: ['blur', 'input'],
+  },
   email: {
     required: true,
     message: 'E-mail is required',
