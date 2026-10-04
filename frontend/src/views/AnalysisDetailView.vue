@@ -124,11 +124,6 @@
             </n-button>
           </n-space>
         </n-card>
-
-        <!-- Feedback after a non-final submission (stays in submission mode). -->
-        <n-alert v-if="lastSubmissionMsg" type="success" closable @close="lastSubmissionMsg = ''">
-          {{ lastSubmissionMsg }}
-        </n-alert>
         </template>
       </template>
 
@@ -228,9 +223,6 @@ const detail = ref(null)
 const result = ref(null)
 const selectedCations = ref([])
 const selectedAnions = ref([])
-// Success message after a non-final submission (the view stays open so the
-// student can submit again until the limit is reached).
-const lastSubmissionMsg = ref('')
 // "New analysis" mode: a fresh re-trial was generated after a wrong submission.
 const retryInfo = ref(null)
 const retryShow = ref(false)
@@ -367,7 +359,6 @@ async function load() {
   loading.value = true
   error.value = ''
   result.value = null
-  lastSubmissionMsg.value = ''
   try {
     detail.value = await api.get(`/analyses/${id.value}`)
     // Once the submission limit is reached, the result is always shown -
@@ -408,20 +399,11 @@ async function doSubmit() {
       retryShow.value = true
       return
     }
-    // Re-fetch the detail so submission_count / window stay authoritative.
-    detail.value = await api.get(`/analyses/${id.value}`)
+    // After every submission, return to the main card view. The card reflects
+    // the new state (score, submissions used, status); the student can open it
+    // again to submit another attempt or to view the result.
     confirmShow.value = false
-    selectedCations.value = []
-    selectedAnions.value = []
-    if (detail.value.submission_count >= detail.value.submission_limit) {
-      // Last allowed submission: switch to the results view.
-      router.replace({ name: 'analysis-results', params: { id: id.value } })
-      return
-    }
-    const left = detail.value.submission_limit - detail.value.submission_count
-    lastSubmissionMsg.value =
-      `Submission #${res?.submission?.submission_number ?? detail.value.submission_count} recorded. ` +
-      `You have ${left} submission${left === 1 ? '' : 's'} left - adjust your selection and submit again.`
+    router.replace({ name: 'home' })
   } catch (e) {
     error.value = e.message
   } finally {
