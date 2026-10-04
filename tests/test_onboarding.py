@@ -26,6 +26,24 @@ def _set_onboarding(mode: str):
     return s
 
 
+# A realistic SOCIALACCOUNT_PROVIDERS value for a Keycloak realm, used to verify
+# the OpenID Connect provider is exposed to the login page and resolvable.
+# ``APPS`` is a list of app-config dicts (one per realm).
+_KEYCLOAK_PROVIDERS = {
+    "openid_connect": {
+        "APPS": [
+            {
+                "provider_id": "keycloak",
+                "name": "Keycloak",
+                "client_id": "flamecheck",
+                "secret": "s3cret",
+                "settings": {"server_url": "https://keycloak.example.com/realms/flamecheck"},
+            }
+        ]
+    }
+}
+
+
 # --------------------------------------------------------------------------- #
 # Models / helpers                                                            #
 # --------------------------------------------------------------------------- #
@@ -84,13 +102,63 @@ class TestOnboardingConfigEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["onboarding"] == "self_registration"
-        assert data["providers"] == ["google"]
+        # Each provider is an entry with a display name + allauth login URL.
+        assert data["providers"] == [
+            {"id": "google", "name": "google", "login_url": "/google/login/"},
+        ]
 
     def test_default_manual_no_providers(self, client):
         resp = client.get("/api/v1/onboarding/config")
         assert resp.status_code == 200
         assert resp.json()["onboarding"] == "manual"
         assert resp.json()["providers"] == []
+
+    def test_keycloak_provider_exposed(self, client, settings):
+        """A configured Keycloak (OIDC) realm is offered with its login URL."""
+        settings.SOCIALACCOUNT_PROVIDERS = _KEYCLOAK_PROVIDERS
+        resp = client.get("/api/v1/onboarding/config")
+        assert resp.status_code == 200
+        assert resp.json()["providers"] == [
+            {"id": "keycloak", "name": "Keycloak", "login_url": "/oidc/keycloak/login/"},
+        ]
+
+
+class TestConfiguredProviders:
+    """How SOCIALACCOUNT_PROVIDERS maps to the login entries the page offers."""
+
+    def test_keycloak_entry(self, settings):
+        from users.api.onboarding import _configured_providers
+
+        settings.SOCIALACCOUNT_PROVIDERS = _KEYCLOAK_PROVIDERS
+        assert _configured_providers() == [
+            {"id": "keycloak", "name": "Keycloak", "login_url": "/oidc/keycloak/login/"},
+        ]
+
+    def test_oidc_without_apps_exposes_nothing(self, settings):
+        from users.api.onboarding import _configured_providers
+
+        settings.SOCIALACCOUNT_PROVIDERS = {"openid_connect": {"APPS": {}}}
+        assert _configured_providers() == []
+
+    def test_mixed_standard_and_oidc(self, settings):
+        from users.api.onboarding import _configured_providers
+
+        settings.SOCIALACCOUNT_PROVIDERS = {"google": {}, **_KEYCLOAK_PROVIDERS}
+        assert _configured_providers() == [
+            {"id": "google", "name": "google", "login_url": "/google/login/"},
+            {"id": "keycloak", "name": "Keycloak", "login_url": "/oidc/keycloak/login/"},
+        ]
+
+    def test_allauth_resolves_keycloak_app(self, settings, rf):
+        """The env-var config must resolve to a SocialApp allauth can actually use."""
+        from allauth.socialaccount.adapter import get_adapter
+
+        settings.SOCIALACCOUNT_PROVIDERS = _KEYCLOAK_PROVIDERS
+        app = get_adapter().get_app(rf.get("/"), provider="keycloak")
+        assert app.provider == "openid_connect"
+        assert app.provider_id == "keycloak"
+        assert app.client_id == "flamecheck"
+        assert app.settings["server_url"].endswith("/realms/flamecheck")
 
 
 # --------------------------------------------------------------------------- #

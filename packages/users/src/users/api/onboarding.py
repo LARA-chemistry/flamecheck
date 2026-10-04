@@ -53,10 +53,38 @@ def _onboarding_mode() -> str:
     return AppSettings.get_onboarding_mode()
 
 
-def _configured_providers() -> list[str]:
-    """The ids of the OAuth providers configured for this deployment."""
+def _configured_providers() -> list[dict[str, str]]:
+    """
+    The OAuth providers configured for this deployment, as login entries.
+
+    Each entry carries the ``id`` (used as the button key/label fallback), a
+    display ``name`` and the allauth ``login_url`` to redirect to. Standard
+    providers are keyed by their provider id (e.g. ``google`` →
+    ``/google/login/``); the generic OpenID Connect provider (``openid_connect``)
+    contributes one entry per app, keyed by that app's ``provider_id`` (e.g.
+    ``keycloak`` → ``/oidc/keycloak/login/``).
+    """
+    from django.urls import NoReverseMatch, reverse
+
     providers = getattr(settings, "SOCIALACCOUNT_PROVIDERS", {}) or {}
-    return list(providers.keys())
+    entries: list[dict[str, str]] = []
+    for provider_id, config in providers.items():
+        if provider_id == "openid_connect":
+            # ``APPS`` is a list of app-config dicts (one per realm).
+            for app in config.get("APPS") or []:
+                if not (pid := app.get("provider_id")):
+                    continue
+                url = reverse("openid_connect_login", kwargs={"provider_id": pid})
+                entries.append({"id": pid, "name": app.get("name") or pid, "login_url": url})
+        else:
+            try:
+                url = reverse(f"{provider_id}_login")
+            except NoReverseMatch:
+                # Provider configured but not installed; fall back to allauth's
+                # conventional URL so the button is still offered.
+                url = f"/{provider_id}/login/"
+            entries.append({"id": provider_id, "name": provider_id, "login_url": url})
+    return entries
 
 
 def _derive_username(email: str) -> str:

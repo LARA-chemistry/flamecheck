@@ -92,12 +92,12 @@
         <n-space vertical>
           <button
             v-for="provider in onboardingConfig.providers"
-            :key="provider"
+            :key="provider.id"
             type="button"
             class="login-oauth"
             @click="startOAuth(provider)"
           >
-            Continue with {{ providerLabel(provider) }}
+            Continue with {{ provider.name || providerLabel(provider.id) }}
           </button>
         </n-space>
       </template>
@@ -167,9 +167,11 @@ function providerLabel(id) {
 }
 
 // Start an OAuth sign-in: a full-page redirect to the provider via allauth.
-// On success the browser is redirected back to /oauth-callback (with a session).
+// The backend supplies each provider's allauth login URL (standard providers
+// are /{id}/login/, OpenID Connect realms /oidc/{id}/login/). On success the
+// browser is redirected back to /oauth-callback (with a session).
 function startOAuth(provider) {
-  window.location.href = `/${provider}/login/?next=/oauth-callback`
+  window.location.href = `${provider.login_url}?next=/oauth-callback`
 }
 
 onMounted(() => {

@@ -76,11 +76,19 @@ class UserOut(BaseModel):
         )
 
 
+class ProviderOut(BaseModel):
+    """A configured OAuth provider (drives one login-page sign-in button)."""
+
+    id: str
+    name: str
+    login_url: str
+
+
 class OnboardingConfigOut(BaseModel):
     """Public onboarding configuration (drives the login-page controls)."""
 
     onboarding: str
-    providers: list[str] = []
+    providers: list[ProviderOut] = []
 
 
 class RegisterIn(BaseModel):

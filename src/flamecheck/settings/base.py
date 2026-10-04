@@ -42,6 +42,9 @@ THIRD_PARTY_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    # Generic OpenID Connect provider (Keycloak & co. configure themselves as
+    # sub-providers of it, keyed by their ``provider_id``).
+    "allauth.socialaccount.providers.openid_connect",
     "django_filters",
     "corsheaders",
 ]
@@ -142,6 +145,18 @@ ACCOUNT_ADAPTER = "users.adapters.AccountAdapter"
 SOCIALACCOUNT_ADAPTER = "users.adapters.SocialAccountAdapter"
 # OAuth identity providers (django-allauth). A JSON object keyed by provider id,
 # e.g. {"google": {"APP": {"client_id": "...", "secret": "...", "key": ""}}}.
+#
+# OpenID Connect providers (Keycloak & co.) use the generic ``openid_connect``
+# provider; each realm is one entry in the ``APPS`` list whose ``provider_id``
+# is what the login button links to (``/{provider_id}/login/``). Example (a
+# Keycloak realm "flamecheck"):
+#   {"openid_connect": {"APPS": [{
+#       "provider_id": "keycloak", "name": "Keycloak",
+#       "client_id": "flamecheck", "secret": "<realm client secret>",
+#       "settings": {"server_url": "https://keycloak.example.com/realms/flamecheck"}
+#   }]}}
+# The realm's valid redirect URI must be
+#   https://<host>/<provider_id>/login/callback/
 # Empty by default: OAuth onboarding only offers buttons for configured providers.
 SOCIALACCOUNT_PROVIDERS = env.json("SOCIALACCOUNT_PROVIDERS", default={})
 # A plain link to the provider login URL (e.g. /google/login/) starts the
