@@ -167,6 +167,25 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- "New analysis" mode: a wrong submission generated a fresh re-trial. -->
+    <n-modal v-model:show="retryShow" preset="card" title="A new analysis was generated" style="width: 480px; max-width: 92vw">
+      <n-space vertical size="medium">
+        <n-text>
+          Your selection was not fully correct, so a fresh
+          <strong>{{ retryInfo?.type }}</strong> analysis (no. {{ retryInfo?.number }}) has been
+          generated for you.
+        </n-text>
+        <n-alert type="info" :bordered="false">
+          Your supporting assistants have been notified about the new analysis.
+        </n-alert>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button type="primary" @click="openRetry">Open the new analysis</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -212,6 +231,17 @@ const selectedAnions = ref([])
 // Success message after a non-final submission (the view stays open so the
 // student can submit again until the limit is reached).
 const lastSubmissionMsg = ref('')
+// "New analysis" mode: a fresh re-trial was generated after a wrong submission.
+const retryInfo = ref(null)
+const retryShow = ref(false)
+
+function openRetry() {
+  if (!retryInfo.value) return
+  const newId = retryInfo.value.new_analysis_id
+  retryShow.value = false
+  retryInfo.value = null
+  router.replace({ name: 'analysis', params: { id: newId } })
+}
 
 const selectedIons = computed(() => [...selectedCations.value, ...selectedAnions.value])
 
@@ -371,6 +401,13 @@ async function doSubmit() {
       confirmed: true,
       idempotency_key: crypto.randomUUID(),
     })
+    // "New analysis" mode: a wrong submission generated a fresh re-trial of the
+    // same type - offer to jump straight to it.
+    if (res?.retry?.generated) {
+      retryInfo.value = res.retry
+      retryShow.value = true
+      return
+    }
     // Re-fetch the detail so submission_count / window stay authoritative.
     detail.value = await api.get(`/analyses/${id.value}`)
     confirmShow.value = false

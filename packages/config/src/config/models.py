@@ -62,6 +62,13 @@ class GradingConfig(models.Model):
         default=0,
         help_text=_("Points deducted per wrongly selected ion (0 disables)."),
     )
+    retry_point_deduction = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=_(
+            "'New analysis' mode: points subtracted from the course total for each "
+            "earlier (superseded) re-trial attempt (0 disables the penalty)."
+        ),
+    )
     grading_mode = models.CharField(
         max_length=16,
         choices=[
@@ -70,6 +77,19 @@ class GradingConfig(models.Model):
         ],
         default="per_ion",
         help_text=_("Scoring mode: award points per correct ion, or only if the whole set is exact."),
+    )
+    submission_mode = models.CharField(
+        max_length=16,
+        choices=[
+            ("resubmit", _("Resubmit (default)")),
+            ("new_analysis", _("New analysis on wrong submission")),
+        ],
+        default="resubmit",
+        help_text=_(
+            "How a wrong submission is handled: allow resubmissions on the same "
+            "analysis, or hand out a fresh random analysis of the same type "
+            "(up to the type's max repetitions)."
+        ),
     )
     max_submissions_per_analysis = models.PositiveSmallIntegerField(
         default=3,

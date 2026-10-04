@@ -48,6 +48,16 @@ class AnalysisType(models.Model):
         blank=True,
         help_text=_("Default latest time a submission is accepted (inherited by new sessions)."),
     )
+    # In the "new_analysis" submission mode, the maximum number of *additional*
+    # (re-trial) analyses a student may be handed for one announcement of this
+    # type after a wrong submission. 0 disables re-trials.
+    max_repetitions = models.PositiveSmallIntegerField(
+        default=2,
+        help_text=_(
+            "In 'new analysis' submission mode: maximum number of re-trial analyses "
+            "generated per student and announcement after a wrong submission."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -69,7 +79,9 @@ class AnalysisInstanceManager(models.Manager["AnalysisInstance"]):
             .filter(assignments__student=student)
             .prefetch_related("type", "correct_ions", "assignments", "submissions")
             .distinct()
-            .order_by("assignments__number", "window_start")
+            # ``id`` breaks ties among re-trials that share a number/window so
+            # the newest sheet of an announcement comes last.
+            .order_by("assignments__number", "window_start", "id")
         )
 
 
@@ -385,15 +397,21 @@ def student_course_result(student, course=None) -> dict:
     link — and compares the total with the course's passing score from the
     applicable :class:`~config.models.GradingConfig`.
 
+    In the default "resubmit" behaviour each announcement contributes the final
+    score of its single analysis. In the "new_analysis" behaviour one announcement
+    can accumulate several analyses (one per re-trial); only the *newest* of them
+    counts toward the total, and every earlier (superseded) attempt subtracts the
+    course's ``retry_point_deduction``.
+
     Args:
         student: The student user.
         course: The course to aggregate over (defaults to the student's course).
 
     Returns:
-        dict with ``instances`` (the aggregated :class:`AnalysisInstance`
-        objects), ``total_score``, ``ideal_score``, ``passing_score`` and
-        ``passed`` (True when the total reaches the passing score; always True
-        when the passing score is 0).
+        dict with ``instances`` (all the student's analyses), ``counting_ids``
+        (the ids that count toward the total), ``total_score``, ``ideal_score``,
+        ``passing_score`` and ``passed`` (True when the total reaches the passing
+        score; always True when the passing score is 0).
 
     """
     if course is None:
@@ -404,13 +422,69 @@ def student_course_result(student, course=None) -> dict:
         for i in AnalysisInstance.objects.for_student(student)
         if course is None or i.course_id == course.id or i.course is None
     ]
-    total = sum(i.score() or 0 for i in instances)
-    ideal = sum(i.ideal_score() for i in instances)
+    # The newest (highest id) instance of each announcement number counts; any
+    # earlier ones are superseded re-trials that only add the per-course penalty.
+    newest_by_number: dict[int, AnalysisInstance] = {}
+    for inst in instances:
+        current = newest_by_number.get(inst.number)
+        if current is None or inst.id > current.id:
+            newest_by_number[inst.number] = inst
+    counting = list(newest_by_number.values())
+    penalty = int(grading.retry_point_deduction)
+    earlier_count = len(instances) - len(counting)
+    total = max(0, sum(i.score() or 0 for i in counting) - penalty * earlier_count)
+    ideal = sum(i.ideal_score() for i in counting)
     passing = int(grading.passing_score)
     return {
         "instances": instances,
+        "counting_ids": {i.id for i in counting},
         "total_score": total,
         "ideal_score": ideal,
         "passing_score": passing,
         "passed": passing <= 0 or total >= passing,
     }
+
+
+class AnalysisNotification(models.Model):
+    """
+    A notification raised when a re-trial analysis is generated for a student.
+
+    In the "new_analysis" submission mode a wrong submission hands the student a
+    fresh analysis; this row records the event so the supporting assistants of the
+    course can be told about it. Each assistant acknowledges independently (via
+    :attr:`read_by`).
+    """
+
+    course = models.ForeignKey(
+        "config.Course",
+        on_delete=models.CASCADE,
+        related_name="analysis_notifications",
+        help_text=_("Course the re-trial belongs to."),
+    )
+    instance = models.ForeignKey(
+        AnalysisInstance,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        help_text=_("The newly generated (re-trial) analysis instance."),
+    )
+    student = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="triggered_analysis_notifications",
+        help_text=_("Student whose wrong submission triggered the re-trial."),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_by = models.ManyToManyField(
+        "users.User",
+        blank=True,
+        related_name="read_analysis_notifications",
+        help_text=_("Assistants who have acknowledged this notification."),
+    )
+
+    class Meta:
+        verbose_name = _("Analysis notification")
+        verbose_name_plural = _("Analysis notifications")
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"Re-trial for {self.student} on {self.instance}"

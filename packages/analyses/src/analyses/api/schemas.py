@@ -151,6 +151,8 @@ class AnalysisTypeIn(Schema):
     # Default submission window inherited by new sessions of this type.
     default_window_start: str | None = None
     default_window_end: str | None = None
+    # "New analysis" mode: max re-trial analyses per student/announcement.
+    max_repetitions: int | None = None
 
 
 class AnalysisInstanceIn(Schema):
@@ -223,6 +225,8 @@ class GradingConfigOut(Schema):
     max_submissions_per_analysis: int
     final_score_strategy: str
     passing_score: int
+    submission_mode: str = "resubmit"
+    retry_point_deduction: int = 0
 
 
 class AppSettingsOut(Schema):

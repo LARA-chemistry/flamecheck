@@ -142,6 +142,18 @@
                   :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
                 />
               </n-form-item>
+              <n-form-item label="Submission mode">
+                <n-select
+                  v-model:value="gradingForm.submission_mode"
+                  :options="[
+                    { label: 'Resubmit (default)', value: 'resubmit' },
+                    { label: 'New analysis on wrong submission', value: 'new_analysis' },
+                  ]"
+                />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.submission_mode === 'new_analysis'" label="Retry point deduction">
+                <n-input-number v-model:value="gradingForm.retry_point_deduction" :min="0" />
+              </n-form-item>
               <n-form-item label="Min. points to pass">
                 <n-input-number v-model:value="gradingForm.passing_score" :min="0" />
               </n-form-item>
@@ -444,6 +456,8 @@ const gradingForm = ref({
   grading_mode: 'per_ion',
   max_submissions_per_analysis: 3,
   final_score_strategy: 'best',
+  submission_mode: 'resubmit',
+  retry_point_deduction: 0,
   passing_score: 50,
 })
 const gradingSaving = ref(false)

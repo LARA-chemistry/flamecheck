@@ -3,11 +3,58 @@
     <header class="fc-header">
       <h1 class="fc-title">Assistant Dashboard</h1>
       <n-space align="center">
+        <n-badge :value="unreadCount" :show-zero="false" :offset="[-4, 4]">
+          <n-button size="small" secondary :type="showNotifs ? 'primary' : 'default'" @click="showNotifs = !showNotifs">
+            Notifications
+          </n-button>
+        </n-badge>
         <HelpToggle :active="helpOpen" @click="helpOpen = !helpOpen" />
         <n-button size="small" secondary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
         <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </n-space>
     </header>
+
+    <!-- Re-trial notifications: shown on login so supporting assistants know a
+         student was handed a fresh analysis to review / edit. -->
+    <n-card v-if="notifications.length" size="small" class="notif-banner" :class="{ 'notif-banner--collapsed': !showNotifs }">
+      <template #header>
+        <n-space align="center" justify="space-between" style="width: 100%">
+          <span class="notif-banner__title">
+            New re-trial analyses
+            <n-tag v-if="unreadCount" type="warning" size="small" round>{{ unreadCount }} new</n-tag>
+          </span>
+          <n-button
+            v-if="unreadCount"
+            size="tiny"
+            quaternary
+            type="primary"
+            :loading="notifsLoading"
+            @click="markAllRead"
+          >
+            Mark all as read
+          </n-button>
+        </n-space>
+      </template>
+      <n-spin :show="notifsLoading">
+        <n-space vertical size="small">
+          <div v-for="n in notifications" :key="n.id" class="notif-item" :class="{ 'notif-item--read': n.read }">
+            <span class="notif-item__text">
+              <strong>{{ n.student_name }}</strong> — a new {{ n.type }} analysis (no. {{ n.number }}) was generated in
+              <em>{{ n.course_name }}</em>.
+            </span>
+            <n-button
+              v-if="!n.read"
+              size="tiny"
+              secondary
+              type="primary"
+              @click="markRead(n)"
+            >
+              Mark as read
+            </n-button>
+          </div>
+        </n-space>
+      </n-spin>
+    </n-card>
 
     <n-card title="Courses" size="large">
       <n-spin :show="loading">
@@ -205,7 +252,7 @@ import { api } from '../api/client'
 import {
   NCard, NSpin, NEmpty, NCollapse, NCollapseItem, NSpace, NButton,
   NDataTable, NStatistic, NInputNumber, NModal, NTag, NProgress,
-  NRadioGroup, NRadioButton, NIcon,
+  NRadioGroup, NRadioButton, NIcon, NBadge,
 } from 'naive-ui'
 import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
@@ -220,6 +267,12 @@ const loading = ref(true)
 const courses = ref([])
 const overview = ref({})
 const overviewLoading = ref({})
+
+// Re-trial notifications (a student was handed a fresh analysis to review).
+const notifications = ref([])
+const notifsLoading = ref(false)
+const showNotifs = ref(false)
+const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
 
 // Per-course active view: 'students' (default) or 'substance'.
 const courseView = ref({})
@@ -432,9 +485,36 @@ async function load() {
   loading.value = true
   try {
     courses.value = await api.get('/assistant/courses')
+    await loadNotifications()
   } finally {
     loading.value = false
   }
+}
+
+async function loadNotifications() {
+  notifsLoading.value = true
+  try {
+    notifications.value = await api.get('/assistant/notifications')
+    // Open the panel on login when there is something new to see.
+    if (notifications.value.some((n) => !n.read)) showNotifs.value = true
+  } catch {
+    notifications.value = []
+  } finally {
+    notifsLoading.value = false
+  }
+}
+
+async function markRead(n) {
+  try {
+    await api.post(`/assistant/notifications/${n.id}/read`, {})
+    n.read = true
+  } catch (e) {
+    window.alert(e.message || 'Failed to mark the notification as read.')
+  }
+}
+
+async function markAllRead() {
+  await Promise.all(notifications.value.filter((n) => !n.read).map((n) => markRead(n)))
 }
 
 function downloadCsv(courseId) {
@@ -469,6 +549,32 @@ onMounted(load)
 .muted {
   font-size: var(--fc-fs-sm);
   color: var(--fc-muted);
+}
+.notif-banner {
+  margin-bottom: 16px;
+  border-left: 3px solid var(--n-warning-color, #f0a020);
+}
+.notif-banner--collapsed :deep(.n-card__content) {
+  display: none;
+}
+.notif-banner__title {
+  font-weight: 600;
+}
+.notif-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--n-warning-color, #f0a020) 8%, transparent);
+}
+.notif-item--read {
+  background: transparent;
+  opacity: 0.6;
+}
+.notif-item__text {
+  font-size: var(--fc-fs-sm);
 }
 .link-btn {
   border: none;

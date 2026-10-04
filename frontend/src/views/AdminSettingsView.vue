@@ -81,6 +81,19 @@
             :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
           />
         </n-form-item>
+        <n-form-item label="Submission mode">
+          <n-select
+            v-model:value="grading.submission_mode"
+            :options="[
+              { label: 'Resubmit (default)', value: 'resubmit' },
+              { label: 'New analysis on wrong submission', value: 'new_analysis' },
+            ]"
+          />
+        </n-form-item>
+        <n-form-item label="Retry point deduction">
+          <n-input-number v-model:value="grading.retry_point_deduction" :min="0" />
+          <template #feedback>Points subtracted per earlier re-trial (new-analysis mode only).</template>
+        </n-form-item>
         <n-button type="primary" :loading="savingGrading" @click="saveGrading">
           Save Grading Configuration
         </n-button>
@@ -284,6 +297,8 @@ const grading = ref({
   grading_mode: 'per_ion',
   max_submissions_per_analysis: 3,
   final_score_strategy: 'best',
+  submission_mode: 'resubmit',
+  retry_point_deduction: 0,
 })
 const savingAppSettings = ref(false)
 const savingGrading = ref(false)

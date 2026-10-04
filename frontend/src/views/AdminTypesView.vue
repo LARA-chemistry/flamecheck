@@ -50,6 +50,12 @@
         <n-text depth="3" style="font-size: 12px">
           New sessions (announcements) of this type inherit this window unless overridden per session.
         </n-text>
+        <n-form-item label="Max re-trials">
+          <n-input-number v-model:value="modal.form.max_repetitions" :min="0" :max="20" />
+          <template #feedback>
+            "New analysis" mode: re-trial analyses a student may get per announcement after a wrong submission.
+          </template>
+        </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
@@ -133,7 +139,7 @@ const modal = ref({
   show: false,
   editing: false,
   saving: false,
-  form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null },
+  form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null, max_repetitions: 2 },
 })
 
 // Per-type sessions (concrete analyses) + their windows.
@@ -170,6 +176,7 @@ const typeCols = [
   { title: 'Name', key: 'name', render: (row) => row.name },
   { title: 'Description', key: 'description', ellipsis: { tooltip: true } },
   { title: 'Ions', key: 'ions', render: (row) => `${row.ions.length}` },
+  { title: 'Max re-trials', key: 'max_repetitions', render: (row) => `${row.max_repetitions ?? 2}` },
   {
     title: 'Default window',
     key: 'default_window',
@@ -263,7 +270,7 @@ function openCreate() {
     show: true,
     editing: false,
     saving: false,
-    form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null },
+    form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null, max_repetitions: 2 },
   }
 }
 
@@ -279,6 +286,7 @@ function openEdit(row) {
       ion_ids: row.ions.map((i) => i.id),
       default_window_start: isoToPicker(row.default_window_start),
       default_window_end: isoToPicker(row.default_window_end),
+      max_repetitions: row.max_repetitions ?? 2,
     },
   }
 }
@@ -303,6 +311,7 @@ async function saveType() {
       ion_ids: f.ion_ids,
       default_window_start: timestampToIso(f.default_window_start),
       default_window_end: timestampToIso(f.default_window_end),
+      max_repetitions: f.max_repetitions ?? 2,
     }
     if (modal.value.editing) {
       await api.put(`/admin/analysis-types/${f.id}`, payload)

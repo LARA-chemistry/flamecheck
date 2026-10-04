@@ -212,14 +212,15 @@ class StudentAssignment(models.Model):
     class Meta:
         verbose_name = _("Student analysis assignment")
         verbose_name_plural = _("Student analysis assignments")
+        # NB: there is deliberately no uniqueness on (course, student, number) -
+        # in the "new analysis" submission mode a student accumulates several
+        # instances for one announcement (the original plus re-trials). The
+        # (student, instance) uniqueness below still prevents double-assigning a
+        # single sheet to the same student.
         constraints = [
             models.UniqueConstraint(
                 fields=["student", "instance"],
                 name="unique_student_instance_assignment",
-            ),
-            models.UniqueConstraint(
-                fields=["course", "student", "number"],
-                name="unique_course_student_number",
             ),
         ]
 

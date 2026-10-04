@@ -534,6 +534,7 @@ def list_analysis_types(request):
             "ions": [ion_to_schema(i) for i in t.possible_ions.all()],
             "default_window_start": t.default_window_start.isoformat() if t.default_window_start else None,
             "default_window_end": t.default_window_end.isoformat() if t.default_window_end else None,
+            "max_repetitions": t.max_repetitions,
             "session_count": t.instances.count(),
         }
         for t in types
@@ -551,6 +552,8 @@ def create_analysis_type(request, payload: AnalysisTypeIn):
         t.default_window_start = _parse_dt(payload.default_window_start)
     if payload.default_window_end:
         t.default_window_end = _parse_dt(payload.default_window_end)
+    if payload.max_repetitions is not None:
+        t.max_repetitions = payload.max_repetitions
     t.save()
     logger.info("Admin %s created analysis type %s", request.user.username, t.name)
     return {"id": t.id, "name": t.name}
@@ -572,6 +575,8 @@ def update_analysis_type(request, type_id: int, payload: AnalysisTypeIn):
         t.default_window_end = _parse_dt(payload.default_window_end)
     elif payload.default_window_end is None:
         t.default_window_end = None
+    if payload.max_repetitions is not None:
+        t.max_repetitions = payload.max_repetitions
     t.save()
     if payload.ion_ids is not None:
         t.possible_ions.set(payload.ion_ids)
@@ -912,6 +917,8 @@ def _apply_grading_payload(gc: GradingConfig, payload: GradingConfigOut) -> None
     gc.max_submissions_per_analysis = payload.max_submissions_per_analysis
     gc.final_score_strategy = payload.final_score_strategy
     gc.passing_score = payload.passing_score
+    gc.submission_mode = payload.submission_mode
+    gc.retry_point_deduction = payload.retry_point_deduction
 
 
 def _grading_config_payload(gc: GradingConfig) -> dict:
@@ -925,6 +932,8 @@ def _grading_config_payload(gc: GradingConfig) -> dict:
         "max_submissions_per_analysis": gc.max_submissions_per_analysis,
         "final_score_strategy": gc.final_score_strategy,
         "passing_score": gc.passing_score,
+        "submission_mode": gc.submission_mode,
+        "retry_point_deduction": gc.retry_point_deduction,
     }
 
 
