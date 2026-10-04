@@ -104,6 +104,15 @@ class GradingConfig(models.Model):
         default="best",
         help_text=_("How the final score is derived when multiple submissions exist."),
     )
+    # ---- multiple choice (per course) ---------------------------------------
+    mc_points_per_card = models.PositiveSmallIntegerField(
+        default=10,
+        help_text=_("Multiple choice: points awarded per card when every question is answered correctly."),
+    )
+    mc_penalty_per_wrong = models.PositiveSmallIntegerField(
+        default=2,
+        help_text=_("Multiple choice: points deducted for each wrongly answered question on a card."),
+    )
     course = models.ForeignKey(
         "config.Course",
         null=True,

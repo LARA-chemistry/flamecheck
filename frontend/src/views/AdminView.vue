@@ -79,6 +79,22 @@
           answer key and the submission window.
         </p>
       </HelpSection>
+      <HelpSection title="Multiple choice">
+        <p>
+          In addition to the analyses, students can answer <em>multiple-choice
+          cards</em>. The <strong>Multiple Choice</strong> page (per course) is
+          the designer: define <em>questions</em> (text, options, one correct
+          answer, plus a description and remarks for your own documentation),
+          group up to three questions into a <em>card</em>, and present a
+          time-windowed <em>sheet</em> to chosen students.
+        </p>
+        <p>
+          Grading is per course (on the same page): points awarded for a fully
+          correct card (default 10) and the penalty per wrong answer (default
+          2). A card's score is the points minus the penalty times the number
+          of wrong answers, floored at zero.
+        </p>
+      </HelpSection>
       <HelpSection title="Ion symbols">
         <p>
           An ion is written as one canonical symbol:
@@ -157,6 +173,7 @@ const navItems = [
   { to: 'admin-courses', label: 'Courses' },
   { to: 'admin-types', label: 'Analysis Types' },
   { to: 'admin-substances', label: 'Substances' },
+  { to: 'admin-multichoice', label: 'Multiple Choice' },
 ]
 
 function isCurrent(name) {

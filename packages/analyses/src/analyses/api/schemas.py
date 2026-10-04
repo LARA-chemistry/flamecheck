@@ -227,6 +227,8 @@ class GradingConfigOut(Schema):
     passing_score: int
     submission_mode: str = "resubmit"
     retry_point_deduction: int = 0
+    mc_points_per_card: int = 10
+    mc_penalty_per_wrong: int = 2
 
 
 class AppSettingsOut(Schema):

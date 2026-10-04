@@ -39,6 +39,7 @@ dependencies = [
   "substances",
   "analyses",
   "config",
+  "multichoice",
   "django-ninja>=1.7",
   "django-cors-headers>=4.9",
   "whitenoise>=6.12",
@@ -83,6 +84,7 @@ users = { workspace = true }
 substances = { workspace = true }
 analyses = { workspace = true }
 config = { workspace = true }
+multichoice = { workspace = true }
 
 
 [tool.uv.workspace]
@@ -91,6 +93,7 @@ members = [
   "packages/substances",
   "packages/analyses",
   "packages/config",
+  "packages/multichoice",
   # "packages/",
 ]
 
@@ -163,6 +166,7 @@ lint.per-file-ignores."packages/users/src/users/admin.py" = [ "D102" ]
 lint.per-file-ignores."packages/users/src/users/templatetags/model_descriptions.py" = [ "D103" ]
 lint.per-file-ignores."packages/users/src/users/management/commands/init_barcode.py" = [ "D102" ]
 lint.per-file-ignores."packages/analyses/src/analyses/models.py" = [ "D105", "D106" ]
+lint.per-file-ignores."packages/multichoice/src/multichoice/models.py" = [ "D105", "D106" ]
 lint.per-file-ignores."packages/analyses/src/analyses/admin.py" = [ "D102" ]
 lint.per-file-ignores."packages/config/src/config/models.py" = [ "D105", "D106" ]
 lint.per-file-ignores."packages/substances/src/substances/models.py" = [ "D105", "D106" ]

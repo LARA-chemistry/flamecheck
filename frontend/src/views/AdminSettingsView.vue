@@ -94,6 +94,14 @@
           <n-input-number v-model:value="grading.retry_point_deduction" :min="0" />
           <template #feedback>Points subtracted per earlier re-trial (new-analysis mode only).</template>
         </n-form-item>
+        <n-form-item label="MC: points per card (all correct)">
+          <n-input-number v-model:value="grading.mc_points_per_card" :min="0" />
+          <template #feedback>Multiple choice: full points for a card answered entirely correctly.</template>
+        </n-form-item>
+        <n-form-item label="MC: penalty per wrong answer">
+          <n-input-number v-model:value="grading.mc_penalty_per_wrong" :min="0" />
+          <template #feedback>Multiple choice: points deducted for each wrongly answered question.</template>
+        </n-form-item>
         <n-button type="primary" :loading="savingGrading" @click="saveGrading">
           Save Grading Configuration
         </n-button>
@@ -299,6 +307,8 @@ const grading = ref({
   final_score_strategy: 'best',
   submission_mode: 'resubmit',
   retry_point_deduction: 0,
+  mc_points_per_card: 10,
+  mc_penalty_per_wrong: 2,
 })
 const savingAppSettings = ref(false)
 const savingGrading = ref(false)

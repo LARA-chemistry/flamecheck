@@ -7,6 +7,7 @@ members = [
     "analyses",
     "config",
     "flamecheck",
+    "multichoice",
     "substances",
     "users",
 ]
@@ -445,6 +446,7 @@ dependencies = [
     { name = "django-filter" },
     { name = "django-ninja" },
     { name = "gunicorn" },
+    { name = "multichoice" },
     { name = "pyjwt" },
     { name = "substances" },
     { name = "users" },
@@ -489,6 +491,7 @@ requires-dist = [
     { name = "django-filter", specifier = ">=26.1" },
     { name = "django-ninja", specifier = ">=1.7" },
     { name = "gunicorn", specifier = ">=26.0" },
+    { name = "multichoice", editable = "packages/multichoice" },
     { name = "psycopg", marker = "extra == 'postgres'", specifier = ">=3.3" },
     { name = "pyjwt", specifier = ">=2.15" },
     { name = "substances", editable = "packages/substances" },
@@ -701,6 +704,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
+
+[[package]]
+name = "multichoice"
+version = "0.0.0"
+source = { editable = "packages/multichoice" }
+dependencies = [
+    { name = "factory-boy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "factory-boy", specifier = ">=3.3.3" }]
 
 [[package]]
 name = "myst-parser"

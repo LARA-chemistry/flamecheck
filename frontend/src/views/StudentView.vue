@@ -103,6 +103,48 @@
       </div>
     </n-spin>
 
+    <!-- Multiple-choice cards (in addition to the analyses) -->
+    <section v-if="mcSheets.length" class="mc-section">
+      <h2 class="mc-section__title">Multiple Choice</h2>
+      <div class="fc-card-grid">
+        <div
+          v-for="m in mcSheets"
+          :key="m.id"
+          class="fc-card"
+          :class="isActiveMC(m) ? 'fc-card--interactive' : 'fc-card--inactive'"
+          :role="isClickableMC(m) ? 'button' : undefined"
+          :tabindex="isClickableMC(m) ? 0 : undefined"
+          @click="openMC(m)"
+          @keyup.enter="openMC(m)"
+        >
+          <span class="fc-card__accent" :class="{ 'fc-card__accent--muted': !isActiveMC(m) }"></span>
+          <div class="analysis-card">
+            <div class="analysis-card__top">
+              <span class="analysis-card__num">MC #{{ m.number }}</span>
+              <n-tag :type="windowTagType(displayStatusMC(m))" round size="small">
+                {{ windowLabel(displayStatusMC(m)) }}
+              </n-tag>
+            </div>
+            <h3 class="analysis-card__title">{{ m.card_title }}</h3>
+            <p v-if="windowInterval(m)" class="analysis-card__window" :title="windowInterval(m)">
+              {{ m.question_count }} question{{ m.question_count === 1 ? '' : 's' }} · {{ windowInterval(m) }}
+            </p>
+            <div class="analysis-card__stats">
+              <div class="stat">
+                <span class="stat__value">{{ m.score != null ? m.score : '—' }}</span>
+                <span class="stat__label">points</span>
+              </div>
+            </div>
+            <div class="analysis-card__actions">
+              <n-button class="analysis-card__action" type="primary" secondary block :disabled="!isClickableMC(m)" @click.stop="openMC(m)">
+                {{ actionLabelMC(m) }}
+              </n-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Course-progress footer at the bottom of the page: a red-yellow-green
          bar (progress towards the max points, with a tick at the passing line)
          and the total/max points on the right, red until the course is passed. -->
@@ -165,6 +207,8 @@ const auth = useAuthStore()
 const user = auth.user
 const loading = ref(true)
 const analyses = ref([])
+// Time-windowed multiple-choice cards assigned to the student.
+const mcSheets = ref([])
 // Course result (total/ideal/passing points + pass status) for the header bar.
 const summary = ref(null)
 // Profile modal visibility (toggled by clicking the user chip in the header).
@@ -257,17 +301,41 @@ function actionLabel(a) {
   return canSubmit(a) ? 'Open Analysis' : a.submission_count > 0 ? 'View Result' : 'Open Analysis'
 }
 
+// --- Multiple choice cards ---------------------------------------------------
+// A MC card is open (answerable) while its window is open and unsubmitted.
+function mcAnswerable(m) {
+  return m.window_status === 'open'
+}
+function isActiveMC(m) {
+  return mcAnswerable(m) || m.submission_count > 0
+}
+function isClickableMC(m) {
+  return mcAnswerable(m) || m.submission_count > 0
+}
+function displayStatusMC(m) {
+  if (m.submission_count > 0) return 'submitted'
+  return m.window_status
+}
+function actionLabelMC(m) {
+  return mcAnswerable(m) ? 'Answer Card' : m.submission_count > 0 ? 'View Result' : 'Answer Card'
+}
+function openMC(m) {
+  if (isClickableMC(m)) router.push(`/mc/${m.id}`)
+}
+
 async function load() {
   loading.value = true
   try {
-    // The summary request is non-critical: if it fails, the card grid still
-    // renders (the pass-status bar just stays hidden).
-    const [list, sum] = await Promise.all([
+    // The summary + MC requests are non-critical: if they fail, the analysis
+    // card grid still renders (the MC section / pass bar just stay hidden).
+    const [list, sum, mc] = await Promise.all([
       api.get('/analyses'),
       api.get('/me/summary').catch(() => null),
+      api.get('/mc-sheets').catch(() => []),
     ])
     analyses.value = list
     summary.value = sum
+    mcSheets.value = mc
   } finally {
     loading.value = false
   }
@@ -448,6 +516,17 @@ onMounted(load)
 .empty {
   padding: var(--fc-space-lg) 0;
   text-align: center;
+}
+
+/* Multiple-choice section (below the analysis grid). */
+.mc-section {
+  margin-top: var(--fc-space-lg);
+}
+.mc-section__title {
+  font-size: var(--fc-fs-md);
+  font-weight: 700;
+  color: var(--fc-ink);
+  margin: 0 0 var(--fc-space-sm);
 }
 
 .analysis-card {

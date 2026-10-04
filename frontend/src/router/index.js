@@ -54,6 +54,13 @@ const routes = [
     meta: { roles: ['student'] },
   },
   {
+    // A time-windowed multiple-choice card the student can answer / re-view.
+    path: '/mc/:id',
+    name: 'mc-card',
+    component: () => import('../views/MCDetailView.vue'),
+    meta: { roles: ['student'] },
+  },
+  {
     path: '/assistant',
     name: 'assistant',
     component: () => import('../views/AssistantView.vue'),
@@ -88,6 +95,12 @@ const routes = [
         path: 'substances',
         name: 'admin-substances',
         component: () => import('../views/AdminSubstancesView.vue'),
+        meta: { roles: ['admin'] },
+      },
+      {
+        path: 'multichoice',
+        name: 'admin-multichoice',
+        component: () => import('../views/AdminMCView.vue'),
         meta: { roles: ['admin'] },
       },
       {

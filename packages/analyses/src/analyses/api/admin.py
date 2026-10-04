@@ -919,6 +919,8 @@ def _apply_grading_payload(gc: GradingConfig, payload: GradingConfigOut) -> None
     gc.passing_score = payload.passing_score
     gc.submission_mode = payload.submission_mode
     gc.retry_point_deduction = payload.retry_point_deduction
+    gc.mc_points_per_card = payload.mc_points_per_card
+    gc.mc_penalty_per_wrong = payload.mc_penalty_per_wrong
 
 
 def _grading_config_payload(gc: GradingConfig) -> dict:
@@ -934,6 +936,8 @@ def _grading_config_payload(gc: GradingConfig) -> dict:
         "passing_score": gc.passing_score,
         "submission_mode": gc.submission_mode,
         "retry_point_deduction": gc.retry_point_deduction,
+        "mc_points_per_card": gc.mc_points_per_card,
+        "mc_penalty_per_wrong": gc.mc_penalty_per_wrong,
     }
 
 

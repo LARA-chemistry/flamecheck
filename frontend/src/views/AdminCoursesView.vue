@@ -165,6 +165,12 @@
               <n-form-item label="Min. points to pass">
                 <n-input-number v-model:value="gradingForm.passing_score" :min="0" />
               </n-form-item>
+              <n-form-item label="MC: points per card (all correct)">
+                <n-input-number v-model:value="gradingForm.mc_points_per_card" :min="0" />
+              </n-form-item>
+              <n-form-item label="MC: penalty per wrong answer">
+                <n-input-number v-model:value="gradingForm.mc_penalty_per_wrong" :min="0" />
+              </n-form-item>
             </n-form>
             <n-button type="primary" size="small" :loading="gradingSaving" @click="saveGrading">
               Save Course Grading
@@ -528,6 +534,8 @@ const gradingForm = ref({
   submission_mode: 'resubmit',
   retry_point_deduction: 0,
   passing_score: 50,
+  mc_points_per_card: 10,
+  mc_penalty_per_wrong: 2,
 })
 const gradingSaving = ref(false)
 

@@ -266,6 +266,7 @@ class Command(BaseCommand):
             instances = self._seed_announcements(types, courses, users)
             self._seed_singletons(courses)
             self._seed_submissions(users, instances)
+            self._seed_multichoice(courses, users)
 
             self._print_summary(courses, users, instances)
 
@@ -301,6 +302,15 @@ class Command(BaseCommand):
         AnalysisInstance.objects.all().delete()
         AnalysisType.objects.all().delete()
         AssistantCourse.objects.all().delete()
+        # Multiple-choice domain (cleared alongside the analyses domain).
+        from multichoice.models import MCCard, MCOption, MCQuestion, MCSheet, MCStudentAssignment, MCSubmission
+
+        MCSubmission.objects.all().delete()
+        MCStudentAssignment.objects.all().delete()
+        MCSheet.objects.all().delete()
+        MCCard.objects.all().delete()
+        MCOption.objects.all().delete()
+        MCQuestion.objects.all().delete()
         GradingConfig.objects.all().delete()
         AppSettings.objects.all().delete()
         # Demo students are the ones that carry a barcode; drop those and the
@@ -551,6 +561,112 @@ class Command(BaseCommand):
                 return [correct_ids[0]] if wrong is None else [wrong, correct_ids[0]]
             case _:
                 return correct_ids
+
+    # -- multiple choice -----------------------------------------------------
+    def _seed_multichoice(self, courses: dict[str, Course], users: dict[str, User]) -> None:
+        """
+        Seed a small, self-consistent multiple-choice set for the demo.
+
+        For the first (Chemistry) course: three flame-test questions grouped
+        into one card, one open sheet assigned to every chemistry student, and
+        two example submissions (one fully correct, one with a wrong answer).
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from multichoice.models import (
+            MCCard,
+            MCCardQuestion,
+            MCOption,
+            MCQuestion,
+            MCSheet,
+            MCStudentAssignment,
+            MCSubmission,
+        )
+
+        course_name = _COURSES[0][0]
+        course = courses.get(course_name)
+        if course is None:
+            return
+        students = [u for u in users.values() if u.is_student and u.course_id == course.id]
+        if not students:
+            return
+
+        def make_question(text: str, options: list[tuple[str, bool]]) -> MCQuestion:
+            q = MCQuestion.objects.create(
+                course=course,
+                text=text,
+                description="Flame-test knowledge check (demo).",
+                remarks="Demo content for the multiple-choice feature.",
+            )
+            for i, (opt_text, correct) in enumerate(options):
+                MCOption.objects.create(question=q, text=opt_text, is_correct=correct, sort_order=i)
+            return q
+
+        questions = [
+            make_question(
+                "Which flame colour does sodium (Na+1) produce?",
+                [("Yellow", True), ("Violet", False), ("Green", False), ("Brick red", False)],
+            ),
+            make_question(
+                "Which flame colour does copper (Cu+2) produce?",
+                [("Green", True), ("Yellow", False), ("Crimson", False), ("No colour", False)],
+            ),
+            make_question(
+                "Which flame colour does potassium (K+1) produce?",
+                [("Lilac (violet)", True), ("Yellow", False), ("Green", False), ("Orange", False)],
+            ),
+        ]
+        card = MCCard.objects.create(
+            course=course,
+            title="Flame test card",
+            description="Three flame-test questions (demo).",
+            remarks="Demo card for the multiple-choice feature.",
+        )
+        for i, q in enumerate(questions):
+            MCCardQuestion.objects.create(card=card, question=q, order=i)
+
+        now = timezone.now().replace(microsecond=0)
+        sheet = MCSheet.objects.create(
+            card=card,
+            course=course,
+            window_start=now - timedelta(hours=1),
+            window_end=now + timedelta(hours=23),
+            number=1,
+        )
+        for student in students:
+            MCStudentAssignment.objects.create(course=course, student=student, sheet=sheet, number=1)
+
+        def submit(username: str, wrong_first: bool) -> None:
+            student = users.get(username)
+            if student is None:
+                return
+            answers: dict[int, int] = {}
+            for q in questions:
+                correct = q.correct_option()
+                if wrong_first and q is questions[0]:
+                    answers[q.id] = q.options_set.filter(is_correct=False).first().id
+                else:
+                    answers[q.id] = correct.id
+            MCSubmission.objects.create(
+                sheet=sheet,
+                student=student,
+                submission_number=1,
+                idempotency_key=f"seed-mc-{student.id}",
+                answers=answers,
+                score=8 if wrong_first else 10,
+                correct_count=2 if wrong_first else 3,
+                wrong_count=1 if wrong_first else 0,
+                ideal_score=10,
+            )
+
+        submit("student-lena", wrong_first=False)
+        submit("student-max", wrong_first=True)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  multichoice:    1 card, {len(questions)} questions, sheet for {len(students)} students"
+            )
+        )
 
     # -- summary -------------------------------------------------------------
     def _print_summary(
