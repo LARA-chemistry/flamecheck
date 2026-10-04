@@ -5,7 +5,15 @@
         <h2 class="page-title">Analysis Types</h2>
         <n-button type="primary" size="small" @click="openCreate">+ New Type</n-button>
       </div>
-      <n-data-table :columns="typeCols" :data="types" size="small" :loading="loading" />
+      <n-data-table
+        :columns="typeCols"
+        :data="types"
+        size="small"
+        :loading="loading"
+        :row-key="(row) => row.id"
+        :row-props="(row) => ({ style: 'cursor: pointer', onClick: (e) => onRowClick(row, e) })"
+      />
+      <n-text depth="3" style="font-size: 12px">Click a row to edit the type.</n-text>
     </n-card>
 
     <n-modal v-model:show="modal.show" preset="card" :title="modal.editing ? 'Edit Analysis Type' : 'New Analysis Type'" style="width: 600px; max-width: 94vw">
@@ -124,6 +132,7 @@ import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NDataTable, NCard, NForm, NFormItem,
   NModal, NAlert, NEmpty, NText, NDatePicker,
 } from 'naive-ui'
+import IonSymbol from '../components/IonSymbol.vue'
 
 const message = ref('')
 const msgType = ref('success')
@@ -255,7 +264,7 @@ async function loadIons() {
   try {
     ions.value = await api.get('/ions')
     ionOptions.value = ions.value.map((i) => ({
-      label: `${i.symbol} (${i.name})`,
+      label: h('span', [h(IonSymbol, { symbol: i.symbol }), ` (${i.name})`]),
       value: i.id,
     }))
   } catch (e) {
@@ -263,6 +272,12 @@ async function loadIons() {
   } finally {
     loadingIons.value = false
   }
+}
+
+// Open the edit modal for a row, but ignore clicks on the row's action buttons.
+function onRowClick(row, event) {
+  if (event && event.target.closest('button, a')) return
+  openEdit(row)
 }
 
 function openCreate() {

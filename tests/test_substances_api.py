@@ -183,6 +183,31 @@ class TestAdminMutations:
         assert substance.name == "Sodium chloride (table salt)"
         assert list(substance.ions.all()) == [cation]
 
+    def test_admin_updates_substance_full_payload(self, client, admin_user, populated, auth_headers):
+        """The SPA edit modal sends every field, possibly empty; all must be applied."""
+        _, anion, substance = populated
+        resp = client.put(
+            f"/api/v1/substances/{substance.id}",
+            {
+                "name": "Salt",
+                "synonyms": [],
+                "formula": "",
+                "ion_ids": [anion.id],
+                "pubchem_id": "",
+                "wikipedia_link": "",
+            },
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        substance.refresh_from_db()
+        assert substance.name == "Salt"
+        assert substance.synonyms == []
+        assert substance.formula == ""
+        assert substance.pubchem_id == ""
+        assert substance.wikipedia_link == ""
+        assert list(substance.ions.all()) == [anion]
+
     def test_admin_cannot_delete_referenced_ion(self, client, admin_user, populated, assigned_instance, auth_headers):
         cation, _, _ = populated
         if assigned_instance.type.possible_ions.filter(pk=cation.id).exists():

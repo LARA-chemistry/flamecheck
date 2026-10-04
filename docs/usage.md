@@ -62,7 +62,11 @@ penalised according to the grading configuration (second attempt, third attempt)
      active). Open *Students* on any course to see who is enrolled there and
      remove students; assign a student to a course from here.
    - **Analysis Types** — the user-defined analysis catalog. Create, edit and
-     delete types and pick each type's possible ion set.
+     delete types and pick each type's possible ion set; click a row to open
+     the edit form.
+   - **Substances** — the substance catalog. Import and export the catalog as
+     CSV; click a row to edit a substance (name, synonyms, formula, ion set
+     and the PubChem / Wikipedia reference).
    - **Assignments** — pick a course to see its analysis sheets (instances);
      open *Manage* on a sheet to choose which students receive it (and the
      announcement number).
