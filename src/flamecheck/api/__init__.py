@@ -20,11 +20,11 @@ from users.api.views import router as auth_router  # noqa: E402
 
 api.add_router("", auth_router)
 
-# Onboarding endpoints (self-registration, OAuth exchange, course enrolment and
-# analysis generation). Their paths carry their own prefixes, so mount at root.
-from users.api.onboarding import router as onboarding_router  # noqa: E402
+# Registration endpoints (self-registration, OAuth exchange, course enrolment
+# and analysis generation). Their paths carry their own prefixes, so mount at root.
+from users.api.registration import router as registration_router  # noqa: E402
 
-api.add_router("", onboarding_router)
+api.add_router("", registration_router)
 
 # Substances (ions, substances)
 from substances.api.views import router as substances_router  # noqa: E402

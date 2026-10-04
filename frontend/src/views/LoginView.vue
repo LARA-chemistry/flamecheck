@@ -78,7 +78,7 @@
       <n-alert v-if="error" type="error" class="login-error">{{ error }}</n-alert>
 
       <!-- Self-registration: a "Register" link (only in self-registration mode). -->
-      <template v-if="onboardingConfig.onboarding === 'self_registration'">
+      <template v-if="registrationConfig.registration === 'self_registration'">
         <n-divider style="margin: var(--fc-space-sm) 0" />
         <p class="login-register">
           New student?
@@ -87,11 +87,11 @@
       </template>
 
       <!-- OAuth: one button per configured provider (only in oauth mode). -->
-      <template v-if="onboardingConfig.onboarding === 'oauth' && onboardingConfig.providers.length">
+      <template v-if="registrationConfig.registration === 'oauth' && registrationConfig.providers.length">
         <n-divider style="margin: var(--fc-space-sm) 0" />
         <n-space vertical>
           <button
-            v-for="provider in onboardingConfig.providers"
+            v-for="provider in registrationConfig.providers"
             :key="provider.id"
             type="button"
             class="login-oauth"
@@ -131,9 +131,9 @@ const error = ref('')
 // authentication. Either may be null, in which case the element is hidden.
 const branding = ref({ login_logo: null, login_qr: null })
 
-// Onboarding configuration (public): which mode is active + available OAuth
+// Registration configuration (public): which mode is active + available OAuth
 // providers. Drives the "Register" link / OAuth buttons on this page.
-const onboardingConfig = ref({ onboarding: 'manual', providers: [] })
+const registrationConfig = ref({ registration: 'manual', providers: [] })
 
 // E-mail-confirmation feedback, read from the ?confirmed / ?confirm_error query
 // params that the confirmation link redirects to.
@@ -154,9 +154,9 @@ async function loadBranding() {
   }
 }
 
-async function loadOnboardingConfig() {
+async function loadRegistrationConfig() {
   try {
-    onboardingConfig.value = await api.get('/onboarding/config')
+    registrationConfig.value = await api.get('/registration/config')
   } catch {
     /* best-effort; the login page still works without the extra controls */
   }
@@ -176,7 +176,7 @@ function startOAuth(provider) {
 
 onMounted(() => {
   loadBranding()
-  loadOnboardingConfig()
+  loadRegistrationConfig()
 })
 
 const form = ref({ username: '', password: '' })
@@ -197,10 +197,10 @@ async function handleLogin() {
   error.value = ''
   try {
     await auth.login(form.value.username, form.value.password)
-    // An OAuth student who has not yet onboarded goes to the onboarding page;
+    // An OAuth student who has not yet registered goes to the registration page;
     // everyone else goes to their role's landing page.
-    if (auth.user?.role === 'student' && auth.user?.onboarded === false) {
-      router.push({ name: 'onboarding' })
+    if (auth.user?.role === 'student' && auth.user?.registered === false) {
+      router.push({ name: 'registration' })
     } else {
       router.push({ name: homeForRole(auth.user?.role) })
     }

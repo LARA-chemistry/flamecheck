@@ -33,7 +33,7 @@ class UserCreateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         return self.request.user.get_absolute_url()
 
     def get_object(self, queryset: QuerySet | None = None) -> User:
-        """Return the current authenticated user for profile onboarding."""
+        """Return the current authenticated user for profile editing."""
         assert self.request.user.is_authenticated  # noqa: S101  # type guard
         return self.request.user
 
@@ -113,7 +113,7 @@ def verify_email(request: HttpRequest, token: str) -> HttpResponseRedirect:
     Activate a self-registered student from their e-mail-confirmation link.
 
     Verifies the signed, timestamped ``token``; on success the account is
-    activated (``is_active=True``) and marked onboarded, then the user is sent to
+    activated (``is_active=True``) and marked registered, then the user is sent to
     the (SPA) login page with a confirmation flag. Invalid or expired tokens are
     sent to the login page with an error flag. This view is public (no session).
     """
@@ -131,7 +131,7 @@ def verify_email(request: HttpRequest, token: str) -> HttpResponseRedirect:
         return HttpResponseRedirect("/login?confirm_error=invalid")
     if not user.is_active:
         user.is_active = True
-        user.onboarded = True
-        user.save(update_fields=["is_active", "onboarded"])
+        user.registered = True
+        user.save(update_fields=["is_active", "registered"])
         logger.info("E-mail confirmation: account %s activated", user.username)
     return HttpResponseRedirect("/login?confirmed=1")

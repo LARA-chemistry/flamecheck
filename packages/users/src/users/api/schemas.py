@@ -50,8 +50,8 @@ class UserOut(BaseModel):
     telephone: str | None = None
     course_name: str | None = None
     version: str | None = None
-    # Whether the user still needs to complete onboarding (OAuth students only).
-    onboarded: bool = True
+    # Whether the user still needs to complete registration (OAuth students only).
+    registered: bool = True
 
     @classmethod
     def from_user(cls, user: Any) -> UserOut:
@@ -72,7 +72,7 @@ class UserOut(BaseModel):
             telephone=(user.telephone or None) if is_student else None,
             course_name=course.name if course is not None else None,
             version=_flamecheck_version(),
-            onboarded=bool(getattr(user, "onboarded", True)),
+            registered=bool(getattr(user, "registered", True)),
         )
 
 
@@ -84,10 +84,10 @@ class ProviderOut(BaseModel):
     login_url: str
 
 
-class OnboardingConfigOut(BaseModel):
-    """Public onboarding configuration (drives the login-page controls)."""
+class RegistrationConfigOut(BaseModel):
+    """Public registration configuration (drives the login-page controls)."""
 
-    onboarding: str
+    registration: str
     providers: list[ProviderOut] = []
 
 
@@ -109,8 +109,8 @@ class RegisterOut(BaseModel):
     message: str
 
 
-class OnboardingIn(BaseModel):
-    """Payload for completing onboarding (course + metadata an OAuth idp lacked)."""
+class RegistrationIn(BaseModel):
+    """Payload for completing registration (course + metadata an OAuth idp lacked)."""
 
     course_id: int
     first_name: str = ""
@@ -122,7 +122,7 @@ class OnboardingIn(BaseModel):
 
 
 class CourseOptionOut(BaseModel):
-    """A course offered on the onboarding page."""
+    """A course offered on the registration page."""
 
     id: int
     name: str

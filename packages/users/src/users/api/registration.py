@@ -1,16 +1,16 @@
 """
-Ninja API views for onboarding (self-registration, e-mail confirmation, OAuth).
+Ninja API views for registration (self-registration, e-mail confirmation, OAuth).
 
 Endpoints:
 
-* ``GET  /onboarding/config``        — public; which onboarding mode is active
+* ``GET  /registration/config``      — public; which registration mode is active
   and which OAuth providers are offered (drives the login page).
 * ``POST /auth/register``            — public; create a student account pending
   e-mail confirmation (self-registration mode only).
 * ``POST /auth/oauth/exchange``      — exchange the allauth session (created by
   an OAuth sign-in) for a JWT pair (the SPA is JWT-based, not session-based).
-* ``GET  /onboarding/courses``       — active courses for the onboarding page.
-* ``POST /onboarding/complete``      — enrol the (OAuth) student in a course,
+* ``GET  /registration/courses``     — active courses for the registration page.
+* ``POST /registration/complete``    — enrol the (OAuth) student in a course,
   fill missing metadata (random labspace if absent) and generate their analyses.
 
 The e-mail-confirmation *link* itself is a plain Django view
@@ -33,24 +33,24 @@ from ninja.errors import AuthenticationError, HttpError, ValidationError
 from users import email_verification
 from users.api.schemas import (
     CourseOptionOut,
-    OnboardingConfigOut,
-    OnboardingIn,
     RegisterIn,
     RegisterOut,
+    RegistrationConfigOut,
+    RegistrationIn,
     UserOut,
 )
 from users.models import User, generate_labspace_id
 
 logger = logging.getLogger("flamecheck.audit")
 
-router = Router(tags=["onboarding"])
+router = Router(tags=["registration"])
 
 
-def _onboarding_mode() -> str:
-    """Return the active onboarding mode (from the settings singleton)."""
+def _registration_mode() -> str:
+    """Return the active registration mode (from the settings singleton)."""
     from config.models import AppSettings
 
-    return AppSettings.get_onboarding_mode()
+    return AppSettings.get_registration_mode()
 
 
 def _configured_providers() -> list[dict[str, str]]:
@@ -115,10 +115,10 @@ def _send_verification_email(request: Any, user: User) -> None:
     send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
 
 
-@router.get("/onboarding/config", response=OnboardingConfigOut, auth=None)
-def onboarding_config(request):
-    """Public onboarding configuration (active mode + available OAuth providers)."""
-    return {"onboarding": _onboarding_mode(), "providers": _configured_providers()}
+@router.get("/registration/config", response=RegistrationConfigOut, auth=None)
+def registration_config(request):
+    """Public registration configuration (active mode + available OAuth providers)."""
+    return {"registration": _registration_mode(), "providers": _configured_providers()}
 
 
 @router.post("/auth/register", response={202: RegisterOut}, auth=None)
@@ -127,10 +127,10 @@ def register(request, payload: RegisterIn):
     Create a student account pending e-mail confirmation (self-registration only).
 
     The account is inactive until the confirmation link in the e-mail is opened.
-    Registration is only possible while the onboarding mode is
+    Registration is only possible while the registration mode is
     ``self_registration``; it always creates a *student*.
     """
-    if _onboarding_mode() != "self_registration":
+    if _registration_mode() != "self_registration":
         raise HttpError(403, "Registration is not available. Accounts are managed by your instructor.")
 
     email = payload.email.strip().lower()
@@ -186,32 +186,32 @@ def oauth_exchange(request):
     return out
 
 
-@router.get("/onboarding/courses", response=list[CourseOptionOut])
-def onboarding_courses(request):
-    """List the active courses a (student) may pick on the onboarding page."""
+@router.get("/registration/courses", response=list[CourseOptionOut])
+def registration_courses(request):
+    """List the active courses a (student) may pick on the registration page."""
     user = request.user
     if not getattr(user, "is_student", False):
-        raise HttpError(403, "Only students can view onboarding courses.")
+        raise HttpError(403, "Only students can view registration courses.")
     from config.models import Course
 
     courses = Course.objects.filter(is_active=True).order_by("name")
     return [{"id": c.id, "name": c.name} for c in courses]
 
 
-@router.post("/onboarding/complete", response=UserOut)
-def onboarding_complete(request, payload: OnboardingIn):
+@router.post("/registration/complete", response=UserOut)
+def registration_complete(request, payload: RegistrationIn):
     """
-    Complete onboarding for an (OAuth) student.
+    Complete registration for an (OAuth) student.
 
     Enrols the student in the chosen course, fills in metadata the identity
     provider did not supply (a random labspace id when none is provided), marks
-    the student onboarded and generates the course's analyses for them.
+    the student registered and generates the course's analyses for them.
     """
     user = request.user
     if not getattr(user, "is_student", False):
-        raise HttpError(403, "Only students can complete onboarding.")
-    if getattr(user, "onboarded", True):
-        raise HttpError(409, "Onboarding was already completed for this account.")
+        raise HttpError(403, "Only students can complete registration.")
+    if getattr(user, "registered", True):
+        raise HttpError(409, "Registration was already completed for this account.")
 
     from config.models import Course
 
@@ -220,7 +220,7 @@ def onboarding_complete(request, payload: OnboardingIn):
         raise HttpError(404, "Course not found (or inactive).")
 
     # Preserve values the identity provider already supplied; only override with
-    # non-empty onboarding input. The labspace is always set (provided or random).
+    # non-empty registration input. The labspace is always set (provided or random).
     if payload.first_name.strip():
         user.first_name = payload.first_name.strip()
     if payload.last_name.strip():
@@ -234,19 +234,19 @@ def onboarding_complete(request, payload: OnboardingIn):
     user.labspace_id = payload.labspace_id.strip() or generate_labspace_id()
     user.course = course
     user.role = User.Role.STUDENT
-    user.onboarded = True
+    user.registered = True
     user.is_active = True
     user.save()
 
-    from analyses.services.onboarding import NoAnalysisTypeError, generate_course_analyses
+    from analyses.services.registration import NoAnalysisTypeError, generate_course_analyses
 
     try:
         instances = generate_course_analyses(user, course)
     except NoAnalysisTypeError as exc:
-        logger.error("Onboarding for %s: could not generate analyses (%s)", user.username, exc)
+        logger.error("Registration for %s: could not generate analyses (%s)", user.username, exc)
         raise HttpError(400, "No analysis types are available to generate analyses yet.") from exc
     logger.info(
-        "Onboarding complete: %s enrolled in %s (%d analyses generated)",
+        "Registration complete: %s enrolled in %s (%d analyses generated)",
         user.username,
         course.name,
         len(instances),

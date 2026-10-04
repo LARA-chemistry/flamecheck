@@ -26,9 +26,9 @@ const routes = [
   {
     // OAuth students complete this page (course + metadata + generated analyses)
     // before reaching the student home.
-    path: '/onboarding',
-    name: 'onboarding',
-    component: () => import('../views/OnboardingView.vue'),
+    path: '/registration',
+    name: 'registration',
+    component: () => import('../views/RegistrationView.vue'),
     meta: { roles: ['student'] },
   },
   {
@@ -128,29 +128,29 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  const needsOnboarding =
-    auth.isAuthenticated && auth.user?.role === 'student' && auth.user?.onboarded === false
+  const needsRegistration =
+    auth.isAuthenticated && auth.user?.role === 'student' && auth.user?.registered === false
 
   if (!to.meta.public && !auth.isAuthenticated) {
     return { name: 'login' }
   }
   if (to.meta.public && auth.isAuthenticated) {
-    if (needsOnboarding) return { name: 'onboarding' }
+    if (needsRegistration) return { name: 'registration' }
     return { name: homeForRole(auth.user?.role) }
   }
   if (to.meta.roles && auth.user && !to.meta.roles.includes(auth.user.role)) {
     return { name: homeForRole(auth.user.role) }
   }
-  // An un-onboarded student is confined to the onboarding page.
-  if (needsOnboarding && !to.meta.public && to.name !== 'onboarding') {
-    return { name: 'onboarding' }
+  // An unregistered student is confined to the registration page.
+  if (needsRegistration && !to.meta.public && to.name !== 'registration') {
+    return { name: 'registration' }
   }
-  // An onboarded student no longer needs the onboarding page.
+  // A registered student no longer needs the registration page.
   if (
     auth.isAuthenticated &&
     auth.user?.role === 'student' &&
-    auth.user?.onboarded &&
-    to.name === 'onboarding'
+    auth.user?.registered &&
+    to.name === 'registration'
   ) {
     return { name: 'home' }
   }

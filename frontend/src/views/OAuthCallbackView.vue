@@ -38,8 +38,8 @@ async function exchange() {
     const tokens = res.tokens ?? {}
     auth.setTokens(tokens.access, tokens.refresh)
     auth.setUser(res.user ?? (await api.get('/me')))
-    if (auth.user?.role === 'student' && auth.user?.onboarded === false) {
-      router.replace({ name: 'onboarding' })
+    if (auth.user?.role === 'student' && auth.user?.registered === false) {
+      router.replace({ name: 'registration' })
     } else {
       router.replace({ name: homeForRole(auth.user?.role) })
     }

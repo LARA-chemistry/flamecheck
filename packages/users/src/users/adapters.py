@@ -18,11 +18,11 @@ class AccountAdapter(DefaultAccountAdapter):
         return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
 
 
-def _onboarding_mode() -> str:
-    """Return the active onboarding mode without requiring a settings row."""
+def _registration_mode() -> str:
+    """Return the active registration mode without requiring a settings row."""
     from config.models import AppSettings
 
-    return AppSettings.get_onboarding_mode()
+    return AppSettings.get_registration_mode()
 
 
 class SocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -32,12 +32,12 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
         sociallogin: SocialLogin,
     ) -> bool:
         """
-        Allow OAuth sign-ups only while the onboarding mode is ``oauth``.
+        Allow OAuth sign-ups only while the registration mode is ``oauth``.
 
         This is the gate that decides whether a brand-new identity from an
         external provider may create a FlameCheck account.
         """
-        return _onboarding_mode() == "oauth"
+        return _registration_mode() == "oauth"
 
     def populate_user(
         self,
@@ -49,8 +49,8 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
         Populate a new user from social provider data.
 
         Every OAuth-created account is a *student* that still has to complete
-        the onboarding page (course + metadata + generated analyses), so
-        ``role`` is forced to student and ``onboarded`` starts False.
+        the registration page (course + metadata + generated analyses), so
+        ``role`` is forced to student and ``registered`` starts False.
 
         See: https://docs.allauth.org/en/latest/socialaccount/advanced.html#creating-and-populating-user-instances
         """
@@ -64,5 +64,5 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
                 user.first_name = str(data.get("first_name") or "")
                 user.last_name = str(data.get("last_name") or "")
         user.role = user.Role.STUDENT
-        user.onboarded = False
+        user.registered = False
         return user

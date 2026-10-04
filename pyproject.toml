@@ -135,7 +135,7 @@ lint.per-file-ignores."tests/**/*" = [
 ]
 # Non-cryptographic randomness: lab-sample assignment (not security-relevant).
 lint.per-file-ignores."packages/analyses/src/analyses/services/randomize.py" = [ "S311" ]
-lint.per-file-ignores."packages/analyses/src/analyses/services/onboarding.py" = [ "S311" ]
+lint.per-file-ignores."packages/analyses/src/analyses/services/registration.py" = [ "S311" ]
 lint.per-file-ignores."packages/analyses/src/analyses/services/retry_analysis.py" = [ "S311" ]
 lint.per-file-ignores."packages/*/src/*/tests/**/*" = [
   "D100",

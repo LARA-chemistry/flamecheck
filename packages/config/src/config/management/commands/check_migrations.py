@@ -18,7 +18,9 @@ depends on the repaired one).
 
 The check is engine-agnostic (SQLite and PostgreSQL) and only inspects columns
 added by ``AddField`` operations - the class of migration that can be left
-half-applied. It never drops data.
+half-applied. A column moved by an applied ``RenameField`` is recognised as
+renamed (not missing), so the earlier ``AddField`` that created it is not
+flagged. It never drops data.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db import connection
 from django.db.migrations.loader import MigrationLoader
-from django.db.migrations.operations.fields import AddField
+from django.db.migrations.operations.fields import AddField, RenameField
 from django.db.models import ForeignKey, ManyToManyField, OneToOneField
 
 logger = logging.getLogger("flamecheck.migrations")
@@ -62,13 +64,17 @@ class Command(BaseCommand):
 
         missing: dict[tuple[str, str], list[str]] = {}
         all_columns = self._all_db_columns()
+        # A column renamed by an applied ``RenameField`` is no longer expected
+        # under its old name, so an earlier ``AddField`` for it is not "missing".
+        renamed_away = self._renamed_columns(loader, applied)
         for app_label, name in applied:
             migration = loader.disk_migrations.get((app_label, name))
             if migration is None:
                 continue
             for column in self._added_columns(migration):
-                if column is not None and column not in all_columns:
-                    missing.setdefault((app_label, name), []).append(column)
+                if column is None or column in renamed_away or column in all_columns:
+                    continue
+                missing.setdefault((app_label, name), []).append(column)
             if (app_label, name) in missing:
                 missing[(app_label, name)] = sorted(missing[(app_label, name)])
 
@@ -165,6 +171,25 @@ class Command(BaseCommand):
         if isinstance(operation.field, (ForeignKey, OneToOneField)):
             return f"{operation.name}_id"
         return operation.name
+
+    @staticmethod
+    def _renamed_columns(loader: MigrationLoader, applied: set[tuple[str, str]]) -> set[str]:
+        """
+        Set of column names no longer present under their old name.
+
+        A ``RenameField`` in an applied migration moves a column to a new name,
+        so the earlier ``AddField`` that created it must not be treated as
+        "missing" just because the old column name is gone.
+        """
+        renamed: set[str] = set()
+        for app_label, name in applied:
+            migration = loader.disk_migrations.get((app_label, name))
+            if migration is None:
+                continue
+            for operation in migration.operations:
+                if isinstance(operation, RenameField):
+                    renamed.add(operation.old_name)
+        return renamed
 
     # -- helpers -------------------------------------------------------------
     def _all_db_columns(self) -> set[str]:

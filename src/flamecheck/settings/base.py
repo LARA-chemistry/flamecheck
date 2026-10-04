@@ -157,7 +157,7 @@ SOCIALACCOUNT_ADAPTER = "users.adapters.SocialAccountAdapter"
 #   }]}}
 # The realm's valid redirect URI must be
 #   https://<host>/<provider_id>/login/callback/
-# Empty by default: OAuth onboarding only offers buttons for configured providers.
+# Empty by default: OAuth registration only offers buttons for configured providers.
 SOCIALACCOUNT_PROVIDERS = env.json("SOCIALACCOUNT_PROVIDERS", default={})
 # A plain link to the provider login URL (e.g. /google/login/) starts the
 # provider flow immediately instead of rendering an intermediate confirm page,

@@ -1,7 +1,7 @@
 """
 Service for generating a newly-enrolled student's course analyses.
 
-When a student completes onboarding (the OAuth flow), the system enrols them in
+When a student completes registration (the OAuth flow), the system enrols them in
 a course and creates their personal analysis instances: one per announcement,
 with a *randomized* composition (a random subset of the type's possible ions as
 the answer key) and the matching reference substances. The count follows the
@@ -33,7 +33,7 @@ class NoAnalysisTypeError(Exception):
 # freshly generated window stays open.
 MIN_IONS = 3
 MAX_IONS = 5
-ONBOARDING_WINDOW_DAYS = 14
+REGISTRATION_WINDOW_DAYS = 14
 
 
 def generate_course_analyses(
@@ -88,7 +88,7 @@ def generate_course_analyses(
 
     now = timezone.now()
     window_start = now - timedelta(minutes=1)  # open immediately
-    window_end = now + timedelta(days=ONBOARDING_WINDOW_DAYS)
+    window_end = now + timedelta(days=REGISTRATION_WINDOW_DAYS)
 
     created: list[AnalysisInstance] = []
     with transaction.atomic():

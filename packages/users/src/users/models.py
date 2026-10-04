@@ -12,7 +12,7 @@ def generate_labspace_id() -> str:
     """
     Return a random labspace id.
 
-    Used during onboarding when the student (or their OAuth provider) did not
+    Used during registration when the student (or their OAuth provider) did not
     supply a labspace number, e.g. ``LS-1A2B3C4D``.
 
     Returns:
@@ -76,12 +76,12 @@ class User(AbstractUser):
         default=0,
         help_text=_("Bumped on logout to revoke all issued JWTs."),
     )
-    onboarded = models.BooleanField(
+    registered = models.BooleanField(
         default=True,
         help_text=(
-            "Whether the user has completed onboarding. OAuth-created students start "
-            "False and complete an onboarding page (course + metadata + generated analyses); "
-            "manually created and self-registered accounts are onboarded by default."
+            "Whether the user has completed registration. OAuth-created students start "
+            "False and complete a registration page (course + metadata + generated analyses); "
+            "manually created and self-registered accounts are registered by default."
         ),
     )
 

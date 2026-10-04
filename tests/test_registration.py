@@ -1,11 +1,11 @@
-"""Tests for the onboarding feature (manual / self-registration / OAuth)."""
+"""Tests for the registration feature (manual / self-registration / OAuth)."""
 
 from __future__ import annotations
 
 import pytest
 from analyses.factory import AnalysisTypeFactory
 from analyses.models import AnalysisInstance
-from analyses.services.onboarding import NoAnalysisTypeError, generate_course_analyses
+from analyses.services.registration import NoAnalysisTypeError, generate_course_analyses
 from config.factory import AppSettingsFactory, CourseFactory
 from django.core import mail, signing
 from substances.factory import create_ion_catalog
@@ -16,12 +16,12 @@ from users.models import User
 pytestmark = pytest.mark.django_db
 
 
-def _set_onboarding(mode: str):
-    """Set the active onboarding mode on the singleton (updates, not just creates)."""
+def _set_registration(mode: str):
+    """Set the active registration mode on the singleton (updates, not just creates)."""
     from config.models import AppSettings
 
     s = AppSettings.get_instance()
-    s.onboarding = mode
+    s.registration = mode
     s.save()
     return s
 
@@ -47,25 +47,25 @@ _KEYCLOAK_PROVIDERS = {
 # --------------------------------------------------------------------------- #
 # Models / helpers                                                            #
 # --------------------------------------------------------------------------- #
-class TestOnboardingModels:
-    def test_appsettings_onboarding_defaults_manual(self, db):
+class TestRegistrationModels:
+    def test_appsettings_registration_defaults_manual(self, db):
         s = AppSettingsFactory()
-        assert s.onboarding == "manual"
+        assert s.registration == "manual"
 
-    def test_get_onboarding_mode_no_row(self, db):
+    def test_get_registration_mode_no_row(self, db):
         from config.models import AppSettings
 
-        assert AppSettings.get_onboarding_mode() == "manual"
+        assert AppSettings.get_registration_mode() == "manual"
 
-    def test_get_onboarding_mode_reads_row(self, db):
+    def test_get_registration_mode_reads_row(self, db):
         from config.models import AppSettings
 
-        AppSettingsFactory(onboarding="oauth")
-        assert AppSettings.get_onboarding_mode() == "oauth"
+        AppSettingsFactory(registration="oauth")
+        assert AppSettings.get_registration_mode() == "oauth"
 
-    def test_user_onboarded_defaults_true(self, db):
+    def test_user_registered_defaults_true(self, db):
         u = UserFactory()
-        assert u.onboarded is True
+        assert u.registered is True
 
 
 class TestEmailVerificationTokens:
@@ -92,31 +92,31 @@ class TestEmailVerificationTokens:
 
 
 # --------------------------------------------------------------------------- #
-# Public onboarding config                                                    #
+# Public registration config                                                    #
 # --------------------------------------------------------------------------- #
-class TestOnboardingConfigEndpoint:
+class TestRegistrationConfigEndpoint:
     def test_returns_mode_and_providers(self, client, settings):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         settings.SOCIALACCOUNT_PROVIDERS = {"google": {}}
-        resp = client.get("/api/v1/onboarding/config")
+        resp = client.get("/api/v1/registration/config")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["onboarding"] == "self_registration"
+        assert data["registration"] == "self_registration"
         # Each provider is an entry with a display name + allauth login URL.
         assert data["providers"] == [
             {"id": "google", "name": "google", "login_url": "/google/login/"},
         ]
 
     def test_default_manual_no_providers(self, client):
-        resp = client.get("/api/v1/onboarding/config")
+        resp = client.get("/api/v1/registration/config")
         assert resp.status_code == 200
-        assert resp.json()["onboarding"] == "manual"
+        assert resp.json()["registration"] == "manual"
         assert resp.json()["providers"] == []
 
     def test_keycloak_provider_exposed(self, client, settings):
         """A configured Keycloak (OIDC) realm is offered with its login URL."""
         settings.SOCIALACCOUNT_PROVIDERS = _KEYCLOAK_PROVIDERS
-        resp = client.get("/api/v1/onboarding/config")
+        resp = client.get("/api/v1/registration/config")
         assert resp.status_code == 200
         assert resp.json()["providers"] == [
             {"id": "keycloak", "name": "Keycloak", "login_url": "/oidc/keycloak/login/"},
@@ -127,7 +127,7 @@ class TestConfiguredProviders:
     """How SOCIALACCOUNT_PROVIDERS maps to the login entries the page offers."""
 
     def test_keycloak_entry(self, settings):
-        from users.api.onboarding import _configured_providers
+        from users.api.registration import _configured_providers
 
         settings.SOCIALACCOUNT_PROVIDERS = _KEYCLOAK_PROVIDERS
         assert _configured_providers() == [
@@ -135,13 +135,13 @@ class TestConfiguredProviders:
         ]
 
     def test_oidc_without_apps_exposes_nothing(self, settings):
-        from users.api.onboarding import _configured_providers
+        from users.api.registration import _configured_providers
 
         settings.SOCIALACCOUNT_PROVIDERS = {"openid_connect": {"APPS": {}}}
         assert _configured_providers() == []
 
     def test_mixed_standard_and_oidc(self, settings):
-        from users.api.onboarding import _configured_providers
+        from users.api.registration import _configured_providers
 
         settings.SOCIALACCOUNT_PROVIDERS = {"google": {}, **_KEYCLOAK_PROVIDERS}
         assert _configured_providers() == [
@@ -178,12 +178,12 @@ class TestSelfRegistration:
         return client.post("/api/v1/auth/register", payload, content_type="application/json")
 
     def test_forbidden_when_mode_not_self_registration(self, client):
-        AppSettingsFactory(onboarding="manual")
+        AppSettingsFactory(registration="manual")
         resp = self._register(client)
         assert resp.status_code == 403
 
     def test_creates_inactive_student_and_sends_email(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         mail.outbox = []
         resp = self._register(client)
         assert resp.status_code == 202
@@ -192,7 +192,7 @@ class TestSelfRegistration:
         user = User.objects.get(email="new.student@example.com")
         assert user.role == User.Role.STUDENT
         assert user.is_active is False
-        assert user.onboarded is True
+        assert user.registered is True
         assert user.username  # derived from the e-mail local part
         assert user.check_password("Str0ngPass!234")
 
@@ -202,24 +202,24 @@ class TestSelfRegistration:
         assert "/accounts/verify-email/" in body
 
     def test_duplicate_email_409(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         UserFactory(email="new.student@example.com")
         assert self._register(client).status_code == 409
 
     def test_weak_password_rejected(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         assert self._register(client, password="short").status_code == 422
 
     def test_invalid_email_rejected(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         assert self._register(client, email="not-an-email").status_code == 422
 
     def test_missing_name_rejected(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         assert self._register(client, first_name="   ", last_name="   ").status_code == 422
 
     def test_verify_email_activates_account(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         self._register(client)
         user = User.objects.get(email="new.student@example.com")
         token = email_verification.make_verification_token(user.username)
@@ -229,10 +229,10 @@ class TestSelfRegistration:
         assert resp.headers["Location"] == "/login?confirmed=1"
         user.refresh_from_db()
         assert user.is_active is True
-        assert user.onboarded is True
+        assert user.registered is True
 
     def test_verify_email_invalid_token(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         self._register(client)
         user = User.objects.get(email="new.student@example.com")
         resp = client.get("/accounts/verify-email/not-a-real-token/")
@@ -242,7 +242,7 @@ class TestSelfRegistration:
         assert user.is_active is False
 
     def test_login_works_after_confirmation(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         self._register(client)
         user = User.objects.get(email="new.student@example.com")
         token = email_verification.make_verification_token(user.username)
@@ -257,7 +257,7 @@ class TestSelfRegistration:
         assert resp.json()["user"]["username"] == user.username
 
     def test_inactive_user_cannot_login_before_confirm(self, client):
-        AppSettingsFactory(onboarding="self_registration")
+        AppSettingsFactory(registration="self_registration")
         self._register(client)
         user = User.objects.get(email="new.student@example.com")
         resp = client.post(
@@ -280,12 +280,12 @@ class TestOAuthAdapter:
 
     def test_is_open_for_signup_by_mode(self, db, rf):
         adapter = self._adapter()
-        _set_onboarding("oauth")
+        _set_registration("oauth")
         assert adapter.is_open_for_signup(rf.get("/"), object()) is True
-        _set_onboarding("manual")
+        _set_registration("manual")
         assert adapter.is_open_for_signup(rf.get("/"), object()) is False
 
-    def test_populate_user_sets_student_and_unonboarded(self, db, rf):
+    def test_populate_user_sets_student_and_unregistered(self, db, rf):
         adapter = self._adapter()
         # A fresh account with no name yet (as allauth would create it), so the
         # adapter's name-population branch runs.
@@ -297,7 +297,7 @@ class TestOAuthAdapter:
         user = adapter.populate_user(rf.get("/"), _FakeSocialLogin(), {"name": "OAuth Kid"})
         assert user is base_user
         assert user.role == User.Role.STUDENT
-        assert user.onboarded is False
+        assert user.registered is False
         assert user.first_name == "OAuth"
         assert user.last_name == "Kid"
 
@@ -324,7 +324,7 @@ class TestOauthExchange:
 
 
 # --------------------------------------------------------------------------- #
-# Onboarding courses + completion                                             #
+# Registration courses + completion                                             #
 # --------------------------------------------------------------------------- #
 def _make_types(db):
     """Two analysis types sharing a 6-ion possible set (enough to randomize)."""
@@ -334,51 +334,51 @@ def _make_types(db):
     return t1, t2, ions
 
 
-class TestOnboardingCourses:
+class TestRegistrationCourses:
     def test_student_sees_active_courses(self, client, student, course):
         CourseFactory(name="Second Course", is_active=True)
         headers = {"HTTP_AUTHORIZATION": f"Bearer {jwt.issue_token(student, jwt.ACCESS_TOKEN)}"}
-        resp = client.get("/api/v1/onboarding/courses", **headers)
+        resp = client.get("/api/v1/registration/courses", **headers)
         assert resp.status_code == 200
         names = {c["name"] for c in resp.json()}
         assert course.name in names and "Second Course" in names
 
     def test_non_student_forbidden(self, client, assistant):
         headers = {"HTTP_AUTHORIZATION": f"Bearer {jwt.issue_token(assistant, jwt.ACCESS_TOKEN)}"}
-        assert client.get("/api/v1/onboarding/courses", **headers).status_code == 403
+        assert client.get("/api/v1/registration/courses", **headers).status_code == 403
 
 
-class TestOnboardingComplete:
+class TestRegistrationComplete:
     def _headers(self, user):
         return {"HTTP_AUTHORIZATION": f"Bearer {jwt.issue_token(user, jwt.ACCESS_TOKEN)}"}
 
     def _complete(self, client, student, course, **overrides):
         payload = {"course_id": course.id, **overrides}
         return client.post(
-            "/api/v1/onboarding/complete", payload, content_type="application/json", **self._headers(student)
+            "/api/v1/registration/complete", payload, content_type="application/json", **self._headers(student)
         )
 
     def test_non_student_forbidden(self, client, assistant, course):
         payload = {"course_id": course.id}
         resp = client.post(
-            "/api/v1/onboarding/complete", payload, content_type="application/json", **self._headers(assistant)
+            "/api/v1/registration/complete", payload, content_type="application/json", **self._headers(assistant)
         )
         assert resp.status_code == 403
 
-    def test_already_onboarded_409(self, client, student, course):
-        student.onboarded = True
+    def test_already_registered_409(self, client, student, course):
+        student.registered = True
         student.save()
         assert self._complete(client, student, course).status_code == 409
 
     def test_unknown_course_404(self, client, student, course):
-        student.onboarded = False
+        student.registered = False
         student.save()
         assert self._complete(client, student, course=course, course_id=99999).status_code == 404
 
     def test_enrolls_generates_analyses_and_random_labspace(self, client, student, course, db):
         _, _, ions = _make_types(db)
         AppSettingsFactory(analyses_per_course=3)
-        student.onboarded = False
+        student.registered = False
         student.labspace_id = ""  # the fixture sets one; clear it to test generation
         student.save()
 
@@ -386,7 +386,7 @@ class TestOnboardingComplete:
         assert resp.status_code == 200
         student.refresh_from_db()
         assert student.course_id == course.id
-        assert student.onboarded is True
+        assert student.registered is True
         assert student.is_active is True
         assert student.full_name == "OAuth Kid"
         assert student.matriculation_no == "M999"
@@ -407,7 +407,7 @@ class TestOnboardingComplete:
     def test_provided_labspace_preserved(self, client, student, course, db):
         _make_types(db)
         AppSettingsFactory(analyses_per_course=1)
-        student.onboarded = False
+        student.registered = False
         student.save()
         resp = self._complete(client, student, course, labspace_id="LS-PROVIDED1")
         assert resp.status_code == 200
@@ -417,7 +417,7 @@ class TestOnboardingComplete:
     def test_empty_metadata_preserves_oauth_values(self, client, student, course, db):
         _make_types(db)
         AppSettingsFactory(analyses_per_course=1)
-        student.onboarded = False
+        student.registered = False
         student.first_name = "From"
         student.last_name = "OAuth"
         student.save()
@@ -428,7 +428,7 @@ class TestOnboardingComplete:
 
     def test_no_types_returns_400(self, client, student, course, db):
         AppSettingsFactory(analyses_per_course=1)
-        student.onboarded = False
+        student.registered = False
         student.save()
         assert self._complete(client, student, course).status_code == 400
 
