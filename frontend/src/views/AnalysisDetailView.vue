@@ -60,9 +60,10 @@
                     v-for="ion in detail.cations"
                     :key="ion.id"
                     :value="ion.id"
-                    :label="`${ion.symbol} — ${ion.name}`"
                     class="ion-check"
-                  />
+                  >
+                    <IonSymbol :symbol="ion.symbol" /> — {{ ion.name }}
+                  </n-checkbox>
                 </n-checkbox-group>
               </div>
               <n-empty v-if="detail.cations.length === 0" description="No cations" size="small" />
@@ -76,9 +77,10 @@
                     v-for="ion in detail.anions"
                     :key="ion.id"
                     :value="ion.id"
-                    :label="`${ion.symbol} — ${ion.name}`"
                     class="ion-check"
-                  />
+                  >
+                    <IonSymbol :symbol="ion.symbol" /> — {{ ion.name }}
+                  </n-checkbox>
                 </n-checkbox-group>
               </div>
               <n-empty v-if="detail.anions.length === 0" description="No anions" size="small" />
@@ -141,13 +143,13 @@
         <!-- The ions the student is submitting, by name -->
         <div class="confirm-ions">
           <n-tag
-            v-for="(label, i) in selectedIonLabels"
-            :key="selectedIons[i]"
-            :type="isCation(selectedIons[i]) ? 'info' : 'warning'"
+            v-for="ion in selectedIonList"
+            :key="ion.id"
+            :type="isCation(ion.id) ? 'info' : 'warning'"
             :bordered="false"
             round
           >
-            {{ label }}
+            <IonSymbol :symbol="ion.symbol" /><span v-if="ion.name"> — {{ ion.name }}</span>
           </n-tag>
         </div>
         <n-alert type="warning" :bordered="false">
@@ -189,6 +191,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import ResultCard from '../components/ResultCard.vue'
+import IonSymbol from '../components/IonSymbol.vue'
 import {
   NCard, NSpace, NButton, NTag, NSpin, NGrid, NGi, NCheckbox, NCheckboxGroup,
   NText, NAlert, NModal, NEmpty,
@@ -273,16 +276,16 @@ const blockedText = computed(() => {
     : 'The submission window is closed.'
 })
 
-// Resolve the selected ion ids to their symbol/name labels (for the confirm
-// modal). Cations come first, then anions, matching the selection order.
-const selectedIonLabels = computed(() => {
+// Resolve the selected ion ids to their ion objects (for the confirm modal).
+// Cations come first, then anions, matching the selection order.
+const selectedIonList = computed(() => {
   const byId = new Map()
   for (const ion of [...detail.value?.cations, ...detail.value?.anions] || []) {
     byId.set(ion.id, ion)
   }
   return selectedIons.value.map((ionId) => {
     const ion = byId.get(ionId)
-    return ion ? `${ion.symbol} — ${ion.name}` : `ion #${ionId}`
+    return ion || { id: ionId, symbol: `#${ionId}`, name: '' }
   })
 })
 

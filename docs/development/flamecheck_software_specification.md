@@ -44,6 +44,13 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 ### 3.3 Admin Configuration
 - **Ion catalog:** Master list of all cations (e.g. Group I–IV/V: Na⁺, K⁺, NH₄⁺, Mg²⁺, Ca²⁺, Ba²⁺, Cu²⁺, Fe²⁺/Fe³⁺, Al³⁺, Zn²⁺, Mn²⁺, etc.) and anions (Cl⁻, Br⁻, I⁻, SO₄²⁻, SO₃²⁻, CO₃²⁻, PO₄³⁻, NO₃⁻, NO₂⁻, S²⁻, etc.).
                   - importable from CSV or JSON for easy updates.
+                  - every ion is stored under a single **canonical symbol** of the
+                    form `<formula><sign><magnitude>` (e.g. `Na+1`, `Mg+2`, `SO4-2`);
+                    the magnitude digit is always present. Human input is
+                    normalized to this form (Unicode IUPAC charges such as `SO₄²⁻`
+                    and whitespace are accepted) and the `charge` / `kind` are
+                    derived from the symbol. See
+                    {doc}`ion_symbol_convention` for the full specification.
 - **Substance catalog:** Optional mapping of ions to common salts (e.g., NaCl, KBr, CuSO₄) for reference.
                       - substance catalog should be importable from CSV or JSON for easy updates.
                       - ions should be deducible from substances, but the system should allow for ions to be defined independently of substances.

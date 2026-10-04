@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { NModal, NSpin, NTag, NEmpty, NScrollbar, NButton, NAlert } from 'naive-ui'
 import { api } from '../api/client'
+import IonSymbol from './IonSymbol.vue'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -243,24 +244,24 @@ watch(
                             <div class="breakdown__group breakdown__group--correct">
                               <span class="breakdown__kind">Right</span>
                               <div class="breakdown__ions">
-                                <n-tag v-for="ion in splitByKind(s.correct).cations" :key="ion.id" type="success" :bordered="false" round size="small">{{ ion.symbol }}</n-tag>
-                                <n-tag v-for="ion in splitByKind(s.correct).anions" :key="ion.id" type="success" :bordered="false" round size="small">{{ ion.symbol }}</n-tag>
+                                <n-tag v-for="ion in splitByKind(s.correct).cations" :key="ion.id" type="success" :bordered="false" round size="small"><IonSymbol :symbol="ion.symbol" /></n-tag>
+                                <n-tag v-for="ion in splitByKind(s.correct).anions" :key="ion.id" type="success" :bordered="false" round size="small"><IonSymbol :symbol="ion.symbol" /></n-tag>
                                 <span v-if="!s.correct?.length" class="breakdown__none">none</span>
                               </div>
                             </div>
                             <div class="breakdown__group breakdown__group--wrong">
                               <span class="breakdown__kind">Wrong</span>
                               <div class="breakdown__ions">
-                                <n-tag v-for="ion in splitByKind(s.wrong).cations" :key="ion.id" type="error" :bordered="false" round size="small">{{ ion.symbol }}</n-tag>
-                                <n-tag v-for="ion in splitByKind(s.wrong).anions" :key="ion.id" type="error" :bordered="false" round size="small">{{ ion.symbol }}</n-tag>
+                                <n-tag v-for="ion in splitByKind(s.wrong).cations" :key="ion.id" type="error" :bordered="false" round size="small"><IonSymbol :symbol="ion.symbol" /></n-tag>
+                                <n-tag v-for="ion in splitByKind(s.wrong).anions" :key="ion.id" type="error" :bordered="false" round size="small"><IonSymbol :symbol="ion.symbol" /></n-tag>
                                 <span v-if="!s.wrong?.length" class="breakdown__none">none</span>
                               </div>
                             </div>
                             <div class="breakdown__group breakdown__group--missing">
                               <span class="breakdown__kind">Missing</span>
                               <div class="breakdown__ions">
-                                <n-tag v-for="ion in splitByKind(s.missing).cations" :key="ion.id" type="warning" :bordered="false" round size="small">{{ ion.symbol }}</n-tag>
-                                <n-tag v-for="ion in splitByKind(s.missing).anions" :key="ion.id" type="warning" :bordered="false" round size="small">{{ ion.symbol }}</n-tag>
+                                <n-tag v-for="ion in splitByKind(s.missing).cations" :key="ion.id" type="warning" :bordered="false" round size="small"><IonSymbol :symbol="ion.symbol" /></n-tag>
+                                <n-tag v-for="ion in splitByKind(s.missing).anions" :key="ion.id" type="warning" :bordered="false" round size="small"><IonSymbol :symbol="ion.symbol" /></n-tag>
                                 <span v-if="!s.missing?.length" class="breakdown__none">none</span>
                               </div>
                             </div>

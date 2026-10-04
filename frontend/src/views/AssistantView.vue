@@ -244,6 +244,15 @@
           totals. Set "samples per analysis" to scale the preparation counts.
         </p>
       </HelpSection>
+      <HelpSection title="Ion symbols">
+        <p>
+          Ions use one canonical symbol - formula, sign, magnitude with the
+          digit always present (e.g. <code>Na+1</code>, <code>Mg+2</code>,
+          <code>SO4-2</code>). In the UI they are rendered with the IUPAC
+          superscript (magnitude before the sign): SO<sub>4</sub><sup>2&#8722;</sup>,
+          Na<sup>+</sup>.
+        </p>
+      </HelpSection>
       <HelpSection title="Export">
         <p>
           "Download CSV" exports the course's results for grading or archiving.

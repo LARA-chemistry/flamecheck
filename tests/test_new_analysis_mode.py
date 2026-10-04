@@ -51,7 +51,7 @@ class TestRetryGeneration:
         self, client, student, assistant, assistant_course, assigned_instance, grading_config, auth_headers
     ):
         _set_new_analysis_mode()
-        resp = _submit(client, auth_headers(student), assigned_instance, ["NH4+"])  # 1 of 3 -> wrong
+        resp = _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])  # 1 of 3 -> wrong
         assert resp.status_code == 200
         data = resp.json()
         assert data["retry"]["generated"] is True
@@ -75,14 +75,14 @@ class TestRetryGeneration:
         self, client, student, assigned_instance, grading_config, auth_headers
     ):
         _set_new_analysis_mode()
-        resp = _submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"])
+        resp = _submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"])
         assert resp.status_code == 200
         assert "retry" not in resp.json()
         assert AnalysisInstance.objects.count() == 1
         assert AnalysisNotification.objects.count() == 0
 
     def test_resubmit_mode_does_not_generate(self, client, student, assigned_instance, grading_config, auth_headers):
-        resp = _submit(client, auth_headers(student), assigned_instance, ["NH4+"])  # default mode
+        resp = _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])  # default mode
         assert resp.status_code == 200
         assert "retry" not in resp.json()
         assert AnalysisInstance.objects.count() == 1
@@ -94,7 +94,7 @@ class TestRetryGeneration:
         assigned_instance.type.save()
         current = assigned_instance
         for index in range(3):
-            resp = _submit(client, auth_headers(student), current, ["NH4+"])
+            resp = _submit(client, auth_headers(student), current, ["NH4+1"])
             body = resp.json()
             if index < 2:
                 assert body["retry"]["generated"] is True
@@ -120,10 +120,10 @@ def _set_correct(inst: AnalysisInstance, symbols: list[str]) -> None:
 class TestRetryGrading:
     def test_newest_counts_and_penalty_applied(self, client, student, assigned_instance, grading_config, auth_headers):
         _set_new_analysis_mode(retry_point_deduction=5)
-        first = _submit(client, auth_headers(student), assigned_instance, ["NH4+"])  # 10
+        first = _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])  # 10
         new_inst = AnalysisInstance.objects.get(pk=first.json()["retry"]["new_analysis_id"])
-        _set_correct(new_inst, ["NH4+", "SO4-2", "Cu2+"])
-        _submit(client, auth_headers(student), new_inst, ["NH4+", "SO4-2", "Cu2+"])  # full 30
+        _set_correct(new_inst, ["NH4+1", "SO4-2", "Cu+2"])
+        _submit(client, auth_headers(student), new_inst, ["NH4+1", "SO4-2", "Cu+2"])  # full 30
         result = student_course_result(student, assigned_instance.course)
         # Newest (30) counts; one earlier attempt * 5 penalty.
         assert result["total_score"] == 25
@@ -133,27 +133,27 @@ class TestRetryGrading:
 
     def test_penalty_floored_at_zero(self, client, student, assigned_instance, grading_config, auth_headers):
         _set_new_analysis_mode(retry_point_deduction=100)
-        first = _submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        first = _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         new_inst = AnalysisInstance.objects.get(pk=first.json()["retry"]["new_analysis_id"])
-        _set_correct(new_inst, ["NH4+", "SO4-2", "Cu2+"])
-        _submit(client, auth_headers(student), new_inst, ["NH4+"])  # 10 < penalty 100
+        _set_correct(new_inst, ["NH4+1", "SO4-2", "Cu+2"])
+        _submit(client, auth_headers(student), new_inst, ["NH4+1"])  # 10 < penalty 100
         result = student_course_result(student, assigned_instance.course)
         assert result["total_score"] == 0
 
     def test_no_penalty_by_default(self, client, student, assigned_instance, grading_config, auth_headers):
         _set_new_analysis_mode()  # retry_point_deduction stays 0
-        first = _submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        first = _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         new_inst = AnalysisInstance.objects.get(pk=first.json()["retry"]["new_analysis_id"])
-        _set_correct(new_inst, ["NH4+", "SO4-2", "Cu2+"])
-        _submit(client, auth_headers(student), new_inst, ["NH4+", "SO4-2", "Cu2+"])
+        _set_correct(new_inst, ["NH4+1", "SO4-2", "Cu+2"])
+        _submit(client, auth_headers(student), new_inst, ["NH4+1", "SO4-2", "Cu+2"])
         result = student_course_result(student, assigned_instance.course)
         assert result["total_score"] == 30
         assert result["counting_ids"] == {new_inst.id}
 
     def test_resubmit_mode_unchanged(self, client, student, assigned_instance, grading_config, auth_headers):
         # Default resubmit mode: one instance, best of the submissions counts.
-        _submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"])  # 30 first
-        _submit(client, auth_headers(student), assigned_instance, ["NH4+"])  # 10, no penalty
+        _submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"])  # 30 first
+        _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])  # 10, no penalty
         result = student_course_result(student, assigned_instance.course)
         assert result["total_score"] == 30
         assert result["counting_ids"] == {assigned_instance.id}
@@ -165,7 +165,7 @@ class TestAssistantNotifications:
         self, client, student, assistant, assistant_course, assigned_instance, grading_config, auth_headers
     ):
         _set_new_analysis_mode()
-        _submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         resp = client.get("/api/v1/assistant/notifications", **auth_headers(assistant))
         assert resp.status_code == 200
         data = resp.json()
@@ -178,7 +178,7 @@ class TestAssistantNotifications:
         self, client, student, assistant, assistant_course, assigned_instance, grading_config, auth_headers
     ):
         _set_new_analysis_mode()
-        _submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         notif_id = AnalysisNotification.objects.get().id
         resp = client.post(f"/api/v1/assistant/notifications/{notif_id}/read", **auth_headers(assistant))
         assert resp.status_code == 200
@@ -191,7 +191,7 @@ class TestAssistantNotifications:
         from users.factory import AssistantUserFactory
 
         _set_new_analysis_mode()
-        _submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         stranger = AssistantUserFactory(username="assistant2")
         data = client.get("/api/v1/assistant/notifications", **auth_headers(stranger)).json()
         assert data == []
@@ -200,7 +200,7 @@ class TestAssistantNotifications:
         self, client, student, admin_user, assigned_instance, grading_config, auth_headers
     ):
         _set_new_analysis_mode()
-        _submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        _submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         data = client.get("/api/v1/assistant/notifications", **auth_headers(admin_user)).json()
         assert len(data) == 1
 

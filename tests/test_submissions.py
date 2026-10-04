@@ -39,8 +39,8 @@ class TestAnalysisDetail:
         assert "correct" not in data
         cations = [i["symbol"] for i in data["cations"]]
         anions = [i["symbol"] for i in data["anions"]]
-        assert "Cu2+" in cations
-        assert "Cl-" in anions
+        assert "Cu+2" in cations
+        assert "Cl-1" in anions
 
     def test_other_student_cannot_access(self, client, assistant, student, assigned_instance, auth_headers):
         resp = client.get(f"/api/v1/analyses/{assigned_instance.id}", **auth_headers(assistant))
@@ -71,7 +71,7 @@ class TestSubmission:
         assert resp.status_code in (400, 422)
 
     def test_all_correct_scores_full_points(self, client, student, assigned_instance, auth_headers, grading_config):
-        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"])
+        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"])
         assert resp.status_code == 200
         data = resp.json()
         # 3 correct ions * 10 pts = 30
@@ -81,7 +81,7 @@ class TestSubmission:
         assert data["result"]["missing_ions"] == []
 
     def test_false_positive_and_missing(self, client, student, assigned_instance, auth_headers):
-        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cl-"])
+        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cl-1"])
         assert resp.status_code == 200
         data = resp.json()
         sub = data["submission"]
@@ -93,13 +93,13 @@ class TestSubmission:
     def test_too_early_rejected(self, client, student, assigned_instance, auth_headers):
         assigned_instance.window_start = timezone.now() + timedelta(hours=1)
         assigned_instance.save()
-        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         assert resp.status_code in (400, 422)
 
     def test_too_late_rejected(self, client, student, assigned_instance, auth_headers):
         assigned_instance.window_end = timezone.now() - timedelta(hours=1)
         assigned_instance.save()
-        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+"])
+        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1"])
         assert resp.status_code in (400, 422)
 
     def test_disallowed_ion_rejected(self, client, student, assigned_instance, auth_headers):
@@ -115,8 +115,8 @@ class TestSubmission:
 
     def test_idempotency_replay_returns_same_submission(self, client, student, assigned_instance, auth_headers):
         key = uuid.uuid4().hex
-        first = self._submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"], idem=key)
-        second = self._submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"], idem=key)
+        first = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"], idem=key)
+        second = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"], idem=key)
         assert first.status_code == 200
         assert second.status_code == 200
         assert first.json()["submission"]["id"] == second.json()["submission"]["id"]
@@ -126,15 +126,15 @@ class TestSubmission:
         gc = GradingConfig.get_instance()
         gc.max_submissions_per_analysis = 1
         gc.save()
-        assert self._submit(client, auth_headers(student), assigned_instance, ["NH4+"]).status_code == 200
-        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"])
+        assert self._submit(client, auth_headers(student), assigned_instance, ["NH4+1"]).status_code == 200
+        resp = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"])
         assert resp.status_code in (400, 422)
 
     def test_retry_penalty_applied(self, client, student, assigned_instance, auth_headers):
-        first = self._submit(client, auth_headers(student), assigned_instance, ["NH4+"], idem=uuid.uuid4().hex)
+        first = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1"], idem=uuid.uuid4().hex)
         assert first.status_code == 200
         assert first.json()["submission"]["score"] == 10
-        second = self._submit(client, auth_headers(student), assigned_instance, ["NH4+", "SO4-2", "Cu2+"])
+        second = self._submit(client, auth_headers(student), assigned_instance, ["NH4+1", "SO4-2", "Cu+2"])
         assert second.status_code == 200
         sub = second.json()["submission"]
         assert sub["submission_number"] == 2
@@ -149,7 +149,7 @@ class TestResultAndSummary:
         assert resp.status_code == 404
 
     def test_result_after_submission(self, client, student, assigned_instance, auth_headers):
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2", "Cu+2"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -164,7 +164,7 @@ class TestResultAndSummary:
         assert len(data["submissions"]) == 1
 
     def test_summary_totals(self, client, student, assigned_instance, auth_headers):
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2", "Cu+2"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -185,7 +185,7 @@ class TestResultAndSummary:
         gc = GradingConfig.get_instance()
         gc.passing_score = 20
         gc.save()
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2", "Cu+2"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -204,7 +204,7 @@ class TestPerAnalysisMode:
         gc = GradingConfig.get_instance()
         gc.grading_mode = "per_analysis"
         gc.save()
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2", "Cu+2"]).values_list("id", flat=True))
         resp = client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -218,7 +218,7 @@ class TestPerAnalysisMode:
         gc = GradingConfig.get_instance()
         gc.grading_mode = "per_analysis"
         gc.save()
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2"]).values_list("id", flat=True))
         resp = client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},

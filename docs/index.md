@@ -24,6 +24,14 @@ contributing
 ```
 
 ```{toctree}
+:caption: Specifications
+:maxdepth: 2
+
+development/ion_symbol_convention
+development/flamecheck_software_specification
+```
+
+```{toctree}
 :caption: API Reference
 :maxdepth: 2
 

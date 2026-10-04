@@ -79,11 +79,33 @@
           answer key and the submission window.
         </p>
       </HelpSection>
+      <HelpSection title="Ion symbols">
+        <p>
+          An ion is written as one canonical symbol:
+          <code>formula&nbsp;+&nbsp;sign&nbsp;+&nbsp;magnitude</code>, with the
+          digit <em>always</em> present - e.g. <code>Na+1</code>, <code>Mg+2</code>,
+          <code>Fe+3</code>, <code>SO4-2</code>, <code>Cl-1</code>. The charge is
+          the part from the last <code>+</code>/<code>-</code> to the end, so
+          multi-valent cations are unambiguous (<code>Fe+2</code> vs <code>Fe+3</code>).
+        </p>
+        <p>
+          You may type a bare sign (<code>Na+</code>) or paste the IUPAC
+          superscript form (<code>SO&#8324;&#178;&#8315;</code>, <code>Mg&#178;&#8314;</code>);
+          the system normalizes it to the canonical form and derives the charge
+          and cation/anion kind from the symbol.
+        </p>
+        <p>
+          In the UI ions are rendered with the IUPAC superscript
+          (magnitude before the sign, unit charge without the 1):
+          SO<sub>4</sub><sup>2&#8722;</sup>, Na<sup>+</sup>, Mg<sup>2+</sup>.
+        </p>
+      </HelpSection>
       <HelpSection title="Substances (CSV import)">
         <p>
           Upload a CSV of substances to grow the catalog. Separate several ions
-          or synonyms with a semicolon (e.g. <code>Na+;Cl-</code>). Rows are
-          matched by name - a match updates the existing substance.
+          or synonyms with a semicolon (e.g. <code>Na+1;Cl-1</code>). Ions use
+          the canonical symbol (see "Ion symbols" above). Rows are matched by
+          name - a match updates the existing substance.
         </p>
       </HelpSection>
       <HelpSection title="Authentication &amp; registration">

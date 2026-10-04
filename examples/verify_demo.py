@@ -194,7 +194,7 @@ def verify_student(access: str) -> None:
 
     status, detail = request("GET", f"/analyses/{inst2_id}", token=access)
     anion_symbols = [i["symbol"] for i in (detail or {}).get("anions", [])]
-    expected_anions = {"Cl-", "SO4-2", "CO3-2", "NO3-", "Br-"}
+    expected_anions = {"Cl-1", "SO4-2", "CO3-2", "NO3-1", "Br-1"}
     check(
         "student: detail shows possible ions (anions only for this type)",
         status == 200 and detail.get("cations") == [] and expected_anions == set(anion_symbols),
@@ -212,11 +212,11 @@ def verify_student(access: str) -> None:
         f"count={len(subs) if isinstance(subs, list) else subs}",
     )
 
-    cl = ion_id(detail.get("anions", []), "Cl-")
+    cl = ion_id(detail.get("anions", []), "Cl-1")
     so4 = ion_id(detail.get("anions", []), "SO4-2")
     co3 = ion_id(detail.get("anions", []), "CO3-2")
     _ions_status, ions = request("GET", "/ions", token=access)
-    iod = ion_id(ions, "I-") if isinstance(ions, list) else None
+    iod = ion_id(ions, "I-1") if isinstance(ions, list) else None
 
     # 3.1 Correct first submission -> full score.
     k1 = uuid.uuid4().hex
@@ -457,7 +457,7 @@ def verify_assistant() -> None:
         "assistant: per-student submissions include answer key",
         status == 200
         and david_s1 is not None
-        and correct_symbols == {"Na+", "K+"}
+        and correct_symbols == {"Na+1", "K+1"}
         and len((david_s1 or {}).get("submissions", [])) == 0,
         f"status={status} correct={correct_symbols}",
     )
@@ -599,7 +599,7 @@ def verify_substances_and_rbac(david_access: str) -> None:
         status == 200 and isinstance(substances, list) and len(substances) == 35,
         f"n={len(substances) if isinstance(substances, list) else '-'}",
     )
-    na = next((i for i in (ions or []) if i.get("symbol") == "Na+"), None)
+    na = next((i for i in (ions or []) if i.get("symbol") == "Na+1"), None)
     status, with_na = request("GET", f"/substances?ion_id={na['id']}", token=david_access) if na else (0, None)
     check(
         "substances: filter by ion (Na+ salts)",

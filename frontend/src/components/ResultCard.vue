@@ -59,7 +59,7 @@
                 <span class="ion-group__kind ion-group__kind--cation">Cations</span>
                 <div class="ion-group__tags">
                   <n-tag v-for="ion in splitByKind(s.correct).cations" :key="ion.id" type="success" :bordered="false" round>
-                    {{ ion.symbol }}
+                    <IonSymbol :symbol="ion.symbol" />
                   </n-tag>
                   <span v-if="splitByKind(s.correct).cations.length === 0" class="breakdown-row__none">none</span>
                 </div>
@@ -68,7 +68,7 @@
                 <span class="ion-group__kind ion-group__kind--anion">Anions</span>
                 <div class="ion-group__tags">
                   <n-tag v-for="ion in splitByKind(s.correct).anions" :key="ion.id" type="success" :bordered="false" round>
-                    {{ ion.symbol }}
+                    <IonSymbol :symbol="ion.symbol" />
                   </n-tag>
                   <span v-if="splitByKind(s.correct).anions.length === 0" class="breakdown-row__none">none</span>
                 </div>
@@ -82,7 +82,7 @@
                 <span class="ion-group__kind ion-group__kind--cation">Cations</span>
                 <div class="ion-group__tags">
                   <n-tag v-for="ion in splitByKind(s.wrong).cations" :key="ion.id" type="error" :bordered="false" round>
-                    {{ ion.symbol }}
+                    <IonSymbol :symbol="ion.symbol" />
                   </n-tag>
                   <span v-if="splitByKind(s.wrong).cations.length === 0" class="breakdown-row__none">none</span>
                 </div>
@@ -91,7 +91,7 @@
                 <span class="ion-group__kind ion-group__kind--anion">Anions</span>
                 <div class="ion-group__tags">
                   <n-tag v-for="ion in splitByKind(s.wrong).anions" :key="ion.id" type="error" :bordered="false" round>
-                    {{ ion.symbol }}
+                    <IonSymbol :symbol="ion.symbol" />
                   </n-tag>
                   <span v-if="splitByKind(s.wrong).anions.length === 0" class="breakdown-row__none">none</span>
                 </div>
@@ -105,7 +105,7 @@
                 <span class="ion-group__kind ion-group__kind--cation">Cations</span>
                 <div class="ion-group__tags">
                   <n-tag v-for="ion in splitByKind(s.missing).cations" :key="ion.id" type="warning" :bordered="false" round>
-                    {{ ion.symbol }}
+                    <IonSymbol :symbol="ion.symbol" />
                   </n-tag>
                   <span v-if="splitByKind(s.missing).cations.length === 0" class="breakdown-row__none">none</span>
                 </div>
@@ -114,7 +114,7 @@
                 <span class="ion-group__kind ion-group__kind--anion">Anions</span>
                 <div class="ion-group__tags">
                   <n-tag v-for="ion in splitByKind(s.missing).anions" :key="ion.id" type="warning" :bordered="false" round>
-                    {{ ion.symbol }}
+                    <IonSymbol :symbol="ion.symbol" />
                   </n-tag>
                   <span v-if="splitByKind(s.missing).anions.length === 0" class="breakdown-row__none">none</span>
                 </div>
@@ -150,6 +150,7 @@
 <script setup>
 import { computed } from 'vue'
 import { NTag, NButton } from 'naive-ui'
+import IonSymbol from './IonSymbol.vue'
 
 const props = defineProps({
   /**

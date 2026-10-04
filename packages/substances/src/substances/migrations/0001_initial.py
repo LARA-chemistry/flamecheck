@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name='Ion',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('symbol', models.CharField(help_text="Ion symbol, e.g. 'NH4+' or 'SO4^2-'.", max_length=32)),
+                ('symbol', models.CharField(help_text="Canonical ion symbol: formula then sign then magnitude, e.g. 'NH4+1' or 'SO4-2'.", max_length=32)),
                 ('name', models.CharField(help_text="Human readable name, e.g. 'Ammonium'.", max_length=255)),
                 ('charge', models.IntegerField(default=0, help_text='Ionic charge (e.g. +2, -1, -2, -3).')),
                 ('kind', models.CharField(choices=[('cation', 'Cation'), ('anion', 'Anion')], help_text='Cation or anion.', max_length=8)),

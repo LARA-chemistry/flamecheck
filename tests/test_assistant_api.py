@@ -65,7 +65,7 @@ class TestRoster:
 
         from substances.models import Ion
 
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2", "Cu+2"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -78,7 +78,7 @@ class TestRoster:
         assert len(data) == 1
         assert len(data[0]["submissions"]) == 1
         # assistant can see the correct answer key
-        assert any(i["symbol"] == "Cu2+" for i in data[0]["correct_ions"])
+        assert any(i["symbol"] == "Cu+2" for i in data[0]["correct_ions"])
 
 
 class TestCsvExport:
@@ -91,7 +91,7 @@ class TestCsvExport:
 
         from substances.models import Ion
 
-        ids = list(Ion.objects.filter(symbol__in=["NH4+", "SO4-2", "Cu2+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1", "SO4-2", "Cu+2"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -135,7 +135,7 @@ class TestSubstanceOverview:
         data = resp.json()
         assert len(data["analyses"]) == 1
         analysis = data["analyses"][0]
-        assert {i["symbol"] for i in analysis["correct_ions"]} == {"NH4+", "SO4-2", "Cu2+"}
+        assert {i["symbol"] for i in analysis["correct_ions"]} == {"NH4+1", "SO4-2", "Cu+2"}
         assert analysis["student_count"] == 1
         assert analysis["sample_count"] == 1  # default: one sample per assigned student
         assert [s["name"] for s in analysis["substances"]] == ["Copper sulfate"]

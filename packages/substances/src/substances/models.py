@@ -26,7 +26,10 @@ class Ion(models.Model):
         CATION = "cation", _("Cation")
         ANION = "anion", _("Anion")
 
-    symbol = models.CharField(max_length=32, help_text=_("Ion symbol, e.g. 'NH4+' or 'SO4^2-'."))
+    symbol = models.CharField(
+        max_length=32,
+        help_text=_("Canonical ion symbol: formula then sign then magnitude, e.g. 'NH4+1' or 'SO4-2'."),
+    )
     name = models.CharField(max_length=255, help_text=_("Human readable name, e.g. 'Ammonium'."))
     charge = models.IntegerField(default=0, help_text=_("Ionic charge (e.g. +2, -1, -2, -3)."))
     kind = models.CharField(max_length=8, choices=Kind.choices, help_text=_("Cation or anion."))

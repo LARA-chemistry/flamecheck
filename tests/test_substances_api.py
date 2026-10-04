@@ -11,9 +11,9 @@ pytestmark = pytest.mark.django_db
 def populated(db, course):
     """Ensure a minimal ion/substance catalog exists (catalog may be empty in tests)."""
     # Unique symbols (not in the factory catalog) so this fixture is isolated
-    # from the shared `ions` fixture and the admin-create test (which uses Ag+).
-    cation = IonFactory(symbol="Pt+", name="Platinum", charge=1, kind="cation", group="Group VIII")
-    anion = IonFactory(symbol="I-", name="Iodide", charge=-1, kind="anion", group="Halides")
+    # from the shared `ions` fixture and the admin-create test (which uses Ag+1).
+    cation = IonFactory(symbol="Pt+1", name="Platinum", charge=1, kind="cation", group="Group VIII")
+    anion = IonFactory(symbol="I-1", name="Iodide", charge=-1, kind="anion", group="Halides")
     substance = SubstanceFactory(name="Platinum iodide", formula="PtI", ions=[cation, anion])
     return cation, anion, substance
 
@@ -43,7 +43,7 @@ class TestReadEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["formula"] == "PtI"
-        assert {i["symbol"] for i in data["ions"]} == {"Pt+", "I-"}
+        assert {i["symbol"] for i in data["ions"]} == {"Pt+1", "I-1"}
 
     def test_substance_exposes_pubchem_url(self, client, student, populated, auth_headers):
         """The substance payload carries a PubChem page URL built from the setting."""
@@ -88,7 +88,7 @@ class TestAdminMutations:
     def test_student_cannot_create_ion(self, client, student, auth_headers):
         resp = client.post(
             "/api/v1/ions",
-            {"symbol": "Ag+", "name": "Silver", "charge": 1, "kind": "cation", "group": "Group I"},
+            {"symbol": "Ag+1", "name": "Silver", "charge": 1, "kind": "cation", "group": "Group I"},
             content_type="application/json",
             **auth_headers(student),
         )
@@ -97,12 +97,74 @@ class TestAdminMutations:
     def test_admin_creates_ion(self, client, admin_user, auth_headers):
         resp = client.post(
             "/api/v1/ions",
-            {"symbol": "Ag+", "name": "Silver", "charge": 1, "kind": "cation", "group": "Group I"},
+            {"symbol": "Ag+1", "name": "Silver", "charge": 1, "kind": "cation", "group": "Group I"},
             content_type="application/json",
             **auth_headers(admin_user),
         )
         assert resp.status_code == 200
-        assert Ion.objects.filter(symbol="Ag+").exists()
+        assert Ion.objects.filter(symbol="Ag+1").exists()
+
+    def test_create_ion_canonicalizes_bare_symbol(self, client, admin_user, auth_headers):
+        # A bare-sign input is normalized to the canonical form (digit added).
+        resp = client.post(
+            "/api/v1/ions",
+            {"symbol": "Ag+", "name": "Silver", "kind": "cation"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["symbol"] == "Ag+1"
+        assert body["charge"] == 1
+        assert body["kind"] == "cation"
+
+    def test_create_ion_derives_charge_and_kind_from_symbol(self, client, admin_user, auth_headers):
+        # The symbol is authoritative: sent charge/kind are ignored.
+        resp = client.post(
+            "/api/v1/ions",
+            {"symbol": "Xx+2", "name": "Xenon-like", "charge": 1, "kind": "cation"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["symbol"] == "Xx+2"
+        assert body["charge"] == 2
+        assert body["kind"] == "cation"
+
+    def test_create_ion_derives_anion(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/ions",
+            {"symbol": "Se-2", "name": "Selenide", "charge": 0, "kind": "cation"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["symbol"] == "Se-2"
+        assert body["charge"] == -2
+        assert body["kind"] == "anion"
+
+    def test_create_ion_rejects_non_ion_symbol(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/ions",
+            {"symbol": "H2O", "name": "Water", "kind": "cation"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+        assert not Ion.objects.filter(symbol="H2O").exists()
+
+    def test_create_ion_rejects_legacy_digit_then_sign(self, client, admin_user, auth_headers):
+        # The ambiguous legacy form is rejected; the canonical form is required.
+        resp = client.post(
+            "/api/v1/ions",
+            {"symbol": "Mg2+", "name": "Magnesium", "kind": "cation"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+        assert not Ion.objects.filter(symbol="Mg2+").exists()
 
     def test_admin_updates_substance(self, client, admin_user, populated, auth_headers):
         cation, _, substance = populated
@@ -189,10 +251,10 @@ class TestCsvImport:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data["missing_ions"]) == {"Zz+", "Qq-"}
+        assert set(data["missing_ions"]) == {"Zz+1", "Qq-1"}
         assert data["created"] == 1
-        # No ions were auto-created.
-        assert not Ion.objects.filter(symbol="Zz+").exists()
+        # No ions were auto-created (the bare tokens canonicalize to Zz+1 / Qq-1).
+        assert not Ion.objects.filter(symbol="Zz+1").exists()
 
     def test_comma_separated_columns_still_accepted(self, client, admin_user, auth_headers):
         # Legacy comma-separated files (ions cell quoted) still parse.
@@ -204,7 +266,7 @@ class TestCsvImport:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data["missing_ions"]) == {"Zz+", "Qq-"}
+        assert set(data["missing_ions"]) == {"Zz+1", "Qq-1"}
         assert data["created"] == 1
 
     def test_create_missing_ions(self, client, admin_user, auth_headers):
@@ -217,8 +279,8 @@ class TestCsvImport:
         assert resp.status_code == 200
         data = resp.json()
         assert data["missing_ions"] == []
-        assert Ion.objects.get(symbol="Zz+").kind == Ion.Kind.CATION
-        assert Ion.objects.get(symbol="Qq-").kind == Ion.Kind.ANION
+        assert Ion.objects.get(symbol="Zz+1").kind == Ion.Kind.CATION
+        assert Ion.objects.get(symbol="Qq-1").kind == Ion.Kind.ANION
 
     def test_rejects_empty_file(self, client, admin_user, auth_headers):
         resp = client.post(
@@ -258,8 +320,8 @@ class TestCsvImport:
         assert lines[0] == "name;synonyms;formula;ions;pubchem_id;wikipedia_link"
         # Each sample row has 6 ``;``-separated columns.
         assert all(len(line.split(";")) == 6 for line in lines)
-        # The ions cell uses commas as the intra-cell separator.
-        assert "Na+,Cl-" in lines[1]
+        # The ions cell uses commas as the intra-cell separator (canonical symbols).
+        assert "Na+1,Cl-1" in lines[1]
 
     def test_template_forbidden_for_student(self, client, student, auth_headers):
         resp = client.get("/api/v1/substances/import-template", **auth_headers(student))

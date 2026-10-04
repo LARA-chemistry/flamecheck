@@ -19,12 +19,19 @@ class IonOut(Schema):
 
 
 class IonIn(Schema):
-    """Payload for creating/updating an ion (admin)."""
+    """
+    Payload for creating/updating an ion (admin).
+
+    ``symbol`` is the source of truth and must be a valid ion; it is stored in
+    canonical form (``<formula><sign><magnitude>``). ``charge`` and ``kind`` are
+    derived from the symbol, so they are accepted for backward compatibility but
+    ignored.
+    """
 
     symbol: str
     name: str
     charge: int = 0
-    kind: str
+    kind: str = ""
     group: str = ""
 
 

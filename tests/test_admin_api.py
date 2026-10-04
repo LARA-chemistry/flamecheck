@@ -96,7 +96,7 @@ class TestAnalysisInstances:
     ):
         from substances.models import Ion
 
-        ids = list(Ion.objects.filter(symbol__in=["NH4+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},

@@ -66,6 +66,14 @@ penalised according to the grading configuration (second attempt, third attempt)
    - **Assignments** — pick a course to see its analysis sheets (instances);
      open *Manage* on a sheet to choose which students receive it (and the
      announcement number).
+   - **Ion symbols** — ions are written in one canonical form,
+     `<formula><sign><magnitude>` with the digit always present (e.g. `Na+1`,
+     `Mg+2`, `SO4-2`). When you create an ion or import substances by CSV the
+     symbol is normalized to this form automatically (Unicode IUPAC charges
+     such as `SO₄²⁻` and extra whitespace are accepted); the charge and
+     cation/anion kind are derived from the symbol. The full rule set, the
+     IUPAC display form and the migration from the old notation are described
+     in {doc}`the ion symbol convention <development/ion_symbol_convention>`.
 3. The same settings are also editable in the standard Django admin
    (`/admin-django/`, reachable via the "Django admin" link in the SPA admin
    panel). Each setting has its own edit page: open *Grading configuration* or

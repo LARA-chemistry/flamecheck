@@ -12,7 +12,7 @@
           <code>formula</code>, <code>ions</code>, <code>pubchem_id</code>,
           <code>wikipedia_link</code>. Columns are separated by
           <code>;</code> and several ions or synonyms are separated by
-          <code>,</code> (e.g. <code>Na+,Cl-</code>), so a cell may hold commas
+          <code>,</code> (e.g. <code>Na+1,Cl-1</code>), so a cell may hold commas
           without quoting. Rows are matched by name - a match updates the existing
           substance, otherwise a new one is created.
         </n-text>

@@ -23,6 +23,7 @@ from substances.api.schemas import (
     ion_to_schema,
     substance_to_schema,
 )
+from substances.ions import IonSymbolError, canonical_symbol, parse_ion
 from substances.models import Ion, Substance
 
 logger = logging.getLogger("flamecheck.audit")
@@ -41,6 +42,20 @@ def _require_admin(request) -> None:
     """Raise unless the request user is an admin."""
     if not (getattr(request.user, "is_admin", False)):
         raise AuthenticationError(403, "Admin role required.")
+
+
+def _canonical_ion(symbol: str) -> tuple[str, int, str]:
+    """
+    Canonicalize an ion symbol and derive its charge and kind.
+
+    The symbol is the source of truth: it is normalized to the canonical form
+    (see :mod:`substances.ions`) and the charge / kind are derived from it.
+    Raises :class:`IonSymbolError` when the symbol is not a valid ion.
+    """
+    canonical = canonical_symbol(symbol)
+    _formula, charge = parse_ion(canonical)
+    kind = Ion.Kind.ANION if charge < 0 else Ion.Kind.CATION
+    return canonical, charge, kind
 
 
 @router.get("/ions", response=list[IonOut])
@@ -86,8 +101,8 @@ def substance_import_template(request):
         [
             FIELD_SEP.join(CSV_HEADER),
             # name;synonyms;formula;ions;pubchem_id;wikipedia_link (6 columns)
-            "Sodium chloride;Table salt;NaCl;Na+,Cl-;238914022;https://en.wikipedia.org/wiki/Sodium_chloride",
-            "Potassium sulfate;;K2SO4;K+,SO4^2-;;",
+            "Sodium chloride;Table salt;NaCl;Na+1,Cl-1;238914022;https://en.wikipedia.org/wiki/Sodium_chloride",
+            "Potassium sulfate;;K2SO4;K+1,SO4-2;;",
         ]
     )
     return _csv_response(sample, filename="substances_import_template.csv")
@@ -130,10 +145,12 @@ def import_substances_csv(request, file: UploadedFile):
     ``wikipedia_link``. Columns are separated by ``;`` (a comma is also accepted
     as the column separator for compatibility). Substances are matched by name;
     a matching row updates the existing substance, otherwise a new one is
-    created. Ion symbols are resolved against existing ions; symbols that are
-    not found are collected in ``missing_ions`` unless the
+    created. Ion symbols are normalized to the canonical form (see
+    :mod:`substances.ions`) and resolved against existing ions; symbols that
+    are not found are collected in ``missing_ions`` unless the
     ``create_missing_ions`` form field is set to ``true``, in which case bare
-    ions (kind inferred from the charge sign) are created.
+    ions (charge and kind derived from the symbol) are created. Invalid symbols
+    (no charge sign) are reported per line and skipped.
     """
     _require_admin(request)
     # ``create_missing_ions`` arrives as a multipart form field (or query param);
@@ -169,6 +186,11 @@ def import_substances_csv(request, file: UploadedFile):
         try:
             ion_ids: list[int] = []
             for symbol in _split_list(row.get("ions")):
+                try:
+                    symbol = canonical_symbol(symbol)
+                except IonSymbolError as exc:
+                    errors.append(f"Line {line_no}: invalid ion symbol {symbol!r} ({exc}) - skipped.")
+                    continue
                 ion = Ion.objects.filter(symbol=symbol).first()
                 if ion is None:
                     if create_missing_ions:
@@ -230,27 +252,40 @@ def get_substance(request, substance_id: int):
 
 @router.post("/ions", response=IonOut)
 def create_ion(request, payload: IonIn):
-    """Create a new ion (admin only)."""
+    """
+    Create a new ion (admin only).
+
+    The ``symbol`` must be a valid ion and is stored in canonical form
+    (``<formula><sign><magnitude>``); the ``charge`` and ``kind`` are derived
+    from it, so any values sent for them are ignored.
+    """
     _require_admin(request)
-    ion = Ion.objects.create(
-        symbol=payload.symbol,
-        name=payload.name,
-        charge=payload.charge,
-        kind=payload.kind,
-        group=payload.group,
-    )
+    try:
+        symbol, charge, kind = _canonical_ion(payload.symbol)
+    except IonSymbolError as exc:
+        raise ValidationError({"symbol": [str(exc)]}) from exc
+    ion = Ion.objects.create(symbol=symbol, name=payload.name, charge=charge, kind=kind, group=payload.group)
     return ion_to_schema(ion)
 
 
 @router.put("/ions/{ion_id}", response=IonOut)
 def update_ion(request, ion_id: int, payload: IonIn):
-    """Update an ion (admin only)."""
+    """
+    Update an ion (admin only).
+
+    The ``symbol`` is canonicalized and the ``charge`` / ``kind`` are derived
+    from it (see :func:`create_ion`).
+    """
     _require_admin(request)
+    try:
+        symbol, charge, kind = _canonical_ion(payload.symbol)
+    except IonSymbolError as exc:
+        raise ValidationError({"symbol": [str(exc)]}) from exc
     ion = Ion.objects.get(pk=ion_id)
-    ion.symbol = payload.symbol
+    ion.symbol = symbol
     ion.name = payload.name
-    ion.charge = payload.charge
-    ion.kind = payload.kind
+    ion.charge = charge
+    ion.kind = kind
     ion.group = payload.group
     ion.save()
     return ion_to_schema(ion)
@@ -317,17 +352,12 @@ def _split_list(value: str | None) -> list[str]:
 
 
 def _create_ion_from_symbol(symbol: str) -> Ion:
-    """Create a bare ion from a symbol string (kind inferred from the charge sign)."""
-    charge = 0
-    if symbol.endswith("+"):
-        charge = 1
-    elif symbol.endswith("-"):
-        charge = -1
-    kind = Ion.Kind.ANION if charge < 0 else Ion.Kind.CATION
+    """Create a bare ion from a symbol string (canonicalized; charge/kind derived)."""
+    canonical, charge, kind = _canonical_ion(symbol)
     ion, _created = Ion.objects.get_or_create(
-        symbol=symbol,
+        symbol=canonical,
         kind=kind,
-        defaults={"name": symbol, "charge": abs(charge) or 0, "group": ""},
+        defaults={"name": canonical, "charge": charge, "group": ""},
     )
     return ion
 

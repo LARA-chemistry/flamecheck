@@ -96,8 +96,8 @@ class TestSubstanceFactories:
     def test_named_catalog_ions(self):
         sodium = IonFactory.make("sodium")
         chloride = IonFactory.make("chloride")
-        assert (sodium.symbol, sodium.charge, sodium.kind) == ("Na+", 1, "cation")
-        assert (chloride.symbol, chloride.charge, chloride.kind) == ("Cl-", -1, "anion")
+        assert (sodium.symbol, sodium.charge, sodium.kind) == ("Na+1", 1, "cation")
+        assert (chloride.symbol, chloride.charge, chloride.kind) == ("Cl-1", -1, "anion")
 
     def test_catalog_idempotent(self):
         # Same (symbol, kind) -> same object (django_get_or_create).
@@ -107,7 +107,7 @@ class TestSubstanceFactories:
 
     def test_create_ion_catalog_batch(self):
         ions = create_ion_catalog(["sodium", "potassium", "chloride", "sulfate"])
-        assert {i.symbol for i in ions} == {"Na+", "K+", "Cl-", "SO4-2"}
+        assert {i.symbol for i in ions} == {"Na+1", "K+1", "Cl-1", "SO4-2"}
 
     def test_unknown_catalog_name_raises(self):
         with pytest.raises(KeyError):
