@@ -251,22 +251,44 @@ class Command(BaseCommand):
         )
 
     # -- entry point ---------------------------------------------------------
-    @transaction.atomic
     def handle(self, *args: Any, **options: Any) -> None:
         """Seed the demo dataset (optionally after a reset)."""
-        if options["reset"]:
-            self._reset()
+        self._ensure_schema()  # guard: migrate a fresh (unmigrated) database first
+        with transaction.atomic():
+            if options["reset"]:
+                self._reset()
 
-        self._seed_catalog()
-        courses = self._seed_courses()
-        users = self._seed_users(courses)
-        self._seed_assistant_courses(users, courses)
-        types = self._seed_types()
-        instances = self._seed_announcements(types, courses, users)
-        self._seed_singletons(courses)
-        self._seed_submissions(users, instances)
+            self._seed_catalog()
+            courses = self._seed_courses()
+            users = self._seed_users(courses)
+            self._seed_assistant_courses(users, courses)
+            types = self._seed_types()
+            instances = self._seed_announcements(types, courses, users)
+            self._seed_singletons(courses)
+            self._seed_submissions(users, instances)
 
-        self._print_summary(courses, users, instances)
+            self._print_summary(courses, users, instances)
+
+    # -- schema guard --------------------------------------------------------
+    def _ensure_schema(self) -> None:
+        """
+        Apply migrations first when the database has no schema yet.
+
+        The command targets a fixed set of tables; on a fresh database — e.g.
+        right after a migration reset, before ``migrate`` has been run — those
+        tables do not exist and the first query fails with ``no such table``.
+        When the core table is missing, run ``migrate`` so ``seed_demo --reset``
+        is self-contained on a clean DB. On an already-migrated database this
+        is a no-op (no migrations are (re)applied as a side effect).
+        """
+        from django.core.management import call_command
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            has_schema = Submission._meta.db_table in connection.introspection.table_names(cursor)
+        if not has_schema:
+            self.stdout.write(self.style.NOTICE("No schema found - running `migrate` before seeding..."))
+            call_command("migrate", interactive=False, verbosity=1)
 
     # -- reset ---------------------------------------------------------------
     def _reset(self) -> None:
