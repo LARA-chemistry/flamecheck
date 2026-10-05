@@ -313,6 +313,13 @@
         <n-form-item label="Active">
           <n-switch v-model:value="modal.form.is_active" />
         </n-form-item>
+        <n-form-item label="Notify student">
+          <n-switch v-model:value="modal.form.notify_student_on_submission" />
+          <div class="form-hint">
+            Send the student a PGP-encrypted e-mail confirmation for every submission
+            (requires ALLOW_EMAILS to be enabled in the container).
+          </div>
+        </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
@@ -509,7 +516,7 @@ const modal = ref({
   show: false,
   editing: false,
   saving: false,
-  form: { id: null, name: '', semester: '', track: '', is_active: true },
+  form: { id: null, name: '', semester: '', track: '', is_active: true, notify_student_on_submission: false },
 })
 
 // Active tab of the course detail view: 'assign' | 'members' | 'analyses'
@@ -1164,7 +1171,12 @@ async function loadMembers() {
 }
 
 function openCreate() {
-  modal.value = { show: true, editing: false, saving: false, form: { id: null, name: '', semester: '', track: '', is_active: true } }
+  modal.value = {
+    show: true,
+    editing: false,
+    saving: false,
+    form: { id: null, name: '', semester: '', track: '', is_active: true, notify_student_on_submission: false },
+  }
 }
 
 function openEdit(row) {
@@ -1172,7 +1184,14 @@ function openEdit(row) {
     show: true,
     editing: true,
     saving: false,
-    form: { id: row.id, name: row.name, semester: row.semester || '', track: row.track || '', is_active: row.is_active },
+    form: {
+      id: row.id,
+      name: row.name,
+      semester: row.semester || '',
+      track: row.track || '',
+      is_active: row.is_active,
+      notify_student_on_submission: row.notify_student_on_submission ?? false,
+    },
   }
 }
 
@@ -1328,6 +1347,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.form-hint {
+  width: 100%;
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-muted, #8a8f99);
+  line-height: 1.4;
+}
 .page-head {
   display: flex;
   align-items: center;

@@ -18,6 +18,13 @@ class Course(models.Model):
         help_text=_("Specialisation track (biology, pharmacy, materials science, ...)."),
     )
     is_active = models.BooleanField(default=True, help_text=_("Only active courses are offered to students."))
+    notify_student_on_submission = models.BooleanField(
+        default=False,
+        help_text=_(
+            "Send the student a PGP-encrypted e-mail confirmation for every submission "
+            "in this course (Admin → Courses)."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Course")
@@ -309,6 +316,65 @@ class AppSettings(models.Model):
         on_delete=models.SET_NULL,
         related_name="plus_active_settings",
         help_text=_("Currently active course (the one students see after login)."),
+    )
+
+    # ---- e-mail notifications (submission confirmations) --------------------
+    # A single master switch for the assistant e-mail, plus the SMTP and PGP
+    # configuration used to build the encrypted/signed messages. Note that every
+    # send is additionally gated by the ``ALLOW_EMAILS`` environment variable
+    # (see :mod:`config.services.notifications`), so nothing is sent in
+    # staging/demo containers unless that variable is explicitly enabled.
+    class SMTPSecurity(models.TextChoices):
+        """How the SMTP connection is secured."""
+
+        NONE = "none", _("None (plain, port 25)")
+        TLS = "tls", _("STARTTLS (port 587)")
+        SSL = "ssl", _("Implicit SSL/TLS (port 465)")
+
+    notify_assistant_on_submission = models.BooleanField(
+        default=False,
+        help_text=_(
+            "Send the course's assistants a PGP-encrypted e-mail for every student "
+            "submission (Admin → Settings → Notifications)."
+        ),
+    )
+    smtp_host = models.CharField(max_length=255, blank=True, default="", help_text=_("SMTP server hostname."))
+    smtp_port = models.PositiveSmallIntegerField(
+        default=587, help_text=_("SMTP server port (587 for STARTTLS, 465 for SSL).")
+    )
+    smtp_username = models.CharField(
+        max_length=255, blank=True, default="", help_text=_("SMTP username (empty = anonymous).")
+    )
+    smtp_password = models.CharField(
+        max_length=255, blank=True, default="", help_text=_("SMTP password / app password.")
+    )
+    smtp_from_email = models.CharField(
+        max_length=255, blank=True, default="", help_text=_("The From: address of sent e-mails.")
+    )
+    smtp_security = models.CharField(
+        max_length=8,
+        choices=SMTPSecurity.choices,
+        default=SMTPSecurity.TLS,
+        help_text=_("How the SMTP connection is secured."),
+    )
+    pgp_public_key = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Armored (-----BEGIN PGP PUBLIC KEY BLOCK-----) public key used to ENCRYPT "
+            "outgoing e-mails (the recipient's key)."
+        ),
+    )
+    pgp_private_key = models.TextField(
+        blank=True,
+        default="",
+        help_text=("Armored (-----BEGIN PGP PRIVATE KEY BLOCK-----) private key used to SIGN outgoing e-mails."),
+    )
+    pgp_private_key_passphrase = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Passphrase protecting the signing private key (empty = unprotected)."),
     )
     # ---- database backup -----------------------------------------------------
     backup_enabled = models.BooleanField(

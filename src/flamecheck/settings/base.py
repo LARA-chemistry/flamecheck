@@ -174,6 +174,14 @@ DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="FlameCheck <no-reply
 EMAIL_SUBJECT_PREFIX = env.str("EMAIL_SUBJECT_PREFIX", default="[FlameCheck] ")
 # How long a self-registration e-mail-confirmation link stays valid (seconds).
 EMAIL_VERIFICATION_TOKEN_MAX_AGE = env.int("EMAIL_VERIFICATION_TOKEN_MAX_AGE", default=48 * 3600)
+#
+# Master switch for the submission-confirmation e-mails (Admin → Courses →
+# "notify the student" / Admin → Settings → Notifications → "notify the
+# assistants"). E-mail sending is DISABLED by default and only happens when the
+# ALLOW_EMAILS environment variable is set to a truthy value in the (docker)
+# container. This extra safety layer prevents any e-mail from being sent in
+# staging / demo environments, even when the in-app switches are enabled.
+ALLOW_EMAILS = env.bool("ALLOW_EMAILS", default=False)
 
 # ---------------------------------------------------------------------------
 # JWT / token auth

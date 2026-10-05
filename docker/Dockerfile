@@ -97,8 +97,13 @@ ENV LANG=C.UTF-8 \
     UV_PROJECT_ENVIRONMENT=/opt/.venv \
     DJANGO_SETTINGS_MODULE=flamecheck.settings.production
 
-# Create a non-root user for security.
-RUN adduser --disabled-password --gecos "" appuser \
+# Create a non-root user for security. ``gnupg`` (the ``gpg`` binary) is needed
+# at runtime to build the PGP-encrypted/signed submission e-mails (see
+# config.services.notifications); e-mail itself only happens when ALLOW_EMAILS is set.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && adduser --disabled-password --gecos "" appuser \
     && mkdir -p /opt/staticfiles /opt/db /opt/media \
     && chown -R appuser:appuser /opt
 

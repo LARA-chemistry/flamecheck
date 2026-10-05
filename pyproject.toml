@@ -45,6 +45,7 @@ dependencies = [
   "whitenoise>=6.12",
   "PyJWT>=2.15",
   "gunicorn>=26.0",
+  "python-gnupg>=0.5.7",
 ]
 
 [project.optional-dependencies]

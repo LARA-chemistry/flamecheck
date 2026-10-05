@@ -85,7 +85,14 @@ def list_courses(request):
     """List all courses (admin)."""
     _admin_user(request)
     return [
-        {"id": c.id, "name": c.name, "semester": c.semester, "track": c.track, "is_active": c.is_active}
+        {
+            "id": c.id,
+            "name": c.name,
+            "semester": c.semester,
+            "track": c.track,
+            "is_active": c.is_active,
+            "notify_student_on_submission": c.notify_student_on_submission,
+        }
         for c in Course.objects.all()
     ]
 
@@ -99,6 +106,7 @@ def create_course(request, payload: CourseIn):
         semester=payload.semester,
         track=payload.track,
         is_active=payload.is_active,
+        notify_student_on_submission=payload.notify_student_on_submission,
     )
     logger.info("Admin %s created course %s", request.user.username, course.name)
     return {"id": course.id, "name": course.name}
@@ -115,6 +123,7 @@ def update_course(request, course_id: int, payload: CourseIn):
     course.semester = payload.semester
     course.track = payload.track
     course.is_active = payload.is_active
+    course.notify_student_on_submission = payload.notify_student_on_submission
     course.save()
     logger.info("Admin %s updated course %s", request.user.username, course.name)
     return {"id": course.id, "name": course.name}
@@ -979,6 +988,11 @@ def get_app_settings(request):
     if not getattr(request.user, "is_authenticated", False):
         raise AuthenticationError(401, "Authentication required.")
     s = AppSettings.get_instance()
+    return _app_settings_payload(s)
+
+
+def _app_settings_payload(s: AppSettings) -> dict:
+    """The global app-settings payload (shared by GET and PUT /app-settings)."""
     return {
         "points_per_analysis": s.points_per_analysis,
         "analyses_per_course": s.analyses_per_course,
@@ -988,6 +1002,16 @@ def get_app_settings(request):
         "backup_interval_minutes": s.backup_interval_minutes,
         "backup_location": s.backup_location,
         "backup_keep": s.backup_keep,
+        "notify_assistant_on_submission": s.notify_assistant_on_submission,
+        "smtp_host": s.smtp_host,
+        "smtp_port": s.smtp_port,
+        "smtp_username": s.smtp_username,
+        "smtp_password": s.smtp_password,
+        "smtp_from_email": s.smtp_from_email,
+        "smtp_security": s.smtp_security,
+        "pgp_public_key": s.pgp_public_key,
+        "pgp_private_key": s.pgp_private_key,
+        "pgp_private_key_passphrase": s.pgp_private_key_passphrase,
     }
 
 
@@ -1008,18 +1032,21 @@ def update_app_settings(request, payload: AppSettingsOut):
     s.backup_interval_minutes = max(1, payload.backup_interval_minutes)
     s.backup_location = payload.backup_location
     s.backup_keep = max(1, payload.backup_keep)
+    s.notify_assistant_on_submission = payload.notify_assistant_on_submission
+    s.smtp_host = payload.smtp_host.strip()
+    s.smtp_port = max(1, int(payload.smtp_port))
+    s.smtp_username = payload.smtp_username.strip()
+    s.smtp_password = payload.smtp_password
+    s.smtp_from_email = payload.smtp_from_email.strip()
+    s.smtp_security = (
+        payload.smtp_security if payload.smtp_security in dict(AppSettings.SMTPSecurity.choices) else "tls"
+    )
+    s.pgp_public_key = payload.pgp_public_key
+    s.pgp_private_key = payload.pgp_private_key
+    s.pgp_private_key_passphrase = payload.pgp_private_key_passphrase
     s.save()
     logger.info("Admin %s updated app settings", request.user.username)
-    return {
-        "points_per_analysis": s.points_per_analysis,
-        "analyses_per_course": s.analyses_per_course,
-        "active_course_id": s.active_course_id,
-        "registration": s.registration,
-        "backup_enabled": s.backup_enabled,
-        "backup_interval_minutes": s.backup_interval_minutes,
-        "backup_location": s.backup_location,
-        "backup_keep": s.backup_keep,
-    }
+    return _app_settings_payload(s)
 
 
 # ---- database backups ----------------------------------------------------------

@@ -8,6 +8,7 @@ submission exists.
 
 from __future__ import annotations
 
+from config.services.notifications import notify_submission
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
 from ninja import Router
@@ -120,6 +121,18 @@ def create_mc_submission(request, sheet_id: int, payload: MCSubmissionIn):
     except DjangoValidationError as exc:
         messages = exc.messages if hasattr(exc, "messages") else [str(exc)]
         raise NinjaValidationError({"answers": list(messages)}) from exc
+
+    # Optionally notify the student / assistants (PGP e-mail), same gating as
+    # the analysis submissions.
+    notify_submission(
+        course=sheet.course,
+        student=user,
+        analysis_name=sheet.card.title,
+        score=submission.score,
+        ideal_score=submission.ideal_score,
+        submission_number=getattr(submission, "submission_number", 1),
+        submission_kind="mc",
+    )
     return {
         "id": submission.id,
         "score": submission.score,

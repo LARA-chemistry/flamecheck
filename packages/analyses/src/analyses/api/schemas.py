@@ -246,6 +246,17 @@ class AppSettingsOut(Schema):
     backup_interval_minutes: int = 60
     backup_location: str = "backups"
     backup_keep: int = 10
+    # ---- e-mail notifications (submission confirmations) --------------------
+    notify_assistant_on_submission: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_security: str = "tls"
+    pgp_public_key: str = ""
+    pgp_private_key: str = ""
+    pgp_private_key_passphrase: str = ""
 
 
 class DatabaseBackupOut(Schema):
@@ -287,6 +298,7 @@ class CourseIn(Schema):
     semester: str = ""
     track: str = ""
     is_active: bool = True
+    notify_student_on_submission: bool = False
 
 
 class StudentOut(Schema):

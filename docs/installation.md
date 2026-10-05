@@ -56,6 +56,20 @@ The template documents every variable. The most relevant for the database:
 `django-environ` parses `DATABASE_URL` and maps it to Django's `DATABASES`, so
 switching engines requires no code or migration changes.
 
+### E-mail notifications (submission confirmations)
+
+FlameCheck can send students and assistants a **PGP-encrypted and signed**
+e-mail for every submission. The switches and the SMTP / PGP details are
+configured in the UI (Admin → Courses for the per-course *student* switch, and
+Admin → Settings → Notifications for the *assistant* switch plus SMTP / PGP).
+
+As a safety layer, **no e-mail is ever sent unless the `ALLOW_EMAILS`
+environment variable is enabled in the container** (defaults to `false`). This
+prevents accidental e-mail delivery in staging and demo environments. To enable
+it, set e.g. `ALLOW_EMAILS=true` in `.env` (or the container environment). The
+Docker image ships with the `gnupg` package (the `gpg` binary) so the PGP
+signing/encryption works out of the box.
+
 ## 4. Build the frontend
 
 ```bash
