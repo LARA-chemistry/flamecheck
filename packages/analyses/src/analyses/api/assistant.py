@@ -63,6 +63,7 @@ def list_courses(request):
                 barcode=s.barcodes.filter(active=True).first().value
                 if s.barcodes.filter(active=True).exists()
                 else None,
+                labspace_id=s.labspace_id or None,
                 analyses=[
                     AnalysisSummary.from_instance(i)
                     for i in AnalysisInstance.objects.for_student(s)
@@ -113,6 +114,7 @@ def course_detail(request, course_id: int):
             last_name=s.last_name or None,
             full_name=(s.full_name or None),
             barcode=s.barcodes.filter(active=True).first().value if s.barcodes.filter(active=True).exists() else None,
+            labspace_id=s.labspace_id or None,
             analyses=[
                 AnalysisSummary.from_instance(i)
                 for i in AnalysisInstance.objects.for_student(s)

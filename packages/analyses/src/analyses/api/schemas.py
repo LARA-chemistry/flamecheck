@@ -121,6 +121,7 @@ class AssistantRosterEntry(Schema):
     last_name: str | None = None
     full_name: str | None = None
     barcode: str | None
+    labspace_id: str | None = None
     analyses: list[AnalysisSummary]
 
 

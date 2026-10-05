@@ -158,10 +158,20 @@
     <n-modal
       v-model:show="studentModal.show"
       preset="card"
-      :title="studentModal.student ? `Student: ${studentModal.student.full_name || studentModal.student.username}` : 'Student'"
       style="width: 860px; max-width: 96vw"
       :segmented="{ content: true }"
     >
+      <template #header>
+        <div class="student-modal__title">
+          <span class="student-modal__name">{{
+            studentModal.student ? studentModal.student.full_name || studentModal.student.username : 'Student'
+          }}</span>
+          <span v-if="studentModal.student?.full_name" class="muted">({{ studentModal.student.username }})</span>
+          <strong v-if="studentModal.student?.labspace_id" class="student-modal__labspace">
+            {{ studentModal.student.labspace_id }}
+          </strong>
+        </div>
+      </template>
       <n-spin :show="studentModal.loading">
         <n-empty v-if="!studentModal.loading && !studentModal.detail" description="No data." />
         <n-space v-else vertical size="large">
@@ -583,6 +593,21 @@ onMounted(load)
 .muted {
   font-size: var(--fc-fs-sm);
   color: var(--fc-muted);
+}
+.student-modal__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.student-modal__name {
+  font-weight: 700;
+  color: var(--fc-ink);
+}
+.student-modal__labspace {
+  font-weight: 700;
+  color: var(--fc-flame-2);
+  font-variant-numeric: tabular-nums;
 }
 .notif-banner {
   margin-bottom: 16px;
