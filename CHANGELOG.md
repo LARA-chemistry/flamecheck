@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.1 (2026-10-05)
+
+### Bug fixes
+
+- Harden auth against student abuse ([`8c033e3`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/8c033e3829266a6c2e2443cd629a69b11899cf1b))
+- Repair staging container boot ([`61e4df6`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/61e4df63cf95027ea7a13900516eefc1cd5faf19))
+
+### Documentation
+
+- Restructure documentation into a chaptered guide ([`e5dcbf8`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/e5dcbf898a7536a7872673b0f4ac8112dc79fd56))
+
+### Features
+
+- Pgp-encrypted/signed submission e-mail notifications ([`13b5eef`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/13b5eefdeec0602ca25b717c664fda8600d80a8d))
+
 ## v0.1.0 (2026-10-05)
 
 ### Features
@@ -23,6 +38,23 @@
 - Course members (students + assistants) management ([`b3d5597`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/b3d5597bad2fe6b64a962619ea4d33bfb133042b))
 - Course detail view with tabbed navigation ([`28ee85f`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/28ee85ff45b934e0b1606db93c97d8cc84fdd321))
 - Resubmit until limit, results behind explicit button ([`8a11372`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/8a1137229fe2de40d4d40fa96ae656b37fac0a5a))
+
+### Bug fixes
+
+- Proactively refresh the access token before expiry ([`7b1aaf7`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/7b1aaf7a0957e625b9a1266a71e504e951101b5c))
+- Migrate a fresh database before seeding ([`1309a45`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/1309a45fa117a4085cf6d9023bbbe3be9643e9f8))
+- Serve branding media in production and cache-bust preview urls ([`74b07e4`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/74b07e40903bc6d20d0c5919887c1c72ace9989d))
+- Always show results once the submission limit is reached ([`87e185d`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/87e185d633e85382e7e356bd5ee75e070d28e7bc))
+- Track django migrations so ci and docker images can build the schema ([`bad9920`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/bad9920f66d618476cff9a3c887166b32f3ec6c3))
+
+### Documentation
+
+- Document the authentication setup and all sign-in methods ([`259c15a`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/259c15a87512954de2ae98bc1a17b771e00f6daf))
+
+## v0.0.5 (2026-10-03)
+
+### Features
+
 - Logos added ([`21ff003`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/21ff0033a37c3c75c872c4bb9778bdb9ea4605dd))
 - Student management (edit, add/delete, csv import) ([`e97dfd3`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/e97dfd32363f7de4003452870f4c126537616d63))
 - Greyed-out cards only open when a result exists ([`481c3f4`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/481c3f4bbfb1616a94fa49339b49ce996211628d))
@@ -35,18 +67,9 @@
 
 ### Bug fixes
 
-- Proactively refresh the access token before expiry ([`7b1aaf7`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/7b1aaf7a0957e625b9a1266a71e504e951101b5c))
-- Migrate a fresh database before seeding ([`1309a45`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/1309a45fa117a4085cf6d9023bbbe3be9643e9f8))
-- Serve branding media in production and cache-bust preview urls ([`74b07e4`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/74b07e40903bc6d20d0c5919887c1c72ace9989d))
-- Always show results once the submission limit is reached ([`87e185d`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/87e185d633e85382e7e356bd5ee75e070d28e7bc))
-- Track django migrations so ci and docker images can build the schema ([`bad9920`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/bad9920f66d618476cff9a3c887166b32f3ec6c3))
 - Versioning in pyproject.toml and .gitlab-ci.yml; ([`341e2c0`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/341e2c0eb78c51f86d48f452b8744fd342e302f1))
 - Make check_migrations tests robust across sqlite builds ([`1fc039d`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/1fc039d909799d06172df74289f18e5ca8293766))
 - Self-heal a corrupt migration state on container start ([`f2a2c6e`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/f2a2c6e9ab02bc276446affca53f6e5e5f0a8c69))
-
-### Documentation
-
-- Document the authentication setup and all sign-in methods ([`259c15a`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/259c15a87512954de2ae98bc1a17b771e00f6daf))
 
 ## v0.0.4 (2026-10-02)
 
