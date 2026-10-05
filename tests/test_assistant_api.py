@@ -169,3 +169,99 @@ class TestSubstanceOverview:
         assert data["analyses"][0]["sample_count"] == 5
         assert data["totals"][0]["count"] == 5
         assert data["total_units"] == 5
+
+
+class TestMCResults:
+    """Multiple-choice results in the assistant students overview."""
+
+    @pytest.fixture
+    def mc_sheet(self, db, course, student):
+        """An open single-question MC sheet assigned to the student fixture."""
+        from multichoice.factory import MCCardFactory, MCQuestionFactory, MCSheetFactory, MCStudentAssignmentFactory
+
+        question = MCQuestionFactory(course=course)
+        card = MCCardFactory(course=course, questions=[question], title="EP Monograph")
+        sheet = MCSheetFactory(card=card, course=course, number=1)
+        MCStudentAssignmentFactory(course=course, sheet=sheet, student=student, number=1)
+        return sheet
+
+    def _submit(self, sheet, student, *, correct: bool = True, key: str) -> None:
+        """Submit one answer for the sheet (the correct option, or a wrong one)."""
+        q = sheet.questions()[0]
+        option = q.correct_option() if correct else next(o for o in q.options() if not o.is_correct)
+        sheet.submit(student, {q.id: option.id}, idempotency_key=key)
+
+    def test_roster_carries_submitted_mc(
+        self, client, assistant, assistant_course, course, student, mc_sheet, auth_headers, idempotency_key
+    ):
+        student.course = course
+        student.save()
+        self._submit(mc_sheet, student, correct=True, key=idempotency_key)
+
+        resp = client.get(f"/api/v1/assistant/courses/{course.id}", **auth_headers(assistant))
+        assert resp.status_code == 200
+        entry = next(s for s in resp.json()["students"] if s["username"] == student.username)
+        assert len(entry["mc"]) == 1
+        assert entry["mc"][0]["card"] == "EP Monograph"
+        assert entry["mc"][0]["window_status"] == "submitted"
+        assert entry["mc"][0]["submission_count"] == 1
+        assert entry["mc"][0]["score"] == 10
+        assert entry["mc"][0]["ideal_score"] == 10
+
+    def test_roster_pending_mc_has_no_score(
+        self, client, assistant, assistant_course, course, student, mc_sheet, auth_headers
+    ):
+        student.course = course
+        student.save()
+
+        resp = client.get(f"/api/v1/assistant/courses/{course.id}", **auth_headers(assistant))
+        assert resp.status_code == 200
+        entry = next(s for s in resp.json()["students"] if s["username"] == student.username)
+        assert entry["mc"][0]["window_status"] == "open"
+        assert entry["mc"][0]["submission_count"] == 0
+        assert entry["mc"][0]["score"] is None
+
+    def test_student_mc_submissions_detail(
+        self, client, assistant, assistant_course, course, student, mc_sheet, auth_headers, idempotency_key
+    ):
+        student.course = course
+        student.save()
+        self._submit(mc_sheet, student, correct=False, key=idempotency_key)
+
+        resp = client.get(f"/api/v1/assistant/students/{student.id}/mc-submissions", **auth_headers(assistant))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        entry = data[0]
+        assert entry["card"] == "EP Monograph"
+        assert entry["window_status"] == "submitted"
+        assert entry["score"] == 8  # 10 points - 2 penalty for the one wrong answer
+        # the correct answer key is revealed
+        assert len(entry["questions"]) == 1
+        assert entry["questions"][0]["correct_option_id"] is not None
+        assert any(o["is_correct"] for o in entry["questions"][0]["options"])
+        # the submission carries the per-question breakdown
+        assert len(entry["submissions"]) == 1
+        per = entry["submissions"][0]["per_question"]
+        assert len(per) == 1
+        assert per[0]["is_correct"] is False
+        assert per[0]["selected_option_id"] is not None
+
+    def test_mc_submissions_requires_assistant(self, client, student, assistant_course, course, mc_sheet, auth_headers):
+        student.course = course
+        student.save()
+        resp = client.get(f"/api/v1/assistant/students/{student.id}/mc-submissions", **auth_headers(student))
+        assert resp.status_code == 403
+
+    def test_mc_submissions_requires_auth(self, client, student, assistant_course, course, mc_sheet):
+        resp = client.get(f"/api/v1/assistant/students/{student.id}/mc-submissions")
+        assert resp.status_code == 401
+
+    def test_mc_submissions_invisible_student_404(
+        self, client, assistant, assistant_course, course, student2, auth_headers
+    ):
+        other = CourseFactory(name="Other Course", is_active=True)
+        student2.course = other
+        student2.save()
+        resp = client.get(f"/api/v1/assistant/students/{student2.id}/mc-submissions", **auth_headers(assistant))
+        assert resp.status_code == 404
