@@ -72,6 +72,16 @@ def _admin_user(request) -> User:
     return user
 
 
+def _staff_user(request) -> User:
+    """Return the request user if admin or assistant, else raise 401/403."""
+    user = request.user
+    if not getattr(user, "is_authenticated", False):
+        raise AuthenticationError(401, "Authentication required.")
+    if not (user.is_admin or user.is_assistant):
+        raise AuthenticationError(403, "Admin or assistant role required.")
+    return user
+
+
 def _parse_dt(value: str) -> datetime:
     """Parse an ISO-8601 datetime (with or without trailing Z)."""
     if value.endswith("Z"):
@@ -220,9 +230,18 @@ def _set_student_fields(student: User, row: dict) -> None:
     student.telephone = (row.get("telephone") or "").strip()
 
 
-def _list_members(request, role: User.Role, course_id: int | None) -> list[dict]:
-    """List users with ``role`` (admin), optionally filtered by their course."""
-    _admin_user(request)
+def _list_members(user: User, role: User.Role, course_id: int | None) -> list[dict]:
+    """
+    List users with ``role`` for a user, optionally filtered by course.
+
+    Assistants may only list the students of a course they support (a
+    ``course_id`` is required and must be one of theirs); admins may list all.
+    """
+    if not user.is_admin:
+        if course_id is None:
+            raise HttpError(404, "Course required.")
+        if not user.assistant_courses.filter(course_id=course_id).exists():
+            raise HttpError(404, "Course not found.")
     qs = User.objects.filter(role=role).select_related("course")
     if course_id is not None:
         qs = qs.filter(course_id=course_id)
@@ -231,14 +250,14 @@ def _list_members(request, role: User.Role, course_id: int | None) -> list[dict]
 
 @router.get("/students", response=list[StudentOut])
 def list_students(request, course_id: int | None = None):
-    """List students (admin), optionally filtered by their course."""
-    return _list_members(request, User.Role.STUDENT, course_id)
+    """List students (admin; assistants see the students of their courses)."""
+    return _list_members(_staff_user(request), User.Role.STUDENT, course_id)
 
 
 @router.get("/assistants", response=list[AssistantOut])
 def list_assistants(request, course_id: int | None = None):
     """List assistants (admin), optionally filtered by their course."""
-    return _list_members(request, User.Role.ASSISTANT, course_id)
+    return _list_members(_admin_user(request), User.Role.ASSISTANT, course_id)
 
 
 # NOTE: the literal ``/students/import-*`` routes must be registered before the
@@ -970,10 +989,12 @@ def get_course_grading_config(request, course_id: int):
 
 @router.put("/courses/{course_id}/grading-config", response=GradingConfigOut)
 def update_course_grading_config(request, course_id: int, payload: GradingConfigOut):
-    """Create or update a course's own grading configuration (admin)."""
-    _admin_user(request)
+    """Create or update a course's grading config (admin, or assistant for their course)."""
+    user = _staff_user(request)
     course = Course.objects.filter(pk=course_id).first()
     if course is None:
+        raise HttpError(404, "Course not found.")
+    if not user.is_admin and not user.assistant_courses.filter(course_id=course.id).exists():
         raise HttpError(404, "Course not found.")
     gc, _ = GradingConfig.objects.get_or_create(course=course)
     _apply_grading_payload(gc, payload)

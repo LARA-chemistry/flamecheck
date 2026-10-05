@@ -6,11 +6,18 @@ from datetime import timedelta
 
 import pytest
 from analyses.models import AnalysisInstance, AnalysisType
-from config.models import AppSettings, Course, GradingConfig
+from config.factory import AssistantCourseFactory, CourseFactory
+from config.models import AppSettings, AssistantCourse, Course, GradingConfig
 from django.utils import timezone
 from users.models import StudentAssignment
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def assistant_course(assistant, course) -> AssistantCourse:
+    """Link the assistant fixture to the course fixture (via factory)."""
+    return AssistantCourseFactory(assistant=assistant, course=course)
 
 
 class TestAnalysisTypes:
@@ -383,6 +390,29 @@ class TestStudentCourse:
     def test_student_cannot_manage_students(self, client, student, course, auth_headers):
         resp = client.get("/api/v1/admin/students", **auth_headers(student))
         assert resp.status_code == 403
+
+    def test_assistant_lists_students_of_own_course(
+        self, client, assistant, assistant_course, student, course, auth_headers
+    ):
+        student.course = course
+        student.save(update_fields=["course"])
+        resp = client.get(f"/api/v1/admin/students?course_id={course.id}", **auth_headers(assistant))
+        assert resp.status_code == 200
+        usernames = {r["username"] for r in resp.json()}
+        assert student.username in usernames
+
+    def test_assistant_cannot_list_students_without_course(self, client, assistant, assistant_course, auth_headers):
+        resp = client.get("/api/v1/admin/students", **auth_headers(assistant))
+        assert resp.status_code == 404
+
+    def test_assistant_cannot_list_other_course_students(
+        self, client, assistant, assistant_course, student, auth_headers
+    ):
+        other = CourseFactory(name="Other Course", is_active=True)
+        student.course = other
+        student.save(update_fields=["course"])
+        resp = client.get(f"/api/v1/admin/students?course_id={other.id}", **auth_headers(assistant))
+        assert resp.status_code == 404
 
 
 class TestStudentManagement:

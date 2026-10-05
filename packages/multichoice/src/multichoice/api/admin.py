@@ -1,8 +1,9 @@
 """
-Admin endpoints for the multiple-choice designer.
+Admin/assistant endpoints for the multiple-choice designer.
 
-CRUD for questions, cards and time-windowed sheets, all admin-only and logged
-to the audit logger. Grading (points-per-card / per-wrong-answer penalty) is
+CRUD for questions, cards and time-windowed sheets, available to admins (all
+courses) and to assistants (only the courses they support) and logged to the
+audit logger. Grading (points-per-card / per-wrong-answer penalty) is
 configured per course through the existing grading-config endpoints.
 """
 
@@ -33,14 +34,37 @@ logger = logging.getLogger("flamecheck.audit")
 router = Router(tags=["multichoice:admin"])
 
 
-def _admin_user(request) -> User:
-    """Return the request user if admin, else raise 401/403."""
+def _staff_user(request) -> User:
+    """Return the request user if admin or assistant, else raise 401/403."""
     user = request.user
     if not getattr(user, "is_authenticated", False):
         raise HttpError(401, "Authentication required.")
-    if not user.is_admin:
-        raise HttpError(403, "Admin role required.")
+    if not (user.is_admin or user.is_assistant):
+        raise HttpError(403, "Admin or assistant role required.")
     return user
+
+
+def _visible_course(user: User, course_id: int) -> Course:
+    """
+    Return the course if ``user`` may manage its MC content, else 404.
+
+    Admins may manage any course; assistants only the courses they support.
+    """
+    course = Course.objects.filter(pk=course_id).first()
+    if course is None:
+        raise HttpError(404, "Course not found.")
+    if not user.is_admin and not user.assistant_courses.filter(course_id=course.id).exists():
+        raise HttpError(404, "Course not found.")
+    return course
+
+
+def _course_visible_to(user: User, course_id: int | None) -> bool:
+    """True when ``user`` may manage MC content of the given course (None = global)."""
+    if user.is_admin:
+        return True
+    if course_id is None:
+        return False
+    return user.assistant_courses.filter(course_id=course_id).exists()
 
 
 def _parse_dt(value: str) -> datetime:
@@ -92,21 +116,21 @@ def _replace_options(question: MCQuestion, options: list) -> None:
 
 @router.get("/questions", response=list[dict])
 def list_questions(request, course_id: int | None = None):
-    """List questions (optionally filtered by course)."""
-    _admin_user(request)
+    """List questions (optionally filtered by course; assistants see their courses)."""
+    user = _staff_user(request)
     qs = MCQuestion.objects.all().prefetch_related("options_set")
     if course_id is not None:
-        qs = qs.filter(course_id=course_id)
+        _visible_course(user, course_id)
+    elif not user.is_admin:
+        qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
     return [_question_payload(q) for q in qs]
 
 
 @router.post("/questions", response=dict)
 def create_question(request, payload: MCQuestionIn, course_id: int):
-    """Create a question in a course (admin)."""
-    _admin_user(request)
-    course = Course.objects.filter(pk=course_id).first()
-    if course is None:
-        raise HttpError(404, "Course not found.")
+    """Create a question in a course (admin, or assistant for a supported course)."""
+    user = _staff_user(request)
+    course = _visible_course(user, course_id)
     if payload.options is None:
         raise ValidationError({"options": ["A question needs at least two options."]})
     _validate_options(payload.options)
@@ -135,9 +159,9 @@ def update_question(request, question_id: int, payload: MCQuestionIn):
     Text/description/remarks are always editable. Options can only be changed
     while the question is not yet in use (no submission answers it).
     """
-    _admin_user(request)
+    user = _staff_user(request)
     q = MCQuestion.objects.filter(pk=question_id).first()
-    if q is None:
+    if q is None or not _course_visible_to(user, q.course_id):
         raise HttpError(404, "Question not found.")
     q.text = payload.text
     if payload.description is not None:
@@ -156,10 +180,10 @@ def update_question(request, question_id: int, payload: MCQuestionIn):
 
 @router.delete("/questions/{question_id}", response=None)
 def delete_question(request, question_id: int):
-    """Delete a question that is not used by any card (admin)."""
-    _admin_user(request)
+    """Delete a question that is not used by any card (admin/assistant)."""
+    user = _staff_user(request)
     q = MCQuestion.objects.filter(pk=question_id).first()
-    if q is None:
+    if q is None or not _course_visible_to(user, q.course_id):
         raise HttpError(404, "Question not found.")
     if q.card_links.exists():
         raise HttpError(409, "Question is used by a card and cannot be deleted.")
@@ -182,21 +206,21 @@ def _card_payload(card: MCCard) -> dict:
 
 @router.get("/cards", response=list[dict])
 def list_cards(request, course_id: int | None = None):
-    """List cards (optionally filtered by course)."""
-    _admin_user(request)
+    """List cards (optionally filtered by course; assistants see their courses)."""
+    user = _staff_user(request)
     qs = MCCard.objects.all().prefetch_related("card_questions__question")
     if course_id is not None:
-        qs = qs.filter(course_id=course_id)
+        _visible_course(user, course_id)
+    elif not user.is_admin:
+        qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
     return [_card_payload(c) for c in qs]
 
 
 @router.post("/cards", response=dict)
 def create_card(request, payload: MCCardIn, course_id: int):
-    """Create a card with 1..3 questions (admin)."""
-    _admin_user(request)
-    course = Course.objects.filter(pk=course_id).first()
-    if course is None:
-        raise HttpError(404, "Course not found.")
+    """Create a card with 1..3 questions (admin, or assistant for a supported course)."""
+    user = _staff_user(request)
+    course = _visible_course(user, course_id)
     if not 1 <= len(payload.question_ids) <= MAX_QUESTIONS_PER_CARD:
         raise ValidationError({"question_ids": [f"A card holds 1 to {MAX_QUESTIONS_PER_CARD} questions."]})
     if len(set(payload.question_ids)) != len(payload.question_ids):
@@ -219,14 +243,14 @@ def create_card(request, payload: MCCardIn, course_id: int):
 @router.put("/cards/{card_id}", response=dict)
 def update_card(request, card_id: int, payload: MCCardIn):
     """
-    Update a card (admin).
+    Update a card (admin/assistant).
 
     Title/description/remarks are always editable. The question set can only be
     changed while the card has no sheets.
     """
-    _admin_user(request)
+    user = _staff_user(request)
     card = MCCard.objects.filter(pk=card_id).first()
-    if card is None:
+    if card is None or not _course_visible_to(user, card.course_id):
         raise HttpError(404, "Card not found.")
     card.title = payload.title
     if payload.description is not None:
@@ -253,10 +277,10 @@ def update_card(request, card_id: int, payload: MCCardIn):
 
 @router.delete("/cards/{card_id}", response=None)
 def delete_card(request, card_id: int):
-    """Delete a card that has no sheets (admin)."""
-    _admin_user(request)
+    """Delete a card that has no sheets (admin/assistant)."""
+    user = _staff_user(request)
     card = MCCard.objects.filter(pk=card_id).first()
-    if card is None:
+    if card is None or not _course_visible_to(user, card.course_id):
         raise HttpError(404, "Card not found.")
     if card.sheets.exists():
         raise HttpError(409, "Card has sheets and cannot be deleted.")
@@ -290,21 +314,23 @@ def _set_students(sheet: MCSheet, course: Course, student_ids: list[int], number
 
 @router.get("/sheets", response=list[dict])
 def list_sheets(request, course_id: int | None = None):
-    """List sheets (optionally filtered by course)."""
-    _admin_user(request)
+    """List sheets (optionally filtered by course; assistants see their courses)."""
+    user = _staff_user(request)
     qs = MCSheet.objects.all().select_related("card", "course").prefetch_related("assignments")
     if course_id is not None:
-        qs = qs.filter(course_id=course_id)
+        _visible_course(user, course_id)
+    elif not user.is_admin:
+        qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
     return [_sheet_payload(s) for s in qs]
 
 
 @router.post("/sheets", response=dict)
 def create_sheet(request, payload: MCSheetIn):
-    """Create a time-windowed sheet presenting a card to students (admin)."""
-    _admin_user(request)
-    course = Course.objects.filter(pk=payload.course_id).first()
-    if course is None:
+    """Create a time-windowed sheet presenting a card to students (admin/assistant)."""
+    user = _staff_user(request)
+    if payload.course_id is None:
         raise HttpError(404, "Course not found.")
+    course = _visible_course(user, payload.course_id)
     card = MCCard.objects.filter(pk=payload.card_id, course=course).first()
     if card is None:
         raise HttpError(404, "Card not found in this course.")
@@ -326,17 +352,19 @@ def create_sheet(request, payload: MCSheetIn):
 @router.put("/sheets/{sheet_id}", response=dict)
 def update_sheet(request, sheet_id: int, payload: MCSheetIn):
     """
-    Update a sheet (admin).
+    Update a sheet (admin/assistant).
 
     The window, number and student assignment are always editable. The card can
-    only be changed while the sheet has no submissions.
+    only be changed while the sheet has no submissions. Assistants may only
+    touch sheets of a course they support (and may not move a sheet to another
+    course).
     """
-    _admin_user(request)
+    user = _staff_user(request)
     sheet = MCSheet.objects.filter(pk=sheet_id).first()
-    if sheet is None:
+    if sheet is None or not _course_visible_to(user, sheet.course_id):
         raise HttpError(404, "Sheet not found.")
     course = Course.objects.filter(pk=payload.course_id).first()
-    if course is None:
+    if course is None or not _course_visible_to(user, course.id):
         raise HttpError(404, "Course not found.")
     start, end = _parse_dt(payload.window_start), _parse_dt(payload.window_end)
     if end <= start:
@@ -360,10 +388,10 @@ def update_sheet(request, sheet_id: int, payload: MCSheetIn):
 
 @router.delete("/sheets/{sheet_id}", response=None)
 def delete_sheet(request, sheet_id: int):
-    """Delete a sheet (admin)."""
-    _admin_user(request)
+    """Delete a sheet (admin/assistant)."""
+    user = _staff_user(request)
     sheet = MCSheet.objects.filter(pk=sheet_id).first()
-    if sheet is None:
+    if sheet is None or not _course_visible_to(user, sheet.course_id):
         raise HttpError(404, "Sheet not found.")
     sheet.delete()
     logger.info("Admin %s deleted MC sheet %d", request.user.username, sheet_id)

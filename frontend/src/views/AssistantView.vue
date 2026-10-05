@@ -84,13 +84,17 @@
                   <n-icon :component="SubstanceIcon" :size="15" :depth="viewOf(c) === 'substance' ? 3 : 0" />
                   Substance
                 </n-radio-button>
+                <n-radio-button value="mc">
+                  <n-icon :component="MCIcon" :size="15" :depth="viewOf(c) === 'mc' ? 3 : 0" />
+                  Multiple Choice
+                </n-radio-button>
               </n-radio-group>
 
               <!-- View content, keyed by course + active view so Vue swaps the
                    whole subtree (avoids mis-patching the v-for list). -->
               <div :key="`${c.id}:${viewOf(c)}`">
                 <!-- Students view: the course roster. -->
-                <template v-if="viewOf(c) !== 'substance'">
+                <template v-if="viewOf(c) === 'students'">
                   <n-data-table
                     :columns="cols"
                     :data="c.students"
@@ -104,7 +108,7 @@
                 </template>
 
                 <!-- Substance view: samples per analysis + overview tables. -->
-                <template v-else>
+                <template v-else-if="viewOf(c) === 'substance'">
                   <n-space align="center" style="margin-bottom: 8px">
                     <span class="muted">Samples per analysis</span>
                     <n-input-number
@@ -146,6 +150,11 @@
                       <n-statistic label="Total substance units" :value="overview[c.id].data.total_units" />
                     </n-space>
                   </template>
+                </template>
+
+                <!-- Multiple Choice: per-course questions, cards, sheets and grading. -->
+                <template v-else>
+                  <MCDesigner :course-id="c.id" />
                 </template>
               </div>
             </n-space>
@@ -311,6 +320,14 @@
           totals. Set "samples per analysis" to scale the preparation counts.
         </p>
       </HelpSection>
+      <HelpSection title="Multiple choice">
+        <p>
+          The "Multiple Choice" tab manages the course's MC content: define
+          questions, group them into cards (max 3 questions each), present
+          time-windowed sheets to students, and set the per-card grading. You
+          only see the courses you support.
+        </p>
+      </HelpSection>
       <HelpSection title="Ion symbols">
         <p>
           Ions use one canonical symbol - formula, sign, magnitude with the
@@ -345,6 +362,7 @@ import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
 import HelpSection from '../components/HelpSection.vue'
 import AboutSection from '../components/AboutSection.vue'
+import MCDesigner from '../components/MCDesigner.vue'
 
 const helpOpen = ref(false)
 
@@ -400,6 +418,19 @@ const SubstanceIcon = {
         h('path', { d: 'M9 3h6' }),
         h('path', { d: 'M10 3v6.34L5.5 17.5A2 2 0 0 0 7.3 20.5h9.4a2 2 0 0 0 1.8-3L14 9.34V3' }),
         h('path', { d: 'M7 14h10' }),
+      ],
+    ),
+}
+const MCIcon = {
+  render: () =>
+    h(
+      'svg',
+      { viewBox: '0 0 24 24', width: '1em', height: '1em', 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+      [
+        h('rect', { x: '4', y: '3', width: '16', height: '18', rx: '2' }),
+        h('path', { d: 'M8 8h8' }),
+        h('path', { d: 'M8 12h8' }),
+        h('path', { d: 'M8 16h4' }),
       ],
     ),
 }
