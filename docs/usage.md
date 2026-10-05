@@ -60,12 +60,17 @@ penalised according to the grading configuration (second attempt, third attempt)
    per concern:
    - **Settings** — every setting of the submission system in one place:
      the *application settings* (points per analysis, analyses per course,
-     the currently active course) and the *grading configuration* (points per
-     ion, retry penalties, false-positive deduction, grading mode per ion /
-     per analysis, submission limit, final-score strategy best / last).
+     the currently active course), the *global grading configuration*
+     (mode, points, penalties, submission limit, final-score strategy,
+     pass mark, multiple-choice points), the *registration mode*, the
+     *e-mail notification* settings (SMTP + PGP) and the *database* backup
+     controls.
    - **Courses** — create, edit and delete courses (name, semester, track,
-     active). Open *Students* on any course to see who is enrolled there and
-     remove students; assign a student to a course from here.
+     active, and the per-course *notify the student* e-mail switch). Open
+     *Students* on any course to see who is enrolled there and remove
+     students; assign a student to a course from here. Each course also has a
+     *Grading* card with its own (overriding) grading configuration — see
+     {ref}`Grading <grading>`.
    - **Analysis Types** — the user-defined analysis catalog. Create, edit and
      delete types and pick each type's possible ion set; click a row to open
      the edit form.
@@ -114,6 +119,11 @@ Authentication is via JWT bearer tokens:
 - `POST /api/v1/auth/logout` — invalidate the current token version.
 - `GET /api/v1/me` — current user profile.
 
-The full authentication setup — all sign-in methods (password, barcode,
-self-registration, OAuth/Keycloak), the token lifecycle and the registration
-modes — is described on the {ref}`Authentication <authentication>` page.
+The full setup — how accounts are created, all sign-in methods (password,
+barcode, self-registration, OAuth/Keycloak), the token lifecycle and the
+registration modes — is described on the
+{ref}`Registration & authentication <registration>` page.
+
+For the mechanics of the tasks themselves, see
+{ref}`Analyses <analyses>`, {ref}`Multiple choice <multichoice>` and
+{ref}`Grading <grading>`.
