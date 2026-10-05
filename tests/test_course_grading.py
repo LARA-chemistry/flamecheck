@@ -215,14 +215,29 @@ class TestPerAnalysisScoring:
         result = instance.submit(student, correct_ids + extra_ids, idempotency_key="k1")
         assert result.score == 0
 
-    def test_no_retry_penalty_in_per_analysis(self, course, grading_global):
-        """A 2nd exact submission is not penalised (penalties are per-ion only)."""
+    def test_retry_penalty_applies_in_per_analysis(self, course, grading_global):
+        """A later exact submission is penalised by the per-retry deduction."""
         self._per_analysis(grading_global, points=20, penalty_second=5)
         instance, student, correct_ids, _ = self._instance_with_student(course, correct_count=2)
-        instance.submit(student, correct_ids, idempotency_key="k1")
+        first = instance.submit(student, correct_ids, idempotency_key="k1")
+        assert first.score == 20
+        assert first.penalty == 0
         result = instance.submit(student, correct_ids, idempotency_key="k2")
-        assert result.score == 20
-        assert result.penalty == 0
+        assert result.score == 15  # 20 - 5 retry penalty
+        assert result.penalty == 5
+
+    def test_third_submission_penalty_in_per_analysis(self, course, grading_global):
+        """The 3rd exact submission uses the third-submission penalty."""
+        self._per_analysis(grading_global, points=20)
+        grading_global.penalty_second_submission = 2
+        grading_global.penalty_third_submission = 4
+        grading_global.save()
+        instance, student, correct_ids, _ = self._instance_with_student(course, correct_count=2)
+        instance.submit(student, correct_ids, idempotency_key="k1")
+        instance.submit(student, correct_ids, idempotency_key="k2")
+        result = instance.submit(student, correct_ids, idempotency_key="k3")
+        assert result.score == 16  # 20 - 4 third-submission penalty
+        assert result.penalty == 4
 
     def test_per_course_mode_overrides_global(self, course, grading_global):
         """A course in per_ion mode scores per ion even though global is per_analysis."""

@@ -119,19 +119,29 @@ uv run python manage.py seed_demo --reset
 
 It creates:
 
-* the ion / substance reference catalog,
-* **4 courses** (Chemistry / Biology / Pharmacy / Materials), Chemistry being
-  the *active* (default) course,
-* **16 users** — an admin, three assistants (one per course) and twelve
-  students (three per course) — **all sharing the password
-  `FlameCheck32!`**, plus a barcode for every student,
-* **3 analysis types** (each with a possible-ion set) and **analysis
-  instances** fanned out one-per-student per announcement, with time windows
-  spanning the *open*, *too early*, *too late* and *submitted* states,
-* **student → instance assignments** (the per-student sheet design),
-* the singleton `GradingConfig` **and** a per-course override on Biology
-  (all-or-nothing, one attempt) to demonstrate per-course grading,
-* the singleton `AppSettings` (active course), and
+* the ion / substance reference catalog (extended cation/anion scope), plus the
+  salts from `examples/substance_list.csv` for the Geology course,
+* **5 courses** (Chemistry / Biology / Geology / Medicine / Materials), Geology
+  being the *active* (default) course,
+* **21 users** — an admin, five assistants (one per course) and fifteen
+  students (three per course, each with an integer `labspace_id` 1–3) — **all
+  sharing the password `FlameCheck32!`**, plus a barcode for every student,
+* **12 analysis types** (a shared set, a simple Medicine set and the full
+  Geology task programme Practice + Analysis 1–5), with **analysis instances**
+  fanned out one-per-student per announcement — each labelled
+  `<type name, no spaces>_<labspace_id>` (e.g. `Cations1_1`) — and time
+  windows spanning the *open*, *too early*, *too late* and *submitted* states,
+* **student → instance assignments** (the per-student sheet design). The
+  Geology answer keys are the union of the ions of a few of the CSV salts,
+  restricted to each analysis' scope,
+* the singleton `GradingConfig` **and** per-course overrides: Geology
+  (per-analysis, all-or-nothing with a −2 / −4 retry penalty), Chemistry
+  ("new analysis" repeat workflow with a 5-point retry deduction), Medicine
+  (per-analysis, three trials) and Biology (per-ion, one attempt),
+* the singleton `AppSettings` (active course), multiple-choice cards (flame
+  test for Chemistry, basic acid/base/amino-acid/redox for Medicine and
+  Biology, and the all-or-nothing European-Pharmacopoeia monograph card for
+  Geology), and
 * a handful of pre-seeded submissions graded through the real `submit()`
   business logic.
 

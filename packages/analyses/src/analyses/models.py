@@ -121,6 +121,16 @@ class AnalysisInstance(models.Model):
         default=1,
         help_text=_("Announcement number within the course (e.g. 3 for the 3rd analysis)."),
     )
+    label = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text=(
+            "Short per-student label shown to users, e.g. 'Cations1_1' (type name "
+            "without spaces plus the student's labspace id). Set when the instance is "
+            "created for a specific student."
+        ),
+    )
     course = models.ForeignKey(
         "config.Course",
         null=True,

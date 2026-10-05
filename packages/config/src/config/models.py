@@ -186,7 +186,9 @@ class GradingConfig(models.Model):
         (minus the false-positive deduction and the retry penalties). In
         ``per_analysis`` mode the submission is all-or-nothing: the full
         ``points_per_correct_ion`` value is awarded only when the selected set
-        exactly matches the correct set; retry penalties do not apply.
+        exactly matches the correct set, minus the retry penalty for having
+        needed earlier (wrong) attempts — e.g. with points=10 and a -2/-4 retry
+        penalty the score is 10 on the first try, 8 on the second, 6 on the third.
 
         Args:
             correct_ion_ids: IDs of the ions actually present in the analysis.
@@ -201,23 +203,24 @@ class GradingConfig(models.Model):
         correct = selected_ion_ids & correct_ion_ids
         wrong = selected_ion_ids - correct_ion_ids
         missing = correct_ion_ids - selected_ion_ids
-        penalty = 0
+        # Retry penalty for a later (2nd+) submission; the spec models taking a
+        # retry as a flat deduction for that submission number.
+        if submission_number == 2:
+            penalty = int(self.penalty_second_submission)
+        elif submission_number >= 3:
+            penalty = int(self.penalty_third_submission)
+        else:
+            penalty = 0
 
         if self.grading_mode == "per_analysis":
             if selected_ion_ids == correct_ion_ids:
-                score = int(self.points_per_correct_ion)
+                score = max(0, int(self.points_per_correct_ion) - penalty)
             else:
                 score = 0
         else:  # per_ion (default)
             score = len(correct) * int(self.points_per_correct_ion)
             if self.false_positive_deduction:
                 score -= len(wrong) * int(self.false_positive_deduction)
-            # Penalties apply when a later submission *improves* on the previous one:
-            # the spec models this as a deduction for taking the retry.
-            if submission_number == 2:
-                penalty = int(self.penalty_second_submission)
-            elif submission_number >= 3:
-                penalty = int(self.penalty_third_submission)
             score -= penalty
             score = max(0, score)
 

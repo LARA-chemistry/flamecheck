@@ -65,6 +65,7 @@ def analysis_detail(request, analysis_id: int):
         "type": type_.name,
         "type_description": type_.description,
         "number": instance.number,
+        "label": instance.label,
         "window_status": instance.window_status(),
         "window_start": instance.window_start.isoformat(),
         "window_end": instance.window_end.isoformat(),

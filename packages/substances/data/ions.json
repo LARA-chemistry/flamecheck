@@ -12,6 +12,16 @@
     {"symbol": "Al+3", "name": "Aluminium", "charge": 3, "kind": "cation", "group": "Group III"},
     {"symbol": "Zn+2", "name": "Zinc", "charge": 2, "kind": "cation", "group": "Group III"},
     {"symbol": "Mn+2", "name": "Manganese(II)", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Li+1", "name": "Lithium", "charge": 1, "kind": "cation", "group": "Group V"},
+    {"symbol": "Mn+4", "name": "Manganese(IV)", "charge": 4, "kind": "cation", "group": "Group III"},
+    {"symbol": "Mn+6", "name": "Manganese(VI)", "charge": 6, "kind": "cation", "group": "Group III"},
+    {"symbol": "Mn+7", "name": "Manganese(VII)", "charge": 7, "kind": "cation", "group": "Group III"},
+    {"symbol": "Ni+2", "name": "Nickel(II)", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Co+2", "name": "Cobalt(II)", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Co+3", "name": "Cobalt(III)", "charge": 3, "kind": "cation", "group": "Group III"},
+    {"symbol": "Ag+1", "name": "Silver", "charge": 1, "kind": "cation", "group": "Group III"},
+    {"symbol": "Pb+2", "name": "Lead(II)", "charge": 2, "kind": "cation", "group": "Group III"},
+    {"symbol": "Sn+2", "name": "Tin(II)", "charge": 2, "kind": "cation", "group": "Group III"},
     {"symbol": "Cl-1", "name": "Chloride", "charge": -1, "kind": "anion", "group": "Halides"},
     {"symbol": "Br-1", "name": "Bromide", "charge": -1, "kind": "anion", "group": "Halides"},
     {"symbol": "I-1", "name": "Iodide", "charge": -1, "kind": "anion", "group": "Halides"},
@@ -21,6 +31,8 @@
     {"symbol": "PO4-3", "name": "Phosphate", "charge": -3, "kind": "anion", "group": "Oxyanions"},
     {"symbol": "NO3-1", "name": "Nitrate", "charge": -1, "kind": "anion", "group": "Oxyanions"},
     {"symbol": "NO2-1", "name": "Nitrite", "charge": -1, "kind": "anion", "group": "Oxyanions"},
-    {"symbol": "S-2", "name": "Sulfide", "charge": -2, "kind": "anion", "group": "Sulfides"}
+    {"symbol": "S-2", "name": "Sulfide", "charge": -2, "kind": "anion", "group": "Sulfides"},
+    {"symbol": "CH3COO-1", "name": "Acetate", "charge": -1, "kind": "anion", "group": "Organic acids"},
+    {"symbol": "SCN-1", "name": "Thiocyanate", "charge": -1, "kind": "anion", "group": "Oxyanions"}
   ]
 }

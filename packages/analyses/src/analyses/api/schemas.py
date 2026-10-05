@@ -14,6 +14,7 @@ class AnalysisSummary(BaseModel):
     id: int
     type: str
     number: int
+    label: str = ""
     window_status: str
     submission_count: int
     submission_limit: int
@@ -28,6 +29,7 @@ class AnalysisSummary(BaseModel):
             id=instance.id,
             type=instance.type.name,
             number=instance.number,
+            label=getattr(instance, "label", "") or "",
             window_status=instance.window_status(),
             submission_count=instance.submission_count(),
             submission_limit=instance.submission_limit(),
@@ -44,6 +46,7 @@ class AnalysisDetailOut(Schema):
     type: str
     type_description: str
     number: int
+    label: str = ""
     window_status: str
     window_start: str
     window_end: str

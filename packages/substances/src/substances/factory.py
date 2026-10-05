@@ -40,6 +40,17 @@ ION_CATALOG: dict[str, tuple[str, str, int, str, str]] = {
     "zinc": ("Zn+2", "Zinc", 2, Ion.Kind.CATION, "Group II"),
     "manganese": ("Mn+2", "Manganese", 2, Ion.Kind.CATION, "Group II"),
     "barium": ("Ba+2", "Barium", 2, Ion.Kind.CATION, "Group II"),
+    # Extended cation set (Geology demo / full first-semester scope).
+    "lithium": ("Li+1", "Lithium", 1, Ion.Kind.CATION, "Group V"),
+    "manganese4": ("Mn+4", "Manganese(IV)", 4, Ion.Kind.CATION, "Group III"),
+    "manganese6": ("Mn+6", "Manganese(VI)", 6, Ion.Kind.CATION, "Group III"),
+    "manganese7": ("Mn+7", "Manganese(VII)", 7, Ion.Kind.CATION, "Group III"),
+    "nickel": ("Ni+2", "Nickel(II)", 2, Ion.Kind.CATION, "Group III"),
+    "cobalt2": ("Co+2", "Cobalt(II)", 2, Ion.Kind.CATION, "Group III"),
+    "cobalt3": ("Co+3", "Cobalt(III)", 3, Ion.Kind.CATION, "Group III"),
+    "silver": ("Ag+1", "Silver", 1, Ion.Kind.CATION, "Group III"),
+    "lead": ("Pb+2", "Lead(II)", 2, Ion.Kind.CATION, "Group III"),
+    "tin": ("Sn+2", "Tin(II)", 2, Ion.Kind.CATION, "Group III"),
     "chloride": ("Cl-1", "Chloride", -1, Ion.Kind.ANION, "Halides"),
     "bromide": ("Br-1", "Bromide", -1, Ion.Kind.ANION, "Halides"),
     "iodide": ("I-1", "Iodide", -1, Ion.Kind.ANION, "Halides"),
@@ -50,6 +61,8 @@ ION_CATALOG: dict[str, tuple[str, str, int, str, str]] = {
     "nitrate": ("NO3-1", "Nitrate", -1, Ion.Kind.ANION, "Oxyanions"),
     "nitrite": ("NO2-1", "Nitrite", -1, Ion.Kind.ANION, "Oxyanions"),
     "sulfide": ("S-2", "Sulfide", -2, Ion.Kind.ANION, "Chalcogens"),
+    "acetate": ("CH3COO-1", "Acetate", -1, Ion.Kind.ANION, "Organic acids"),
+    "thiocyanate": ("SCN-1", "Thiocyanate", -1, Ion.Kind.ANION, "Oxyanions"),
 }
 
 
