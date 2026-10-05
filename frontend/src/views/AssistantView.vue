@@ -299,9 +299,10 @@
       <HelpSection title="Student login">
         <p>
           Students sign in with their username and password, by scanning their
-          personal barcode (listed per student below), or - if your course uses
-          OAuth - via the external identity provider. New OAuth students first
-          pick their course on the registration page.
+          personal barcode, or - if your course uses OAuth - via the external
+          identity provider. The "Labspace" column shows each student's bench /
+          lab-space number. New OAuth students first pick their course on the
+          registration page.
         </p>
       </HelpSection>
       <HelpSection title="Student statistics">
@@ -439,7 +440,11 @@ const studentModal = ref({ show: false, loading: false, student: null, detail: n
 
 const cols = [
   { title: 'Student', key: 'full_name', render: (row) => row.full_name || row.username },
-  { title: 'Barcode', key: 'barcode' },
+  {
+    title: 'Labspace',
+    key: 'labspace_id',
+    render: (row) => row.labspace_id || '—',
+  },
   {
     title: 'Analyses',
     key: 'analyses',
