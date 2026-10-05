@@ -46,6 +46,7 @@ dependencies = [
   "PyJWT>=2.15",
   "gunicorn>=26.0",
   "python-gnupg>=0.5.7",
+  "requests>=2.32",
 ]
 
 [project.optional-dependencies]

@@ -10,7 +10,9 @@ is required — Django, migrations and the entrypoint are engine-agnostic.
 from .base import *  # noqa: F403
 from .base import env
 
-DEBUG = False
+# DEBUG stays off by default in production; the staging compose sets
+# DJANGO_DEBUG=true to enable the OpenAPI docs and debug features.
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 

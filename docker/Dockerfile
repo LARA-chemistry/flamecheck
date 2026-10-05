@@ -116,6 +116,9 @@ COPY --from=build_image --chown=appuser:appuser /opt/.venv /opt/.venv
 COPY --chown=appuser:appuser src/ src/
 COPY --chown=appuser:appuser packages/ packages/
 COPY --chown=appuser:appuser manage.py pyproject.toml uv.lock ./
+# The demo seeder (SEED_DEMO, staging) imports examples/substance_list.csv and
+# load_examples reads examples/datasets/, so ship the examples directory too.
+COPY --chown=appuser:appuser examples/ examples/
 # Copy the built frontend so Django can serve it via WhiteNoise.
 COPY --from=frontend_build --chown=appuser:appuser /app/dist frontend/dist
 # Copy the production entrypoint.
