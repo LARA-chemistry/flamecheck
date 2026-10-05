@@ -158,7 +158,7 @@ def randomize_substances_for_announcement(
             results.append(
                 StudentAssignmentResult(
                     student_id=student.student_id if student else 0,
-                    student_name=(student.student.name or student.student.username) if student else "",
+                    student_name=(student.student.full_name or student.student.username) if student else "",
                     instance_id=instance.id,
                     correct_ion_ids=correct_ids,
                     assigned_substance_ids=[s.id for s in substances],

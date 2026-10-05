@@ -12,8 +12,14 @@ DATABASES = {
     }
 }
 
+# Use the same (database) cache backend as production so the rate-limit code
+# paths are exercised against a real table, not the in-memory stand-in.
 CACHES = {
-    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "flamecheck_cache",
+        "TIMEOUT": 300,
+    }
 }
 
 # The in-process backup scheduler must not run during tests.

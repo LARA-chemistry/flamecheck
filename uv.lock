@@ -7,6 +7,7 @@ members = [
     "analyses",
     "config",
     "flamecheck",
+    "multichoice",
     "substances",
     "users",
 ]
@@ -432,7 +433,7 @@ wheels = [
 
 [[package]]
 name = "flamecheck"
-version = "0.0.5"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "analyses" },
@@ -445,7 +446,10 @@ dependencies = [
     { name = "django-filter" },
     { name = "django-ninja" },
     { name = "gunicorn" },
+    { name = "multichoice" },
     { name = "pyjwt" },
+    { name = "python-gnupg" },
+    { name = "requests" },
     { name = "substances" },
     { name = "users" },
     { name = "whitenoise" },
@@ -475,6 +479,7 @@ docs = [
     { name = "python-docs-theme" },
     { name = "sphinx" },
     { name = "sphinx-autobuild" },
+    { name = "sphinxcontrib-mermaid" },
 ]
 
 [package.metadata]
@@ -489,8 +494,11 @@ requires-dist = [
     { name = "django-filter", specifier = ">=26.1" },
     { name = "django-ninja", specifier = ">=1.7" },
     { name = "gunicorn", specifier = ">=26.0" },
+    { name = "multichoice", editable = "packages/multichoice" },
     { name = "psycopg", marker = "extra == 'postgres'", specifier = ">=3.3" },
     { name = "pyjwt", specifier = ">=2.15" },
+    { name = "python-gnupg", specifier = ">=0.5.7" },
+    { name = "requests", specifier = ">=2.32" },
     { name = "substances", editable = "packages/substances" },
     { name = "users", editable = "packages/users" },
     { name = "whitenoise", specifier = ">=6.12" },
@@ -516,6 +524,7 @@ docs = [
     { name = "python-docs-theme", specifier = ">=2026.9.1" },
     { name = "sphinx", marker = "python_full_version >= '3.11'", specifier = ">=9.0" },
     { name = "sphinx-autobuild", specifier = ">=2025.8.25" },
+    { name = "sphinxcontrib-mermaid", specifier = ">=1.0" },
 ]
 
 [[package]]
@@ -701,6 +710,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
+
+[[package]]
+name = "multichoice"
+version = "0.0.0"
+source = { editable = "packages/multichoice" }
+dependencies = [
+    { name = "factory-boy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "factory-boy", specifier = ">=3.3.3" }]
 
 [[package]]
 name = "myst-parser"
@@ -937,6 +957,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5c/dc/292d32245ca35447b265c47a0ed9f35de1ab280a05da1da306b61a035833/python_gitlab-8.6.0.tar.gz", hash = "sha256:d1602164fb58ab280ceef460faf015cec6e7d83bb2d9cbae44ba448adb5568ef", size = 423347, upload-time = "2026-09-28T03:13:53.86Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/55/aa/9c96a88d79453eaea91f301c318dc3c5e95b195087759fd94fedf1104386/python_gitlab-8.6.0-py3-none-any.whl", hash = "sha256:34fee7e5576cf01982c4bfa98f94d50e24733edb66beba3cb8ef286287723019", size = 159654, upload-time = "2026-09-28T03:13:52.285Z" },
+]
+
+[[package]]
+name = "python-gnupg"
+version = "0.5.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bb/d4/47aa0f34b6a06a976063e3e0bf1512b140ec1e6efda83bc717fac58071db/python_gnupg-0.5.7.tar.gz", hash = "sha256:73ea46219f992b361eb1ce54cb0968101670654454916a3ee5df8bb9bf0cc8cc", size = 63974, upload-time = "2026-09-29T16:40:09.487Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/38/ffad2b8a27e7295e70616ab4d938cead165a56db4496558491f485fa3a87/python_gnupg-0.5.7-py2.py3-none-any.whl", hash = "sha256:dc7afba57a9bc50163c27c726c66cb2fc9692248597f5201f4f7d9eb6097dd1d", size = 22362, upload-time = "2026-09-29T16:40:08.189Z" },
 ]
 
 [[package]]
@@ -1190,6 +1219,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b2/e8/9ed3830aeed71f17c026a07a5097edcf44b692850ef215b161b8ad875729/sphinxcontrib-jsmath-1.0.1.tar.gz", hash = "sha256:a9925e4a4587247ed2191a22df5f6970656cb8ca2bd6284309578f2153e0c4b8", size = 5787, upload-time = "2019-01-21T16:10:16.347Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/42/4c8646762ee83602e3fb3fbe774c2fac12f317deb0b5dbeeedd2d3ba4b77/sphinxcontrib_jsmath-1.0.1-py2.py3-none-any.whl", hash = "sha256:2ec2eaebfb78f3f2078e73666b1415417a116cc848b72e5172e596c871103178", size = 5071, upload-time = "2019-01-21T16:10:14.333Z" },
+]
+
+[[package]]
+name = "sphinxcontrib-mermaid"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "pyyaml" },
+    { name = "sphinx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/87/06537dff20aa57df2d0f2afa87edff4afa85dec6f57f03f7acc24f83ff88/sphinxcontrib_mermaid-2.1.1.tar.gz", hash = "sha256:f8d7f1b2f0ad69b7ebdd5cbf532fb4ee107893b5373bc2d0e9634089c0b2cfee", size = 22353, upload-time = "2026-09-01T16:10:23.671Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/6a/5bf2222b8084c7a7bc3ec23d470c91e3e03e82e4ce0bbacaa61f456ce7c1/sphinxcontrib_mermaid-2.1.1-py3-none-any.whl", hash = "sha256:3b9ac1a8e0b5154dec3c0acf9b5c54dd9ba58540e416f20858c300814c25648f", size = 16368, upload-time = "2026-09-01T16:10:22.377Z" },
 ]
 
 [[package]]

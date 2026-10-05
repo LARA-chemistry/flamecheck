@@ -364,7 +364,7 @@ class TestComposition:
         assert resp.status_code == 200, resp.content
         assert resp.json()["compositions_applied"] == 1
         inst = AnalysisInstance.objects.get(course=course, number=1, assignments__student=course_student)
-        assert {i.symbol for i in inst.correct_ions.all()} == {"Na+", "Cl-", "SO4-2"}
+        assert {i.symbol for i in inst.correct_ions.all()} == {"Na+1", "Cl-1", "SO4-2"}
         assert {s.name for s in inst.assigned_substances.all()} == {s1.name, s2.name}
 
     def test_composition_matches_by_formula_and_synonym(
@@ -423,8 +423,8 @@ class TestComposition:
         assert resp.json()["compositions_applied"] == 2
         inst_a = AnalysisInstance.objects.get(course=course, number=1, assignments__student=a)
         inst_b = AnalysisInstance.objects.get(course=course, number=1, assignments__student=b)
-        assert {i.symbol for i in inst_a.correct_ions.all()} == {"Na+", "Cl-"}
-        assert {i.symbol for i in inst_b.correct_ions.all()} == {"Na+", "SO4-2"}
+        assert {i.symbol for i in inst_a.correct_ions.all()} == {"Na+1", "Cl-1"}
+        assert {i.symbol for i in inst_b.correct_ions.all()} == {"Na+1", "SO4-2"}
 
     def test_existing_assignment_conflict_rejected(
         self, client, admin_user, analysis_type, course, course_students, auth_headers
@@ -468,4 +468,4 @@ class TestComposition:
         assert resp.status_code == 200, resp.content
         assert resp.json()["compositions_applied"] == 0
         assert resp.json()["analyses_reused"] == 1
-        assert {i.symbol for i in inst.correct_ions.all()} == {"Cl-", "SO4-2"}
+        assert {i.symbol for i in inst.correct_ions.all()} == {"Cl-1", "SO4-2"}

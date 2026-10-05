@@ -40,8 +40,10 @@ services:
       # are NOT overwritten by these mounts.
       - ./src:/opt/src
       - ./packages:/opt/packages
-      # Persist the SQLite database.
+      # Persist the SQLite database and uploaded media (login branding images);
+      # /opt/media is MEDIA_ROOT (see settings).
       - dev_db:/opt/db
+      - dev_media:/opt/media
     depends_on:
       db:
         condition: service_healthy
@@ -68,4 +70,5 @@ services:
 
 volumes:
   dev_db:
+  dev_media:
   db_data:

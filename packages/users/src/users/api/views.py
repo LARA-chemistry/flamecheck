@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.cache import cache
+from django.utils import timezone
 from ninja import Router
-from ninja.errors import AuthenticationError, ValidationError
+from ninja.errors import AuthenticationError, HttpError, ValidationError
 from users import jwt
 from users.api.schemas import (
     BarcodeScanIn,
@@ -23,18 +26,30 @@ logger = logging.getLogger("flamecheck.audit")
 
 router = Router(tags=["auth"])
 
-# In-memory style rate limit via the Django cache: max scans per minute.
+# Rate limits via the (shared) Django cache: max attempts per window per key.
 _SCAN_RATE_LIMIT = 10
 _SCAN_WINDOW_SECONDS = 60
 _LOGIN_RATE_LIMIT = 5
 _LOGIN_WINDOW_SECONDS = 60
 
+# Persistent lockout per username: after ``LOGIN_MAX_ATTEMPTS`` consecutive
+# failures the account refuses logins for ``LOGIN_LOCKOUT_SECONDS``, regardless
+# of the client IP (which is attacker-controllable). A successful login resets
+# the counter; failures older than the lockout window stop counting.
+
 
 def _client_ip(request) -> str | None:
-    """Best-effort extraction of the client IP address."""
+    """
+    Best-effort extraction of the client IP address.
+
+    Behind a reverse proxy the ``X-Forwarded-For`` chain starts with
+    client-supplied (forgeable) entries and ends with the real peer address
+    appended by the closest trusted proxy — only that last entry is trusted,
+    so a forged first entry cannot be used to bypass the rate limits.
+    """
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        return forwarded.rsplit(",", 1)[-1].strip() or None
     return request.META.get("REMOTE_ADDR")
 
 
@@ -68,6 +83,28 @@ def _login_out(user: User, request) -> dict:
 def _record_attempt(username: str, ip: str | None, success: bool) -> None:
     """Persist a login attempt for audit/lockout purposes."""
     LoginAttempt.objects.create(username=username, ip_address=ip, success=success)
+
+
+def _locked_out(username: str) -> bool:
+    """
+    True if ``username`` is currently locked out after too many failures.
+
+    Failures count since the most recent successful login (a stored success
+    resets the counter) and only within the lockout window. The count is
+    IP-independent: an attacker must not be able to keep an account unlocked
+    by rotating source addresses.
+    """
+    failures = LoginAttempt.objects.filter(username=username, success=False)
+    last_success = (
+        LoginAttempt.objects.filter(username=username, success=True)
+        .order_by("-attempted_at")
+        .values_list("attempted_at", flat=True)
+        .first()
+    )
+    if last_success is not None:
+        failures = failures.filter(attempted_at__gt=last_success)
+    window = timedelta(seconds=settings.LOGIN_LOCKOUT_SECONDS)
+    return failures.filter(attempted_at__gte=timezone.now() - window).count() >= settings.LOGIN_MAX_ATTEMPTS
 
 
 @router.post("/auth/barcode/scan", response=LoginOut, auth=None)
@@ -106,6 +143,11 @@ def login(request, payload: LoginIn):
         # so the message must not imply the password is wrong.
         message = f"Too many login attempts (max {_LOGIN_RATE_LIMIT} per minute). Try again in a minute."
         raise ValidationError({"username": [message]})
+
+    # Persistent, IP-independent lockout (the rate limit above is per IP and
+    # therefore bypassable; this one is not).
+    if _locked_out(payload.username):
+        raise HttpError(423, "Too many failed login attempts. Try again in a few minutes.")
 
     user = authenticate(request, username=payload.username, password=payload.password)
     if user is None:

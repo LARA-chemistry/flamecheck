@@ -18,13 +18,26 @@ class AccountAdapter(DefaultAccountAdapter):
         return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
 
 
+def _registration_mode() -> str:
+    """Return the active registration mode without requiring a settings row."""
+    from config.models import AppSettings
+
+    return AppSettings.get_registration_mode()
+
+
 class SocialAccountAdapter(DefaultSocialAccountAdapter):
     def is_open_for_signup(
         self,
         request: HttpRequest,
         sociallogin: SocialLogin,
     ) -> bool:
-        return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
+        """
+        Allow OAuth sign-ups only while the registration mode is ``oauth``.
+
+        This is the gate that decides whether a brand-new identity from an
+        external provider may create a FlameCheck account.
+        """
+        return _registration_mode() == "oauth"
 
     def populate_user(
         self,
@@ -33,16 +46,23 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
         data: dict[str, typing.Any],
     ) -> User:
         """
-        Populates user information from social provider info.
+        Populate a new user from social provider data.
+
+        Every OAuth-created account is a *student* that still has to complete
+        the registration page (course + metadata + generated analyses), so
+        ``role`` is forced to student and ``registered`` starts False.
 
         See: https://docs.allauth.org/en/latest/socialaccount/advanced.html#creating-and-populating-user-instances
         """
         user = super().populate_user(request, sociallogin, data)
-        if not user.name:
+        if not user.first_name and not user.last_name:
             if name := data.get("name"):
-                user.name = name
-            elif first_name := data.get("first_name"):
-                user.name = first_name
-                if last_name := data.get("last_name"):
-                    user.name += f" {last_name}"
+                parts = str(name).strip().split(None, 1)
+                user.first_name = parts[0] if parts else ""
+                user.last_name = parts[1] if len(parts) > 1 else ""
+            else:
+                user.first_name = str(data.get("first_name") or "")
+                user.last_name = str(data.get("last_name") or "")
+        user.role = user.Role.STUDENT
+        user.registered = False
         return user

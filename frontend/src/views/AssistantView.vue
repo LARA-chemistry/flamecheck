@@ -3,11 +3,58 @@
     <header class="fc-header">
       <h1 class="fc-title">Assistant Dashboard</h1>
       <n-space align="center">
+        <n-badge :value="unreadCount" :show-zero="false" :offset="[-4, 4]">
+          <n-button size="small" secondary :type="showNotifs ? 'primary' : 'default'" @click="showNotifs = !showNotifs">
+            Notifications
+          </n-button>
+        </n-badge>
         <HelpToggle :active="helpOpen" @click="helpOpen = !helpOpen" />
         <n-button size="small" secondary @click="router.push({ name: homeForRole(auth.role) })">Home</n-button>
         <n-button size="small" secondary @click="handleLogout">Logout</n-button>
       </n-space>
     </header>
+
+    <!-- Re-trial notifications: shown on login so supporting assistants know a
+         student was handed a fresh analysis to review / edit. -->
+    <n-card v-if="notifications.length" size="small" class="notif-banner" :class="{ 'notif-banner--collapsed': !showNotifs }">
+      <template #header>
+        <n-space align="center" justify="space-between" style="width: 100%">
+          <span class="notif-banner__title">
+            New re-trial analyses
+            <n-tag v-if="unreadCount" type="warning" size="small" round>{{ unreadCount }} new</n-tag>
+          </span>
+          <n-button
+            v-if="unreadCount"
+            size="tiny"
+            quaternary
+            type="primary"
+            :loading="notifsLoading"
+            @click="markAllRead"
+          >
+            Mark all as read
+          </n-button>
+        </n-space>
+      </template>
+      <n-spin :show="notifsLoading">
+        <n-space vertical size="small">
+          <div v-for="n in notifications" :key="n.id" class="notif-item" :class="{ 'notif-item--read': n.read }">
+            <span class="notif-item__text">
+              <strong>{{ n.student_name }}</strong> — a new {{ n.type }} analysis (no. {{ n.number }}) was generated in
+              <em>{{ n.course_name }}</em>.
+            </span>
+            <n-button
+              v-if="!n.read"
+              size="tiny"
+              secondary
+              type="primary"
+              @click="markRead(n)"
+            >
+              Mark as read
+            </n-button>
+          </div>
+        </n-space>
+      </n-spin>
+    </n-card>
 
     <n-card title="Courses" size="large">
       <n-spin :show="loading">
@@ -111,10 +158,20 @@
     <n-modal
       v-model:show="studentModal.show"
       preset="card"
-      :title="studentModal.student ? `Student: ${studentModal.student.name || studentModal.student.username}` : 'Student'"
       style="width: 860px; max-width: 96vw"
       :segmented="{ content: true }"
     >
+      <template #header>
+        <div class="student-modal__title">
+          <span class="student-modal__name">{{
+            studentModal.student ? studentModal.student.full_name || studentModal.student.username : 'Student'
+          }}</span>
+          <span v-if="studentModal.student?.full_name" class="muted">({{ studentModal.student.username }})</span>
+          <strong v-if="studentModal.student?.labspace_id" class="student-modal__labspace">
+            {{ studentModal.student.labspace_id }}
+          </strong>
+        </div>
+      </template>
       <n-spin :show="studentModal.loading">
         <n-empty v-if="!studentModal.loading && !studentModal.detail" description="No data." />
         <n-space v-else vertical size="large">
@@ -134,6 +191,9 @@
                 <div class="analysis-card__head">
                   <span class="analysis-card__title">{{ a.analysis }}</span>
                   <n-tag :type="submittedTagType(a)" round size="small">{{ a.submissions.length ? 'Submitted' : 'Pending' }}</n-tag>
+                  <span v-if="lastSubmittedAt(a)" class="analysis-card__submitted-at" :title="`Last submitted ${lastSubmittedAt(a)} (UTC)`">
+                    {{ lastSubmittedAt(a) }}
+                  </span>
                 </div>
               </template>
               <template #header-extra>
@@ -172,6 +232,14 @@
           assignments, submitted, pending and the class average score.
         </p>
       </HelpSection>
+      <HelpSection title="Student login">
+        <p>
+          Students sign in with their username and password, by scanning their
+          personal barcode (listed per student below), or - if your course uses
+          OAuth - via the external identity provider. New OAuth students first
+          pick their course on the registration page.
+        </p>
+      </HelpSection>
       <HelpSection title="Student statistics">
         <p>
           Click any student row to open their per-analysis breakdown: submitted
@@ -184,6 +252,15 @@
           "Substance Overview" groups each announcement by sample composition
           (the correct ion set) and lists the salts to prepare, with per-course
           totals. Set "samples per analysis" to scale the preparation counts.
+        </p>
+      </HelpSection>
+      <HelpSection title="Ion symbols">
+        <p>
+          Ions use one canonical symbol - formula, sign, magnitude with the
+          digit always present (e.g. <code>Na+1</code>, <code>Mg+2</code>,
+          <code>SO4-2</code>). In the UI they are rendered with the IUPAC
+          superscript (magnitude before the sign): SO<sub>4</sub><sup>2&#8722;</sup>,
+          Na<sup>+</sup>.
         </p>
       </HelpSection>
       <HelpSection title="Export">
@@ -205,7 +282,7 @@ import { api } from '../api/client'
 import {
   NCard, NSpin, NEmpty, NCollapse, NCollapseItem, NSpace, NButton,
   NDataTable, NStatistic, NInputNumber, NModal, NTag, NProgress,
-  NRadioGroup, NRadioButton, NIcon,
+  NRadioGroup, NRadioButton, NIcon, NBadge,
 } from 'naive-ui'
 import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
@@ -220,6 +297,12 @@ const loading = ref(true)
 const courses = ref([])
 const overview = ref({})
 const overviewLoading = ref({})
+
+// Re-trial notifications (a student was handed a fresh analysis to review).
+const notifications = ref([])
+const notifsLoading = ref(false)
+const showNotifs = ref(false)
+const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
 
 // Per-course active view: 'students' (default) or 'substance'.
 const courseView = ref({})
@@ -267,7 +350,7 @@ const SubstanceIcon = {
 const studentModal = ref({ show: false, loading: false, student: null, detail: null })
 
 const cols = [
-  { title: 'Student', key: 'name' },
+  { title: 'Student', key: 'full_name', render: (row) => row.full_name || row.username },
   { title: 'Barcode', key: 'barcode' },
   {
     title: 'Analyses',
@@ -370,6 +453,20 @@ function submittedTagType(a) {
   return a.submissions.length ? 'success' : 'default'
 }
 
+// Render a UTC ISO timestamp as an exact "YYYY-MM-DD HH:MM:SS" string.
+function fmtSubmittedAt(iso) {
+  if (!iso) return ''
+  return iso.slice(0, 19).replace('T', ' ')
+}
+
+// The exact datetime of the student's most recent submission for this analysis
+// (empty while the analysis is still pending). Submissions arrive ordered by
+// `submitted_at`, so the last entry is the latest.
+function lastSubmittedAt(a) {
+  if (!a.submissions.length) return ''
+  return fmtSubmittedAt(a.submissions[a.submissions.length - 1].submitted_at)
+}
+
 const submissionCols = [
   { title: '#', key: 'submission_number', width: 44 },
   { title: 'Submitted', key: 'submitted_at', render: (row) => row.submitted_at.replace('T', ' ').slice(0, 16) },
@@ -432,9 +529,36 @@ async function load() {
   loading.value = true
   try {
     courses.value = await api.get('/assistant/courses')
+    await loadNotifications()
   } finally {
     loading.value = false
   }
+}
+
+async function loadNotifications() {
+  notifsLoading.value = true
+  try {
+    notifications.value = await api.get('/assistant/notifications')
+    // Open the panel on login when there is something new to see.
+    if (notifications.value.some((n) => !n.read)) showNotifs.value = true
+  } catch {
+    notifications.value = []
+  } finally {
+    notifsLoading.value = false
+  }
+}
+
+async function markRead(n) {
+  try {
+    await api.post(`/assistant/notifications/${n.id}/read`, {})
+    n.read = true
+  } catch (e) {
+    window.alert(e.message || 'Failed to mark the notification as read.')
+  }
+}
+
+async function markAllRead() {
+  await Promise.all(notifications.value.filter((n) => !n.read).map((n) => markRead(n)))
 }
 
 function downloadCsv(courseId) {
@@ -470,6 +594,47 @@ onMounted(load)
   font-size: var(--fc-fs-sm);
   color: var(--fc-muted);
 }
+.student-modal__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.student-modal__name {
+  font-weight: 700;
+  color: var(--fc-ink);
+}
+.student-modal__labspace {
+  font-weight: 700;
+  color: var(--fc-flame-2);
+  font-variant-numeric: tabular-nums;
+}
+.notif-banner {
+  margin-bottom: 16px;
+  border-left: 3px solid var(--n-warning-color, #f0a020);
+}
+.notif-banner--collapsed :deep(.n-card__content) {
+  display: none;
+}
+.notif-banner__title {
+  font-weight: 600;
+}
+.notif-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--n-warning-color, #f0a020) 8%, transparent);
+}
+.notif-item--read {
+  background: transparent;
+  opacity: 0.6;
+}
+.notif-item__text {
+  font-size: var(--fc-fs-sm);
+}
 .link-btn {
   border: none;
   background: none;
@@ -499,6 +664,11 @@ onMounted(load)
 .analysis-card__score {
   font-size: var(--fc-fs-sm);
   color: var(--fc-text-soft);
+}
+.analysis-card__submitted-at {
+  font-size: var(--fc-fs-xs);
+  color: var(--fc-muted);
+  font-variant-numeric: tabular-nums;
 }
 .analysis-card__correct {
   display: flex;

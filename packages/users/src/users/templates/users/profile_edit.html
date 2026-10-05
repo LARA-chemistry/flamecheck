@@ -2,7 +2,7 @@
 
 {% block content %}
 
-{% if onboarding %}
+{% if registration %}
 <h1 class="mb-4">Complete your Profile</h1>
 {% else %}
 <h1 class="mb-4">Edit your Profile</h1>
@@ -19,7 +19,7 @@
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit" >Submit</button>
-    {% if onboarding %}
+    {% if registration %}
     <a class="button button-gray ml-1" href="{% url 'home' %}">Skip</a>
     {% else %}
     <a class="button button-gray ml-1" href="{{ request.META.HTTP_REFERER }}">Cancel</a>

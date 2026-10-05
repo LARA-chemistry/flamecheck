@@ -7,10 +7,33 @@ To run production on PostgreSQL, set ``DATABASE_URL`` in the environment
 is required — Django, migrations and the entrypoint are engine-agnostic.
 """
 
-from .base import *  # noqa: F403
-from .base import env
+from django.core.exceptions import ImproperlyConfigured
 
-DEBUG = False
+from .base import *  # noqa: F403
+from .base import ENV, SECRET_KEY, env
+
+_INSECURE_DEFAULT_KEY = "insecure-development-only-key-change-me"
+
+# In production a missing (or still-default) signing key means anyone who
+# knows the key can forge valid JWTs for *any* user — fail fast at boot
+# instead of starting with the insecure development default. (The staging
+# compose intentionally reuses the dev ``.env`` and runs with ``ENV=development``;
+# it keeps working but logs a warning below.)
+if ENV == "production" and SECRET_KEY in ("", _INSECURE_DEFAULT_KEY):
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set to a long random value in production; "
+        "the insecure development default would allow JWT forgery."
+    )
+elif SECRET_KEY == _INSECURE_DEFAULT_KEY:
+    import logging
+
+    logging.getLogger("flamecheck.security").warning(
+        "FlameCheck is running with the insecure development SECRET_KEY (staging only!)."
+    )
+
+# DEBUG stays off by default in production; the staging compose sets
+# DJANGO_DEBUG=true to enable the OpenAPI docs and debug features.
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 

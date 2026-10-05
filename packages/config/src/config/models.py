@@ -18,6 +18,13 @@ class Course(models.Model):
         help_text=_("Specialisation track (biology, pharmacy, materials science, ...)."),
     )
     is_active = models.BooleanField(default=True, help_text=_("Only active courses are offered to students."))
+    notify_student_on_submission = models.BooleanField(
+        default=False,
+        help_text=_(
+            "Send the student a PGP-encrypted e-mail confirmation for every submission "
+            "in this course (Admin → Courses)."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Course")
@@ -62,6 +69,13 @@ class GradingConfig(models.Model):
         default=0,
         help_text=_("Points deducted per wrongly selected ion (0 disables)."),
     )
+    retry_point_deduction = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=_(
+            "'New analysis' mode: points subtracted from the course total for each "
+            "earlier (superseded) re-trial attempt (0 disables the penalty)."
+        ),
+    )
     grading_mode = models.CharField(
         max_length=16,
         choices=[
@@ -70,6 +84,19 @@ class GradingConfig(models.Model):
         ],
         default="per_ion",
         help_text=_("Scoring mode: award points per correct ion, or only if the whole set is exact."),
+    )
+    submission_mode = models.CharField(
+        max_length=16,
+        choices=[
+            ("resubmit", _("Resubmit (default)")),
+            ("new_analysis", _("New analysis on wrong submission")),
+        ],
+        default="resubmit",
+        help_text=_(
+            "How a wrong submission is handled: allow resubmissions on the same "
+            "analysis, or hand out a fresh random analysis of the same type "
+            "(up to the type's max repetitions)."
+        ),
     )
     max_submissions_per_analysis = models.PositiveSmallIntegerField(
         default=3,
@@ -83,6 +110,15 @@ class GradingConfig(models.Model):
         ],
         default="best",
         help_text=_("How the final score is derived when multiple submissions exist."),
+    )
+    # ---- multiple choice (per course) ---------------------------------------
+    mc_points_per_card = models.PositiveSmallIntegerField(
+        default=10,
+        help_text=_("Multiple choice: points awarded per card when every question is answered correctly."),
+    )
+    mc_penalty_per_wrong = models.PositiveSmallIntegerField(
+        default=2,
+        help_text=_("Multiple choice: points deducted for each wrongly answered question on a card."),
     )
     course = models.ForeignKey(
         "config.Course",
@@ -157,7 +193,9 @@ class GradingConfig(models.Model):
         (minus the false-positive deduction and the retry penalties). In
         ``per_analysis`` mode the submission is all-or-nothing: the full
         ``points_per_correct_ion`` value is awarded only when the selected set
-        exactly matches the correct set; retry penalties do not apply.
+        exactly matches the correct set, minus the retry penalty for having
+        needed earlier (wrong) attempts — e.g. with points=10 and a -2/-4 retry
+        penalty the score is 10 on the first try, 8 on the second, 6 on the third.
 
         Args:
             correct_ion_ids: IDs of the ions actually present in the analysis.
@@ -172,23 +210,24 @@ class GradingConfig(models.Model):
         correct = selected_ion_ids & correct_ion_ids
         wrong = selected_ion_ids - correct_ion_ids
         missing = correct_ion_ids - selected_ion_ids
-        penalty = 0
+        # Retry penalty for a later (2nd+) submission; the spec models taking a
+        # retry as a flat deduction for that submission number.
+        if submission_number == 2:
+            penalty = int(self.penalty_second_submission)
+        elif submission_number >= 3:
+            penalty = int(self.penalty_third_submission)
+        else:
+            penalty = 0
 
         if self.grading_mode == "per_analysis":
             if selected_ion_ids == correct_ion_ids:
-                score = int(self.points_per_correct_ion)
+                score = max(0, int(self.points_per_correct_ion) - penalty)
             else:
                 score = 0
         else:  # per_ion (default)
             score = len(correct) * int(self.points_per_correct_ion)
             if self.false_positive_deduction:
                 score -= len(wrong) * int(self.false_positive_deduction)
-            # Penalties apply when a later submission *improves* on the previous one:
-            # the spec models this as a deduction for taking the retry.
-            if submission_number == 2:
-                penalty = int(self.penalty_second_submission)
-            elif submission_number >= 3:
-                penalty = int(self.penalty_third_submission)
             score -= penalty
             score = max(0, score)
 
@@ -244,6 +283,24 @@ class AssistantCourse(models.Model):
 class AppSettings(models.Model):
     """Singleton global application settings (points per analysis, analyses per course)."""
 
+    class Registration(models.TextChoices):
+        """How new student accounts are created (mutually exclusive)."""
+
+        MANUAL = "manual", _("Manual (created by an admin in Admin → Courses → Members)")
+        SELF_REGISTRATION = "self_registration", _("Self-registration (students register + confirm their e-mail)")
+        OAUTH = "oauth", _("OAuth (students sign in via an external identity provider)")
+
+    registration = models.CharField(
+        max_length=24,
+        choices=Registration.choices,
+        default=Registration.MANUAL,
+        help_text=(
+            "How new student accounts are created. Exactly one mode is active at a time: "
+            "manual (admin creates accounts), self-registration (students register and confirm "
+            "their e-mail) or OAuth (students sign in via an external provider and complete a "
+            "registration page)."
+        ),
+    )
     points_per_analysis = models.PositiveSmallIntegerField(
         default=10,
         help_text=_("Points per correctly identified analysis (per-analysis mode)."),
@@ -259,6 +316,65 @@ class AppSettings(models.Model):
         on_delete=models.SET_NULL,
         related_name="plus_active_settings",
         help_text=_("Currently active course (the one students see after login)."),
+    )
+
+    # ---- e-mail notifications (submission confirmations) --------------------
+    # A single master switch for the assistant e-mail, plus the SMTP and PGP
+    # configuration used to build the encrypted/signed messages. Note that every
+    # send is additionally gated by the ``ALLOW_EMAILS`` environment variable
+    # (see :mod:`config.services.notifications`), so nothing is sent in
+    # staging/demo containers unless that variable is explicitly enabled.
+    class SMTPSecurity(models.TextChoices):
+        """How the SMTP connection is secured."""
+
+        NONE = "none", _("None (plain, port 25)")
+        TLS = "tls", _("STARTTLS (port 587)")
+        SSL = "ssl", _("Implicit SSL/TLS (port 465)")
+
+    notify_assistant_on_submission = models.BooleanField(
+        default=False,
+        help_text=_(
+            "Send the course's assistants a PGP-encrypted e-mail for every student "
+            "submission (Admin → Settings → Notifications)."
+        ),
+    )
+    smtp_host = models.CharField(max_length=255, blank=True, default="", help_text=_("SMTP server hostname."))
+    smtp_port = models.PositiveSmallIntegerField(
+        default=587, help_text=_("SMTP server port (587 for STARTTLS, 465 for SSL).")
+    )
+    smtp_username = models.CharField(
+        max_length=255, blank=True, default="", help_text=_("SMTP username (empty = anonymous).")
+    )
+    smtp_password = models.CharField(
+        max_length=255, blank=True, default="", help_text=_("SMTP password / app password.")
+    )
+    smtp_from_email = models.CharField(
+        max_length=255, blank=True, default="", help_text=_("The From: address of sent e-mails.")
+    )
+    smtp_security = models.CharField(
+        max_length=8,
+        choices=SMTPSecurity.choices,
+        default=SMTPSecurity.TLS,
+        help_text=_("How the SMTP connection is secured."),
+    )
+    pgp_public_key = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Armored (-----BEGIN PGP PUBLIC KEY BLOCK-----) public key used to ENCRYPT "
+            "outgoing e-mails (the recipient's key)."
+        ),
+    )
+    pgp_private_key = models.TextField(
+        blank=True,
+        default="",
+        help_text=("Armored (-----BEGIN PGP PRIVATE KEY BLOCK-----) private key used to SIGN outgoing e-mails."),
+    )
+    pgp_private_key_passphrase = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Passphrase protecting the signing private key (empty = unprotected)."),
     )
     # ---- database backup -----------------------------------------------------
     backup_enabled = models.BooleanField(
@@ -317,3 +433,16 @@ class AppSettings(models.Model):
     def get_instance(cls) -> "AppSettings":
         """Return (creating if necessary) the singleton settings row."""
         return cls.objects.get_or_create_instance()
+
+    @classmethod
+    def get_registration_mode(cls) -> str:
+        """
+        Return the active registration mode without creating a settings row.
+
+        Returns:
+            str: One of :class:`AppSettings.Registration` values; ``"manual"`` when no
+                settings row exists yet (e.g. a brand-new database).
+
+        """
+        instance = cls.objects.first()
+        return instance.registration if instance is not None else cls.Registration.MANUAL

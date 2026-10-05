@@ -83,9 +83,9 @@ class TestInstanceHelpers:
             ids = list(Ion.objects.filter(symbol__in=symbols).values_list("id", flat=True))
             return assigned_instance.submit(student, ids, idempotency_key=key)
 
-        first = submit(["NH4+"], "k1")
+        first = submit(["NH4+1"], "k1")
         assert first.score == 10
-        second = submit(["NH4+", "SO4-2", "Cu2+"], "k2")
+        second = submit(["NH4+1", "SO4-2", "Cu+2"], "k2")
         assert second.score == 28  # 30 - 2 penalty
         assert assigned_instance.score() == 28  # best
 

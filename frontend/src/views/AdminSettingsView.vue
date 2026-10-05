@@ -23,6 +23,116 @@
       </n-form>
     </n-card>
 
+    <!-- E-mail notifications (submission confirmations) -->
+    <n-card size="small" :bordered="false">
+      <div class="grading-card-head">
+        <h3 class="grading-card-title">E-mail notifications</h3>
+      </div>
+      <n-space vertical size="large">
+        <n-alert type="warning" :bordered="false" style="padding: 6px 12px">
+          Sending e-mails additionally requires the <code>ALLOW_EMAILS</code> environment variable
+          to be enabled in the container. Until it is, no e-mail is sent — even when the switches below
+          are on. This is a safety layer to keep staging and demo environments silent.
+        </n-alert>
+
+        <n-form-item label="Notify assistants">
+          <n-switch v-model:value="appSettings.notify_assistant_on_submission" />
+          <div class="form-hint">
+            Send the course's assistants a PGP-encrypted e-mail for every student submission.
+          </div>
+        </n-form-item>
+
+        <n-divider style="margin: 4px 0" />
+
+        <n-text strong>SMTP</n-text>
+        <n-form label-placement="left" label-width="180">
+          <n-form-item label="Host">
+            <n-input v-model:value="appSettings.smtp_host" placeholder="smtp.example.org" />
+          </n-form-item>
+          <n-form-item label="Port">
+            <n-input-number v-model:value="appSettings.smtp_port" :min="1" :max="65535" style="width: 180px" />
+          </n-form-item>
+          <n-form-item label="Security">
+            <n-select
+              v-model:value="appSettings.smtp_security"
+              :options="smtpSecurityOptions"
+              style="width: 240px"
+            />
+          </n-form-item>
+          <n-form-item label="Username">
+            <n-input v-model:value="appSettings.smtp_username" placeholder="empty = anonymous" />
+          </n-form-item>
+          <n-form-item label="Password">
+            <n-input v-model:value="appSettings.smtp_password" type="password" show-password-on="click" placeholder="app password" />
+          </n-form-item>
+          <n-form-item label="From e-mail">
+            <n-input v-model:value="appSettings.smtp_from_email" placeholder="flamecheck@example.org" />
+          </n-form-item>
+        </n-form>
+
+        <n-divider style="margin: 4px 0" />
+
+        <n-text strong>PGP (sign + encrypt)</n-text>
+        <n-text depth="3" style="display: block; margin-bottom: var(--fc-space-sm)">
+          The message is signed with the private key and encrypted for the public key (the
+          recipient's key). Paste the armored blocks as exported from GnuPG
+          (<code>gpg --armor --export [recipient]</code> / <code>gpg --armor --export-secret-keys [signer]</code>).
+        </n-text>
+        <n-form label-placement="top">
+          <n-form-item label="Recipient public key">
+            <n-input
+              v-model:value="appSettings.pgp_public_key"
+              type="textarea"
+              :autosize="{ minRows: 3, maxRows: 8 }"
+              placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"
+            />
+          </n-form-item>
+          <n-form-item label="Signing private key">
+            <n-input
+              v-model:value="appSettings.pgp_private_key"
+              type="textarea"
+              :autosize="{ minRows: 3, maxRows: 8 }"
+              placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"
+            />
+          </n-form-item>
+          <n-form-item label="Private key passphrase">
+            <n-input
+              v-model:value="appSettings.pgp_private_key_passphrase"
+              type="password"
+              show-password-on="click"
+              placeholder="empty = unprotected key"
+            />
+          </n-form-item>
+        </n-form>
+
+        <n-button type="primary" :loading="savingAppSettings" @click="saveAppSettings">
+          Save Notifications
+        </n-button>
+      </n-space>
+    </n-card>
+
+    <!-- Registration: how new student accounts are created (mutually exclusive) -->
+    <n-card title="Registration" size="small" :bordered="false">
+      <n-space vertical size="large">
+        <n-text depth="3">
+          Choose how new student accounts are created. Exactly one mode is active at a time.
+        </n-text>
+        <n-radio-group v-model:value="appSettings.registration" name="registration">
+          <n-space vertical>
+            <n-space v-for="opt in registrationOptions" :key="opt.value" vertical size="small">
+              <n-radio-button :value="opt.value" :bordered="false" style="width: 240px">
+                {{ opt.label }}
+              </n-radio-button>
+              <n-text depth="3" style="padding-left: 8px">{{ opt.hint }}</n-text>
+            </n-space>
+          </n-space>
+        </n-radio-group>
+        <n-button type="primary" :loading="savingAppSettings" @click="saveAppSettings">
+          Save Registration
+        </n-button>
+      </n-space>
+    </n-card>
+
     <n-card size="small" :bordered="false">
       <div class="grading-card-head">
         <h3 class="grading-card-title">Default grading configuration</h3>
@@ -58,6 +168,27 @@
             v-model:value="grading.final_score_strategy"
             :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
           />
+        </n-form-item>
+        <n-form-item label="Submission mode">
+          <n-select
+            v-model:value="grading.submission_mode"
+            :options="[
+              { label: 'Resubmit (default)', value: 'resubmit' },
+              { label: 'New analysis on wrong submission', value: 'new_analysis' },
+            ]"
+          />
+        </n-form-item>
+        <n-form-item label="Retry point deduction">
+          <n-input-number v-model:value="grading.retry_point_deduction" :min="0" />
+          <template #feedback>Points subtracted per earlier re-trial (new-analysis mode only).</template>
+        </n-form-item>
+        <n-form-item label="MC: points per card (all correct)">
+          <n-input-number v-model:value="grading.mc_points_per_card" :min="0" />
+          <template #feedback>Multiple choice: full points for a card answered entirely correctly.</template>
+        </n-form-item>
+        <n-form-item label="MC: penalty per wrong answer">
+          <n-input-number v-model:value="grading.mc_penalty_per_wrong" :min="0" />
+          <template #feedback>Multiple choice: points deducted for each wrongly answered question.</template>
         </n-form-item>
         <n-button type="primary" :loading="savingGrading" @click="saveGrading">
           Save Grading Configuration
@@ -224,6 +355,7 @@ import { api } from '../api/client'
 import {
   NSpace, NButton, NInputNumber, NInput, NSelect, NForm, NFormItem, NAlert,
   NCard, NSwitch, NDivider, NDataTable, NEmpty, NText, NPopconfirm,
+  NRadioGroup, NRadioButton,
 } from 'naive-ui'
 
 const message = ref('')
@@ -240,11 +372,36 @@ const appSettings = ref({
   points_per_analysis: 10,
   analyses_per_course: 3,
   active_course_id: null,
+  registration: 'manual',
   backup_enabled: false,
   backup_interval_minutes: 60,
   backup_location: 'backups',
   backup_keep: 10,
+  notify_assistant_on_submission: false,
+  smtp_host: '',
+  smtp_port: 587,
+  smtp_username: '',
+  smtp_password: '',
+  smtp_from_email: '',
+  smtp_security: 'tls',
+  pgp_public_key: '',
+  pgp_private_key: '',
+  pgp_private_key_passphrase: '',
 })
+
+// Descriptions for the mutually-exclusive registration modes (the radio group).
+const registrationOptions = [
+  { value: 'manual', label: 'Manual', hint: 'A new student account is created by an admin in Admin → Courses → Members.' },
+  { value: 'self_registration', label: 'Self-registration', hint: 'The login page shows a “Register” link. Students register and confirm their e-mail address (console e-mail in development).' },
+  { value: 'oauth', label: 'OAuth', hint: 'Students sign in via an external identity provider (django-allauth); a student account is created and they complete a registration page (course + details + generated analyses).' },
+]
+
+// Options for the SMTP connection security mode (e-mail notifications).
+const smtpSecurityOptions = [
+  { label: 'STARTTLS (port 587)', value: 'tls' },
+  { label: 'Implicit SSL/TLS (port 465)', value: 'ssl' },
+  { label: 'None (plain, port 25)', value: 'none' },
+]
 const grading = ref({
   points_per_correct_ion: 10,
   penalty_second_submission: 2,
@@ -253,6 +410,10 @@ const grading = ref({
   grading_mode: 'per_ion',
   max_submissions_per_analysis: 3,
   final_score_strategy: 'best',
+  submission_mode: 'resubmit',
+  retry_point_deduction: 0,
+  mc_points_per_card: 10,
+  mc_penalty_per_wrong: 2,
 })
 const savingAppSettings = ref(false)
 const savingGrading = ref(false)
@@ -451,6 +612,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.form-hint {
+  width: 100%;
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-muted, #8a8f99);
+  line-height: 1.4;
+}
 .grading-card-head {
   margin-bottom: var(--fc-space-sm);
 }

@@ -5,7 +5,7 @@
       "type": "Analysis 1 - Cations I-II",
       "course": "Inorganic Chemistry WS 2026 - Biology",
       "number": 1,
-      "selected_ions": ["Na+", "K+"],
+      "selected_ions": ["Na+1", "K+1"],
       "idempotency_key": "seed-anna-bio1"
     },
     {
@@ -13,7 +13,7 @@
       "type": "Analysis 1 - Cations I-II",
       "course": "Inorganic Chemistry WS 2026 - Biology",
       "number": 1,
-      "selected_ions": ["Na+"],
+      "selected_ions": ["Na+1"],
       "idempotency_key": "seed-ben-bio1-1"
     },
     {
@@ -21,7 +21,7 @@
       "type": "Analysis 1 - Cations I-II",
       "course": "Inorganic Chemistry WS 2026 - Biology",
       "number": 1,
-      "selected_ions": ["Na+", "K+"],
+      "selected_ions": ["Na+1", "K+1"],
       "idempotency_key": "seed-ben-bio1-2"
     }
   ]

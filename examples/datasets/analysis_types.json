@@ -3,22 +3,22 @@
     {
       "name": "Analysis 1 - Cations I-II",
       "description": "Qualitative detection of the most common group I and II cations.",
-      "possible_ions": ["Na+", "K+", "NH4+", "Ca2+", "Mg2+"]
+      "possible_ions": ["Na+1", "K+1", "NH4+1", "Ca+2", "Mg+2"]
     },
     {
       "name": "Analysis 2 - Anions I",
       "description": "Identification of common anions (halides and oxyanions).",
-      "possible_ions": ["Cl-", "Br-", "SO4-2", "CO3-2", "NO3-"]
+      "possible_ions": ["Cl-1", "Br-1", "SO4-2", "CO3-2", "NO3-1"]
     },
     {
       "name": "Analysis 3 - Cations II & Anions",
       "description": "Mixed unknown: cations of groups II-III together with anions.",
-      "possible_ions": ["NH4+", "Cu2+", "Fe2+", "Zn2+", "Al3+", "Mg2+", "Cl-", "SO4-2", "NO3-"]
+      "possible_ions": ["NH4+1", "Cu+2", "Fe+2", "Zn+2", "Al+3", "Mg+2", "Cl-1", "SO4-2", "NO3-1"]
     },
     {
       "name": "Analysis 4 - Mixed Unknown",
       "description": "Advanced mixed unknown with rarer cations and oxyanions.",
-      "possible_ions": ["K+", "Ba2+", "Mn2+", "PO4-3", "NO2-", "S2-"]
+      "possible_ions": ["K+1", "Ba+2", "Mn+2", "PO4-3", "NO2-1", "S-2"]
     }
   ]
 }

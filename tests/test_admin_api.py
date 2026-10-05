@@ -96,7 +96,7 @@ class TestAnalysisInstances:
     ):
         from substances.models import Ion
 
-        ids = list(Ion.objects.filter(symbol__in=["NH4+"]).values_list("id", flat=True))
+        ids = list(Ion.objects.filter(symbol__in=["NH4+1"]).values_list("id", flat=True))
         client.post(
             f"/api/v1/analyses/{assigned_instance.id}/submissions",
             {"ion_ids": ids, "confirmed": True, "idempotency_key": uuid.uuid4().hex},
@@ -407,7 +407,8 @@ class TestStudentManagement:
             {
                 "username": "jdoe",
                 "password": "FlameCheck32!",
-                "name": "Jane Doe",
+                "first_name": "Jane",
+                "last_name": "Doe",
                 "email": "jane@example.com",
                 "matriculation_no": "M123456",
                 "lab": "Inorganic",
@@ -474,13 +475,13 @@ class TestStudentManagement:
     def test_update_student_fields(self, client, admin_user, student, auth_headers):
         resp = client.put(
             f"/api/v1/admin/students/{student.id}",
-            {"name": "Renamed Student", "telephone": "+49 151 999", "matriculation_no": "M777"},
+            {"first_name": "Renamed", "last_name": "Student", "telephone": "+49 151 999", "matriculation_no": "M777"},
             content_type="application/json",
             **auth_headers(admin_user),
         )
         assert resp.status_code == 200
         student.refresh_from_db()
-        assert student.name == "Renamed Student"
+        assert student.full_name == "Renamed Student"
         assert student.telephone == "+49 151 999"
         assert student.matriculation_no == "M777"
 
@@ -555,9 +556,9 @@ class TestStudentManagement:
 
     def test_import_csv_creates_and_updates(self, client, admin_user, student, course, auth_headers):
         body = (
-            "username;name;email;matriculation_no;lab;labspace_id;telephone;course;password\n"
-            f"csv-new;New Person;new@example.com;M001;Lab;LS-1;+49 151 1;{course.name};CsvPass123!\n"
-            f"{student.username};Updated Person;u@example.com;M002;;;;\n"
+            "username;first_name;last_name;email;matriculation_no;lab;labspace_id;telephone;course;password\n"
+            f"csv-new;New;Person;new@example.com;M001;Lab;LS-1;+49 151 1;{course.name};CsvPass123!\n"
+            f"{student.username};Updated;Person;u@example.com;M002;;;;\n"
         )
         resp = client.post(
             "/api/v1/admin/students/import-csv",
@@ -574,7 +575,7 @@ class TestStudentManagement:
         assert new.course_id == course.id
         assert new.matriculation_no == "M001"
         student.refresh_from_db()
-        assert student.name == "Updated Person"
+        assert student.full_name == "Updated Person"
         assert student.matriculation_no == "M002"
         # empty course cell keeps the existing course
         assert student.course_id is None or student.course_id == course.id
@@ -598,11 +599,11 @@ class TestStudentManagement:
 
     def test_import_csv_collects_errors(self, client, admin_user, student, auth_headers):
         body = (
-            "username;name;course;password\n"
-            "err-course;Bad Course;NoSuchCourse;\n"
-            ";missing username\n"
-            f"{student.username};Existing student;;;short\n"
-            "err-pw;Bad Password;;123\n"
+            "username;first_name;last_name;course;password\n"
+            "err-course;Bad;Course;NoSuchCourse;\n"
+            ";missing;username;;\n"
+            f"{student.username};Existing;;;\n"
+            "err-pw;Bad;Password;;123\n"
         )
         resp = client.post(
             "/api/v1/admin/students/import-csv",
@@ -624,7 +625,7 @@ class TestStudentManagement:
         # the weak-password row must not have created a student
         assert not User.objects.filter(username="err-pw").exists()
         # the existing student was updated (password untouched)
-        assert User.objects.get(username__iexact=student.username).name == "Existing student"
+        assert User.objects.get(username__iexact=student.username).full_name == "Existing"
 
     def test_import_csv_requires_username_header(self, client, admin_user, auth_headers):
         resp = client.post(
@@ -638,6 +639,181 @@ class TestStudentManagement:
         resp = client.post(
             "/api/v1/admin/students/import-csv",
             {"file": io.BytesIO(b"username\nx\n")},
+            **auth_headers(student),
+        )
+        assert resp.status_code == 403
+
+
+class TestAssistantManagement:
+    """Assistant account CRUD + course assignment (admin)."""
+
+    def test_list_assistants_excludes_students(self, client, admin_user, student, assistant, auth_headers):
+        resp = client.get("/api/v1/admin/assistants", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        usernames = [r["username"] for r in resp.json()]
+        assert assistant.username in usernames
+        assert student.username not in usernames
+
+    def test_list_assistants_course_filter(self, client, admin_user, assistant, course, auth_headers):
+        assistant.course = course
+        assistant.save()
+        resp = client.get(f"/api/v1/admin/assistants?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert [r["username"] for r in resp.json()] == [assistant.username]
+        resp = client.get(f"/api/v1/admin/assistants?course_id={course.id + 1}", **auth_headers(admin_user))
+        assert resp.json() == []
+
+    def test_create_assistant_with_password(self, client, admin_user, course, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {
+                "username": "jlab",
+                "password": "FlameCheck32!",
+                "first_name": "Jane",
+                "last_name": "Lab",
+                "email": "jane.lab@example.com",
+                "lab": "Inorganic",
+                "labspace_id": "LS-000456",
+                "telephone": "+49 151 3456789",
+                "course_id": course.id,
+            },
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["username"] == "jlab"
+        assert body["course_id"] == course.id
+        assert body["password"] is None  # explicit password is not echoed back
+        from users.models import User
+
+        created = User.objects.get(username="jlab")
+        assert created.is_assistant
+        assert not created.is_student
+        assert created.check_password("FlameCheck32!")
+        assert created.course_id == course.id
+
+    def test_create_assistant_generates_password_when_empty(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "anon-assistant", "name": "Anonymous"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        generated = resp.json()["password"]
+        assert generated and len(generated) >= 8
+        from users.models import User
+
+        assert User.objects.get(username="anon-assistant").check_password(generated)
+
+    def test_create_assistant_rejects_weak_password(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "weakpw-a", "password": "123"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 422
+
+    def test_create_assistant_duplicate_username_409(self, client, admin_user, student, auth_headers):
+        # username uniqueness spans roles: a student username blocks an assistant
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": student.username, "password": "FlameCheck32!"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 409
+
+    def test_create_assistant_unknown_course_404(self, client, admin_user, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "nocourse-a", "course_id": 99999},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_update_assistant_fields(self, client, admin_user, assistant, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}",
+            {"first_name": "Renamed", "last_name": "Assistant", "telephone": "+49 151 999"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assistant.refresh_from_db()
+        assert assistant.full_name == "Renamed Assistant"
+        assert assistant.telephone == "+49 151 999"
+
+    def test_update_assistant_resets_password(self, client, admin_user, assistant, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}",
+            {"password": "NewPass123!"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["password"]
+        assistant.refresh_from_db()
+        assert assistant.check_password("NewPass123!")
+
+    def test_update_assistant_with_student_id_404(self, client, admin_user, student, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{student.id}",
+            {"name": "x"},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_assign_assistant_course(self, client, admin_user, assistant, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}/course",
+            {"assistant_id": assistant.id, "course_id": course.id},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["course_id"] == course.id
+        assistant.refresh_from_db()
+        assert assistant.course_id == course.id
+
+    def test_assign_assistant_detach(self, client, admin_user, assistant, course, auth_headers):
+        assistant.course = course
+        assistant.save()
+        resp = client.put(
+            f"/api/v1/admin/assistants/{assistant.id}/course",
+            {"assistant_id": assistant.id, "course_id": None},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 200
+        assistant.refresh_from_db()
+        assert assistant.course_id is None
+
+    def test_assign_assistant_with_student_id_404(self, client, admin_user, student, course, auth_headers):
+        resp = client.put(
+            f"/api/v1/admin/assistants/{student.id}/course",
+            {"assistant_id": student.id, "course_id": course.id},
+            content_type="application/json",
+            **auth_headers(admin_user),
+        )
+        assert resp.status_code == 404
+
+    def test_delete_assistant(self, client, admin_user, assistant, auth_headers):
+        resp = client.delete(f"/api/v1/admin/assistants/{assistant.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        from users.models import User
+
+        assert not User.objects.filter(pk=assistant.pk).exists()
+
+    def test_student_cannot_create_assistant(self, client, student, auth_headers):
+        resp = client.post(
+            "/api/v1/admin/assistants",
+            {"username": "sneaky-a", "password": "FlameCheck32!"},
+            content_type="application/json",
             **auth_headers(student),
         )
         assert resp.status_code == 403

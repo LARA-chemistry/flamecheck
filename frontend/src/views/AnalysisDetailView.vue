@@ -5,15 +5,53 @@
         <n-button quaternary size="small" @click="router.push('/')">← Back</n-button>
         <h2 class="fc-title">{{ detail?.type }} <span class="analysis-num">#{{ detail?.number }}</span></h2>
       </n-space>
-      <n-tag v-if="detail" :type="windowTagType(detail.window_status)" round>
-        {{ windowLabel(detail.window_status) }}
-      </n-tag>
+      <n-space align="center" size="small">
+        <!-- Switch to the result view (only once a submission exists). -->
+        <n-button
+          v-if="detail && !isResultMode && detail.submission_count > 0"
+          size="small"
+          tertiary
+          @click="goToResults"
+        >
+          Results
+        </n-button>
+        <!-- Back to the submission view (only while more submissions fit). -->
+        <n-button
+          v-if="detail && isResultMode && canSubmit"
+          size="small"
+          secondary
+          type="primary"
+          @click="goToSubmit"
+        >
+          New Submission
+        </n-button>
+        <n-tag v-if="detail" :type="windowTagType(displayStatus)" round>
+          {{ windowLabel(displayStatus) }}
+        </n-tag>
+      </n-space>
     </header>
 
     <n-spin :show="loading">
       <template v-if="detail">
-        <!-- Editable ion selection (only before submission) -->
-        <n-grid :cols="responsiveCols" :x-gap="20" :y-gap="20" v-if="!result">
+        <!-- Results mode: the full submission history (explicit route only). -->
+        <template v-if="isResultMode">
+          <ResultCard
+            v-if="result"
+            :submissions="result.submissions"
+            :total-score="result.total_score"
+            :ideal-score="result.ideal_score"
+            @back="router.push('/')"
+          />
+          <n-alert v-else-if="detail.submission_count === 0" type="info">
+            No submissions yet — the result is not available.
+          </n-alert>
+        </template>
+
+        <!-- Submission mode (default route). -->
+        <template v-else>
+        <!-- Editable ion selection: while the window is open and more
+             submissions fit into the limit. -->
+        <n-grid :cols="responsiveCols" :x-gap="20" :y-gap="20" v-if="canSubmit">
           <n-gi>
             <n-card title="Cations" size="small">
               <div class="ion-grid">
@@ -22,9 +60,10 @@
                     v-for="ion in detail.cations"
                     :key="ion.id"
                     :value="ion.id"
-                    :label="`${ion.symbol} — ${ion.name}`"
                     class="ion-check"
-                  />
+                  >
+                    <IonSymbol :symbol="ion.symbol" /> — {{ ion.name }}
+                  </n-checkbox>
                 </n-checkbox-group>
               </div>
               <n-empty v-if="detail.cations.length === 0" description="No cations" size="small" />
@@ -38,9 +77,10 @@
                     v-for="ion in detail.anions"
                     :key="ion.id"
                     :value="ion.id"
-                    :label="`${ion.symbol} — ${ion.name}`"
                     class="ion-check"
-                  />
+                  >
+                    <IonSymbol :symbol="ion.symbol" /> — {{ ion.name }}
+                  </n-checkbox>
                 </n-checkbox-group>
               </div>
               <n-empty v-if="detail.anions.length === 0" description="No anions" size="small" />
@@ -48,12 +88,17 @@
           </n-gi>
         </n-grid>
 
-        <!-- Submit bar (only while the window is open and nothing submitted yet) -->
-        <n-card v-if="!result && detail.window_status === 'open'" class="submit-bar">
+        <!-- Submit bar (submission mode, while more submissions fit). -->
+        <n-card v-if="canSubmit" class="submit-bar">
           <n-space justify="space-between" align="center" :wrap="true">
-            <n-text depth="3">
-              {{ selectedIons.length }} ion{{ selectedIons.length === 1 ? '' : 's' }} selected
-            </n-text>
+            <n-space align="center" :wrap="true">
+              <n-text depth="3">
+                {{ selectedIons.length }} ion{{ selectedIons.length === 1 ? '' : 's' }} selected
+              </n-text>
+              <n-tag size="small" round :bordered="false" type="info">
+                {{ detail.submission_count }}/{{ detail.submission_limit }} submissions used
+              </n-tag>
+            </n-space>
             <n-button
               type="primary"
               size="large"
@@ -61,20 +106,28 @@
               :disabled="selectedIons.length === 0"
               @click="confirmShow = true"
             >
-              Submit Analysis
+              {{ detail.submission_count > 0 ? 'Submit Again' : 'Submit Analysis' }}
             </n-button>
           </n-space>
         </n-card>
-      </template>
 
-      <!-- Result view (full submission history) -->
-      <ResultCard
-        v-if="result"
-        :submissions="result.submissions"
-        :total-score="result.total_score"
-        :ideal-score="result.ideal_score"
-        @back="router.push('/')"
-      />
+        <!-- Submission mode, but no (further) submission is possible. -->
+        <n-card v-else class="submit-bar">
+          <n-space vertical align="center" :wrap="true">
+            <n-text>{{ blockedText }}</n-text>
+            <n-button
+              v-if="detail.submission_count > 0"
+              type="primary"
+              secondary
+              size="large"
+              @click="goToResults"
+            >
+              View Result
+            </n-button>
+          </n-space>
+        </n-card>
+        </template>
+      </template>
 
       <n-alert v-if="error" type="error" class="error-alert">{{ error }}</n-alert>
     </n-spin>
@@ -90,13 +143,13 @@
         <!-- The ions the student is submitting, by name -->
         <div class="confirm-ions">
           <n-tag
-            v-for="(label, i) in selectedIonLabels"
-            :key="selectedIons[i]"
-            :type="isCation(selectedIons[i]) ? 'info' : 'warning'"
+            v-for="ion in selectedIonList"
+            :key="ion.id"
+            :type="isCation(ion.id) ? 'info' : 'warning'"
             :bordered="false"
             round
           >
-            {{ label }}
+            <IonSymbol :symbol="ion.symbol" /><span v-if="ion.name"> — {{ ion.name }}</span>
           </n-tag>
         </div>
         <n-alert type="warning" :bordered="false">
@@ -111,14 +164,34 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- "New analysis" mode: a wrong submission generated a fresh re-trial. -->
+    <n-modal v-model:show="retryShow" preset="card" title="A new analysis was generated" style="width: 480px; max-width: 92vw">
+      <n-space vertical size="medium">
+        <n-text>
+          Your selection was not fully correct, so a fresh
+          <strong>{{ retryInfo?.type }}</strong> analysis (no. {{ retryInfo?.number }}) has been
+          generated for you.
+        </n-text>
+        <n-alert type="info" :bordered="false">
+          Your supporting assistants have been notified about the new analysis.
+        </n-alert>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button type="primary" @click="openRetry">Open the new analysis</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import ResultCard from '../components/ResultCard.vue'
+import IonSymbol from '../components/IonSymbol.vue'
 import {
   NCard, NSpace, NButton, NTag, NSpin, NGrid, NGi, NCheckbox, NCheckboxGroup,
   NText, NAlert, NModal, NEmpty,
@@ -131,7 +204,10 @@ function isCation(ionId) {
 
 const route = useRoute()
 const router = useRouter()
-const id = route.params.id
+// Reactive on purpose: the same component instance serves both the
+// submission and the results route (and could be reused for another
+// analysis), so navigation must re-load the data.
+const id = computed(() => route.params.id)
 
 // Responsive ion grid: single column on phones, two columns on larger screens.
 const isNarrow = ref(window.innerWidth < 620)
@@ -150,19 +226,66 @@ const detail = ref(null)
 const result = ref(null)
 const selectedCations = ref([])
 const selectedAnions = ref([])
+// "New analysis" mode: a fresh re-trial was generated after a wrong submission.
+const retryInfo = ref(null)
+const retryShow = ref(false)
+
+function openRetry() {
+  if (!retryInfo.value) return
+  const newId = retryInfo.value.new_analysis_id
+  retryShow.value = false
+  retryInfo.value = null
+  router.replace({ name: 'analysis', params: { id: newId } })
+}
 
 const selectedIons = computed(() => [...selectedCations.value, ...selectedAnions.value])
 
-// Resolve the selected ion ids to their symbol/name labels (for the confirm
-// modal). Cations come first, then anions, matching the selection order.
-const selectedIonLabels = computed(() => {
+// The component serves two routes: the submission view (/analysis/:id) and
+// the explicit results view (/analysis/:id/results).
+const isResultMode = computed(() => route.name === 'analysis-results')
+// Whether the submission window is still open right now (by the raw window
+// timestamps - the window_status payload says "submitted" as soon as any
+// submission exists, even while the window is still open).
+const windowOpen = computed(() => {
+  const d = detail.value
+  if (!d?.window_start || !d?.window_end) return false
+  const now = Date.now()
+  return new Date(d.window_start).getTime() <= now && now <= new Date(d.window_end).getTime()
+})
+// A (further) submission is possible while the window is open and the limit
+// has not been reached yet.
+const canSubmit = computed(() =>
+  !!detail.value && windowOpen.value && detail.value.submission_count < detail.value.submission_limit,
+)
+// Header tag: "Open" while (further) submissions are possible, otherwise the
+// raw window status (Submitted / Closed / Not Open Yet).
+const displayStatus = computed(() => {
+  const d = detail.value
+  if (!d) return 'too_early'
+  return canSubmit.value ? 'open' : d.window_status
+})
+// Explanation shown in submission mode when no (further) submission is possible.
+const blockedText = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  if (d.submission_count >= d.submission_limit) {
+    return `The submission limit (${d.submission_count}/${d.submission_limit}) has been reached.`
+  }
+  return d.window_status === 'too_early'
+    ? 'The submission window is not open yet.'
+    : 'The submission window is closed.'
+})
+
+// Resolve the selected ion ids to their ion objects (for the confirm modal).
+// Cations come first, then anions, matching the selection order.
+const selectedIonList = computed(() => {
   const byId = new Map()
   for (const ion of [...detail.value?.cations, ...detail.value?.anions] || []) {
     byId.set(ion.id, ion)
   }
   return selectedIons.value.map((ionId) => {
     const ion = byId.get(ionId)
-    return ion ? `${ion.symbol} — ${ion.name}` : `ion #${ionId}`
+    return ion || { id: ionId, symbol: `#${ionId}`, name: '' }
   })
 })
 
@@ -227,13 +350,33 @@ function normalizeResult(payload) {
   return null
 }
 
+// Switch between the submission view and the explicit results view.
+function goToResults() {
+  router.push({ name: 'analysis-results', params: { id: id.value } })
+}
+function goToSubmit() {
+  router.push({ name: 'analysis', params: { id: id.value } })
+}
+
 async function load() {
   loading.value = true
   error.value = ''
+  result.value = null
   try {
-    detail.value = await api.get(`/analyses/${id}`)
-    if (detail.value.window_status === 'submitted') {
-      const payload = await api.get(`/analyses/${id}/result`)
+    detail.value = await api.get(`/analyses/${id.value}`)
+    // Once the submission limit is reached, the result is always shown -
+    // regardless of which route the student landed on (the submission view
+    // has nothing left to offer).
+    if (
+      !isResultMode.value &&
+      detail.value.submission_count > 0 &&
+      detail.value.submission_count >= detail.value.submission_limit
+    ) {
+      router.replace({ name: 'analysis-results', params: { id: id.value } })
+      return
+    }
+    if (isResultMode.value && detail.value.submission_count > 0) {
+      const payload = await api.get(`/analyses/${id.value}/result`)
       result.value = normalizeResult(payload)
     }
   } catch (e) {
@@ -247,16 +390,23 @@ async function doSubmit() {
   submitting.value = true
   error.value = ''
   try {
-    await api.post(`/analyses/${id}/submissions`, {
+    const res = await api.post(`/analyses/${id.value}/submissions`, {
       ion_ids: selectedIons.value,
       confirmed: true,
       idempotency_key: crypto.randomUUID(),
     })
-    // Re-fetch the full history so the result view shows every attempt.
-    const payload = await api.get(`/analyses/${id}/result`)
-    result.value = normalizeResult(payload)
-    detail.value.window_status = 'submitted'
+    // "New analysis" mode: a wrong submission generated a fresh re-trial of the
+    // same type - offer to jump straight to it.
+    if (res?.retry?.generated) {
+      retryInfo.value = res.retry
+      retryShow.value = true
+      return
+    }
+    // After every submission, return to the main card view. The card reflects
+    // the new state (score, submissions used, status); the student can open it
+    // again to submit another attempt or to view the result.
     confirmShow.value = false
+    router.replace({ name: 'home' })
   } catch (e) {
     error.value = e.message
   } finally {
@@ -265,6 +415,13 @@ async function doSubmit() {
 }
 
 onMounted(load)
+
+// Re-load when switching between the submission and results routes (the
+// component instance is kept) or when a different analysis is opened.
+watch(
+  () => [route.name, route.params.id],
+  () => load(),
+)
 </script>
 
 <style scoped>

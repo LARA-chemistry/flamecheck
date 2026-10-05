@@ -42,6 +42,9 @@ THIRD_PARTY_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    # Generic OpenID Connect provider (Keycloak & co. configure themselves as
+    # sub-providers of it, keyed by their ``provider_id``).
+    "allauth.socialaccount.providers.openid_connect",
     "django_filters",
     "corsheaders",
 ]
@@ -51,6 +54,7 @@ LOCAL_APPS = [
     "substances",
     "analyses",
     "config",
+    "multichoice",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -140,6 +144,44 @@ ACCOUNT_LOGIN_METHODS = {"username", "email"}
 ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_ADAPTER = "users.adapters.AccountAdapter"
 SOCIALACCOUNT_ADAPTER = "users.adapters.SocialAccountAdapter"
+# OAuth identity providers (django-allauth). A JSON object keyed by provider id,
+# e.g. {"google": {"APP": {"client_id": "...", "secret": "...", "key": ""}}}.
+#
+# OpenID Connect providers (Keycloak & co.) use the generic ``openid_connect``
+# provider; each realm is one entry in the ``APPS`` list whose ``provider_id``
+# is what the login button links to (``/{provider_id}/login/``). Example (a
+# Keycloak realm "flamecheck"):
+#   {"openid_connect": {"APPS": [{
+#       "provider_id": "keycloak", "name": "Keycloak",
+#       "client_id": "flamecheck", "secret": "<realm client secret>",
+#       "settings": {"server_url": "https://keycloak.example.com/realms/flamecheck"}
+#   }]}}
+# The realm's valid redirect URI must be
+#   https://<host>/<provider_id>/login/callback/
+# Empty by default: OAuth registration only offers buttons for configured providers.
+SOCIALACCOUNT_PROVIDERS = env.json("SOCIALACCOUNT_PROVIDERS", default={})
+# A plain link to the provider login URL (e.g. /google/login/) starts the
+# provider flow immediately instead of rendering an intermediate confirm page,
+# which is what the SPA login button expects.
+SOCIALACCOUNT_LOGIN_ON_GET = True
+
+# ---------------------------------------------------------------------------
+# E-mail
+# ---------------------------------------------------------------------------
+# The console backend is the default *development* choice (see development.py);
+# production sets a real SMTP backend. These defaults keep the address stable.
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="FlameCheck <no-reply@flamecheck.local>")
+EMAIL_SUBJECT_PREFIX = env.str("EMAIL_SUBJECT_PREFIX", default="[FlameCheck] ")
+# How long a self-registration e-mail-confirmation link stays valid (seconds).
+EMAIL_VERIFICATION_TOKEN_MAX_AGE = env.int("EMAIL_VERIFICATION_TOKEN_MAX_AGE", default=48 * 3600)
+#
+# Master switch for the submission-confirmation e-mails (Admin → Courses →
+# "notify the student" / Admin → Settings → Notifications → "notify the
+# assistants"). E-mail sending is DISABLED by default and only happens when the
+# ALLOW_EMAILS environment variable is set to a truthy value in the (docker)
+# container. This extra safety layer prevents any e-mail from being sent in
+# staging / demo environments, even when the in-app switches are enabled.
+ALLOW_EMAILS = env.bool("ALLOW_EMAILS", default=False)
 
 # ---------------------------------------------------------------------------
 # JWT / token auth
@@ -152,6 +194,21 @@ JWT_ISSUER = env.str("JWT_ISSUER", default="flamecheck")
 # Number of failed logins before a temporary lockout
 LOGIN_MAX_ATTEMPTS = env.int("LOGIN_MAX_ATTEMPTS", default=5)
 LOGIN_LOCKOUT_SECONDS = env.int("LOGIN_LOCKOUT_SECONDS", default=300)
+
+# ---------------------------------------------------------------------------
+# Caching
+# ---------------------------------------------------------------------------
+# The database cache backend is *shared* across all gunicorn workers, so the
+# per-IP/per-user rate limits actually apply to the whole server (the default
+# local-memory cache is per-process and would weaken them by the worker count).
+# It needs no extra service and works unchanged with SQLite and Postgres.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "flamecheck_cache",
+        "TIMEOUT": 300,
+    }
+}
 
 # ---------------------------------------------------------------------------
 # External reference links

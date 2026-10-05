@@ -1,9 +1,25 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+def generate_labspace_id() -> str:
+    """
+    Return a random labspace id.
+
+    Used during registration when the student (or their OAuth provider) did not
+    supply a labspace number, e.g. ``LS-1A2B3C4D``.
+
+    Returns:
+        str: A fresh, unique labspace identifier.
+
+    """
+    return f"LS-{uuid.uuid4().hex[:8].upper()}"
 
 
 class User(AbstractUser):
@@ -16,9 +32,8 @@ class User(AbstractUser):
         ASSISTANT = "assistant", _("Assistant")
         ADMIN = "admin", _("Admin")
 
-    name = models.CharField(_("Name of User"), blank=True, max_length=255)
-    first_name = None  # type: ignore[assignment]
-    last_name = None  # type: ignore[assignment]
+    first_name = models.CharField(_("First name of User"), blank=True, max_length=128)
+    last_name = models.CharField(_("Last name of User"), blank=True, max_length=128)
     role = models.CharField(
         max_length=16,
         choices=Role.choices,
@@ -61,6 +76,14 @@ class User(AbstractUser):
         default=0,
         help_text=_("Bumped on logout to revoke all issued JWTs."),
     )
+    registered = models.BooleanField(
+        default=True,
+        help_text=(
+            "Whether the user has completed registration. OAuth-created students start "
+            "False and complete a registration page (course + metadata + generated analyses); "
+            "manually created and self-registered accounts are registered by default."
+        ),
+    )
 
     # -- role helpers -------------------------------------------------------
     @property
@@ -77,6 +100,20 @@ class User(AbstractUser):
     def is_admin(self) -> bool:
         """Return True if the user has the admin role."""
         return self.role == self.Role.ADMIN
+
+    @property
+    def full_name(self) -> str:
+        """
+        Return the user's full name (first + last).
+
+        Empty parts are omitted, so a user with only a first name returns just
+        that. Returns an empty string when both parts are blank.
+
+        Returns:
+            str: The concatenated name, or ``""``.
+
+        """
+        return f"{self.first_name} {self.last_name}".strip()
 
     def get_absolute_url(self) -> str:
         """
@@ -175,14 +212,15 @@ class StudentAssignment(models.Model):
     class Meta:
         verbose_name = _("Student analysis assignment")
         verbose_name_plural = _("Student analysis assignments")
+        # NB: there is deliberately no uniqueness on (course, student, number) -
+        # in the "new analysis" submission mode a student accumulates several
+        # instances for one announcement (the original plus re-trials). The
+        # (student, instance) uniqueness below still prevents double-assigning a
+        # single sheet to the same student.
         constraints = [
             models.UniqueConstraint(
                 fields=["student", "instance"],
                 name="unique_student_instance_assignment",
-            ),
-            models.UniqueConstraint(
-                fields=["course", "student", "number"],
-                name="unique_course_student_number",
             ),
         ]
 

@@ -18,6 +18,11 @@ from analyses.api.schemas import (
     AnalysisTypeIn,
     AppSettingsOut,
     AssignmentIn,
+    AssistantCourseAssignIn,
+    AssistantCreatedOut,
+    AssistantIn,
+    AssistantOut,
+    AssistantUpdateIn,
     CourseIn,
     DatabaseRestoreIn,
     DatabaseStatusOut,
@@ -80,7 +85,14 @@ def list_courses(request):
     """List all courses (admin)."""
     _admin_user(request)
     return [
-        {"id": c.id, "name": c.name, "semester": c.semester, "track": c.track, "is_active": c.is_active}
+        {
+            "id": c.id,
+            "name": c.name,
+            "semester": c.semester,
+            "track": c.track,
+            "is_active": c.is_active,
+            "notify_student_on_submission": c.notify_student_on_submission,
+        }
         for c in Course.objects.all()
     ]
 
@@ -94,6 +106,7 @@ def create_course(request, payload: CourseIn):
         semester=payload.semester,
         track=payload.track,
         is_active=payload.is_active,
+        notify_student_on_submission=payload.notify_student_on_submission,
     )
     logger.info("Admin %s created course %s", request.user.username, course.name)
     return {"id": course.id, "name": course.name}
@@ -110,6 +123,7 @@ def update_course(request, course_id: int, payload: CourseIn):
     course.semester = payload.semester
     course.track = payload.track
     course.is_active = payload.is_active
+    course.notify_student_on_submission = payload.notify_student_on_submission
     course.save()
     logger.info("Admin %s updated course %s", request.user.username, course.name)
     return {"id": course.id, "name": course.name}
@@ -133,7 +147,8 @@ def delete_course(request, course_id: int):
 # template). Columns are separated by ``;`` (a comma is accepted as well).
 STUDENT_CSV_HEADER = [
     "username",
-    "name",
+    "first_name",
+    "last_name",
     "email",
     "matriculation_no",
     "lab",
@@ -146,10 +161,13 @@ STUDENT_CSV_HEADER = [
 
 def _student_to_out(s: User) -> dict:
     """Serialize a student :class:`~users.models.User` into the API payload."""
+    full = s.full_name
     return {
         "id": s.id,
         "username": s.username,
-        "name": s.name or None,
+        "first_name": s.first_name or None,
+        "last_name": s.last_name or None,
+        "full_name": full or None,
         "email": s.email or "",
         "matriculation_no": s.matriculation_no or "",
         "lab": s.lab or "",
@@ -193,7 +211,8 @@ def _validate_or_raise(password: str) -> None:
 
 def _set_student_fields(student: User, row: dict) -> None:
     """Copy the editable info columns from a CSV row onto ``student``."""
-    student.name = (row.get("name") or "").strip()
+    student.first_name = (row.get("first_name") or "").strip()
+    student.last_name = (row.get("last_name") or "").strip()
     student.email = (row.get("email") or "").strip()
     student.matriculation_no = (row.get("matriculation_no") or "").strip()
     student.lab = (row.get("lab") or "").strip()
@@ -201,14 +220,25 @@ def _set_student_fields(student: User, row: dict) -> None:
     student.telephone = (row.get("telephone") or "").strip()
 
 
+def _list_members(request, role: User.Role, course_id: int | None) -> list[dict]:
+    """List users with ``role`` (admin), optionally filtered by their course."""
+    _admin_user(request)
+    qs = User.objects.filter(role=role).select_related("course")
+    if course_id is not None:
+        qs = qs.filter(course_id=course_id)
+    return [_student_to_out(u) for u in qs]
+
+
 @router.get("/students", response=list[StudentOut])
 def list_students(request, course_id: int | None = None):
     """List students (admin), optionally filtered by their course."""
-    _admin_user(request)
-    qs = User.objects.filter(role=User.Role.STUDENT).select_related("course")
-    if course_id is not None:
-        qs = qs.filter(course_id=course_id)
-    return [_student_to_out(s) for s in qs]
+    return _list_members(request, User.Role.STUDENT, course_id)
+
+
+@router.get("/assistants", response=list[AssistantOut])
+def list_assistants(request, course_id: int | None = None):
+    """List assistants (admin), optionally filtered by their course."""
+    return _list_members(request, User.Role.ASSISTANT, course_id)
 
 
 # NOTE: the literal ``/students/import-*`` routes must be registered before the
@@ -328,9 +358,13 @@ def import_students_csv(request, file: UploadedFile = File(...)):  # noqa: B008
     }
 
 
-@router.post("/students", response=StudentCreatedOut)
-def create_student(request, payload: StudentIn):
-    """Create a student account (admin). An empty ``password`` is auto-generated."""
+def _member_label(role: User.Role) -> str:
+    """Human label for a member role used in log messages and error texts."""
+    return "assistant" if role == User.Role.ASSISTANT else "student"
+
+
+def _create_member(request, role: User.Role, payload) -> dict:
+    """Create a member account (student or assistant); empty password auto-generates."""
     _admin_user(request)
     if User.objects.filter(username__iexact=payload.username).exists():
         raise HttpError(409, f"Username '{payload.username}' is already taken.")
@@ -343,106 +377,156 @@ def create_student(request, payload: StudentIn):
     else:
         password = _generate_student_password()
         generated = True
-    student = User(username=payload.username, role=User.Role.STUDENT, is_active=True)
-    student.set_password(password)
-    student.name = payload.name
-    student.email = payload.email
-    student.matriculation_no = payload.matriculation_no
-    student.lab = payload.lab
-    student.labspace_id = payload.labspace_id
-    student.telephone = payload.telephone
-    student.course_id = payload.course_id
-    student.save()
+    member = User(username=payload.username, role=role, is_active=True)
+    member.set_password(password)
+    member.first_name = payload.first_name
+    member.last_name = payload.last_name
+    member.email = payload.email
+    member.matriculation_no = payload.matriculation_no
+    member.lab = payload.lab
+    member.labspace_id = payload.labspace_id
+    member.telephone = payload.telephone
+    member.course_id = payload.course_id
+    member.save()
     logger.info(
-        "Admin %s created student %s (auto password: %s)",
+        "Admin %s created %s %s (auto password: %s)",
         request.user.username,
+        _member_label(role),
         payload.username,
         generated,
     )
-    out = _student_to_out(student)
+    out = _student_to_out(member)
     if generated:
         out["password"] = password
     return out
 
 
-@router.put("/students/{student_id}", response=StudentCreatedOut)
-def update_student(request, student_id: int, payload: StudentUpdateIn):
-    """Update a student account (admin); only provided fields are changed."""
+def _update_member(request, role: User.Role, member_id: int, payload) -> dict:
+    """Update a member account (student or assistant); only provided fields change."""
     _admin_user(request)
-    student = User.objects.filter(pk=student_id, role=User.Role.STUDENT).first()
-    if student is None:
-        raise HttpError(404, "Student not found.")
-    if payload.username is not None and payload.username != student.username:
-        if User.objects.filter(username__iexact=payload.username).exclude(pk=student.pk).exists():
+    member = User.objects.filter(pk=member_id, role=role).first()
+    if member is None:
+        raise HttpError(404, f"{_member_label(role).capitalize()} not found.")
+    if payload.username is not None and payload.username != member.username:
+        if User.objects.filter(username__iexact=payload.username).exclude(pk=member.pk).exists():
             raise HttpError(409, f"Username '{payload.username}' is already taken.")
-        student.username = payload.username
+        member.username = payload.username
     if payload.password:
         _validate_or_raise(payload.password)
-        student.set_password(payload.password)
-    if payload.name is not None:
-        student.name = payload.name
+        member.set_password(payload.password)
+    if payload.first_name is not None:
+        member.first_name = payload.first_name
+    if payload.last_name is not None:
+        member.last_name = payload.last_name
     if payload.email is not None:
-        student.email = payload.email
+        member.email = payload.email
     if payload.matriculation_no is not None:
-        student.matriculation_no = payload.matriculation_no
+        member.matriculation_no = payload.matriculation_no
     if payload.lab is not None:
-        student.lab = payload.lab
+        member.lab = payload.lab
     if payload.labspace_id is not None:
-        student.labspace_id = payload.labspace_id
+        member.labspace_id = payload.labspace_id
     if payload.telephone is not None:
-        student.telephone = payload.telephone
+        member.telephone = payload.telephone
     if payload.is_active is not None:
-        student.is_active = payload.is_active
-    student.save()
-    logger.info("Admin %s updated student %s", request.user.username, student.username)
-    out = _student_to_out(student)
+        member.is_active = payload.is_active
+    member.save()
+    logger.info("Admin %s updated %s %s", request.user.username, _member_label(role), member.username)
+    out = _student_to_out(member)
     if payload.password:
         out["password"] = payload.password
     return out
 
 
-@router.delete("/students/{student_id}", response=dict)
-def delete_student(request, student_id: int):
+def _delete_member(request, role: User.Role, member_id: int) -> dict:
     """
-    Delete a student account (admin).
+    Delete a member account (student or assistant) (admin).
 
-    Refused with 409 while the student still has submissions (their results
-    must be preserved); course assignments and barcodes are removed.
+    Refused with 409 while the member still has submissions (their results must
+    be preserved); course assignments and barcodes are removed.
     """
     _admin_user(request)
-    student = User.objects.filter(pk=student_id, role=User.Role.STUDENT).first()
-    if student is None:
-        raise HttpError(404, "Student not found.")
-    if student.submissions.exists():
-        raise HttpError(409, "Student has submissions and cannot be deleted.")
-    username = student.username
-    student.delete()
-    logger.info("Admin %s deleted student %s", request.user.username, username)
-    return {"id": student_id, "deleted": True}
+    member = User.objects.filter(pk=member_id, role=role).first()
+    if member is None:
+        raise HttpError(404, f"{_member_label(role).capitalize()} not found.")
+    if member.submissions.exists():
+        raise HttpError(409, f"{_member_label(role).capitalize()} has submissions and cannot be deleted.")
+    username = member.username
+    member.delete()
+    logger.info("Admin %s deleted %s %s", request.user.username, _member_label(role), username)
+    return {"id": member_id, "deleted": True}
+
+
+def _assign_member_course(request, role: User.Role, member_id: int, course_id: int | None) -> dict:
+    """Set (or clear, with ``course_id = null``) a member's course (admin)."""
+    _admin_user(request)
+    member = User.objects.filter(pk=member_id, role=role).first()
+    if member is None:
+        raise HttpError(404, f"{_member_label(role).capitalize()} not found.")
+    if course_id is not None:
+        course = Course.objects.filter(pk=course_id).first()
+        if course is None:
+            raise HttpError(404, "Course not found.")
+        member.course = course
+    else:
+        member.course = None
+    member.save(update_fields=["course"])
+    logger.info(
+        "Admin %s set course for %s %s to %s",
+        request.user.username,
+        _member_label(role),
+        member.username,
+        course_id,
+    )
+    return {"id": member.id, "username": member.username, "course_id": member.course_id}
+
+
+@router.post("/students", response=StudentCreatedOut)
+def create_student(request, payload: StudentIn):
+    """Create a student account (admin). An empty ``password`` is auto-generated."""
+    return _create_member(request, User.Role.STUDENT, payload)
+
+
+@router.put("/students/{student_id}", response=StudentCreatedOut)
+def update_student(request, student_id: int, payload: StudentUpdateIn):
+    """Update a student account (admin); only provided fields are changed."""
+    return _update_member(request, User.Role.STUDENT, student_id, payload)
+
+
+@router.delete("/students/{student_id}", response=dict)
+def delete_student(request, student_id: int):
+    """Delete a student account (admin); refused while they have submissions."""
+    return _delete_member(request, User.Role.STUDENT, student_id)
 
 
 @router.put("/students/{student_id}/course", response=dict)
 def assign_student_course(request, student_id: int, payload: StudentCourseAssignIn):
     """Assign a student to a course (or detach with ``course_id = null``) (admin)."""
-    _admin_user(request)
-    student = User.objects.filter(pk=payload.student_id, role=User.Role.STUDENT).first()
-    if student is None:
-        raise HttpError(404, "Student not found.")
-    if payload.course_id is not None:
-        course = Course.objects.filter(pk=payload.course_id).first()
-        if course is None:
-            raise HttpError(404, "Course not found.")
-        student.course = course
-    else:
-        student.course = None
-    student.save(update_fields=["course"])
-    logger.info(
-        "Admin %s set course for student %s to %s",
-        request.user.username,
-        student.username,
-        payload.course_id,
-    )
-    return {"id": student.id, "username": student.username, "course_id": student.course_id}
+    return _assign_member_course(request, User.Role.STUDENT, payload.student_id, payload.course_id)
+
+
+@router.post("/assistants", response=AssistantCreatedOut)
+def create_assistant(request, payload: AssistantIn):
+    """Create an assistant account (admin). An empty ``password`` is auto-generated."""
+    return _create_member(request, User.Role.ASSISTANT, payload)
+
+
+@router.put("/assistants/{assistant_id}", response=AssistantCreatedOut)
+def update_assistant(request, assistant_id: int, payload: AssistantUpdateIn):
+    """Update an assistant account (admin); only provided fields are changed."""
+    return _update_member(request, User.Role.ASSISTANT, assistant_id, payload)
+
+
+@router.delete("/assistants/{assistant_id}", response=dict)
+def delete_assistant(request, assistant_id: int):
+    """Delete an assistant account (admin); refused while they have submissions."""
+    return _delete_member(request, User.Role.ASSISTANT, assistant_id)
+
+
+@router.put("/assistants/{assistant_id}/course", response=dict)
+def assign_assistant_course(request, assistant_id: int, payload: AssistantCourseAssignIn):
+    """Assign an assistant to a course (or detach with ``course_id = null``) (admin)."""
+    return _assign_member_course(request, User.Role.ASSISTANT, payload.assistant_id, payload.course_id)
 
 
 # ---- analysis types ------------------------------------------------------------
@@ -459,6 +543,7 @@ def list_analysis_types(request):
             "ions": [ion_to_schema(i) for i in t.possible_ions.all()],
             "default_window_start": t.default_window_start.isoformat() if t.default_window_start else None,
             "default_window_end": t.default_window_end.isoformat() if t.default_window_end else None,
+            "max_repetitions": t.max_repetitions,
             "session_count": t.instances.count(),
         }
         for t in types
@@ -476,6 +561,8 @@ def create_analysis_type(request, payload: AnalysisTypeIn):
         t.default_window_start = _parse_dt(payload.default_window_start)
     if payload.default_window_end:
         t.default_window_end = _parse_dt(payload.default_window_end)
+    if payload.max_repetitions is not None:
+        t.max_repetitions = payload.max_repetitions
     t.save()
     logger.info("Admin %s created analysis type %s", request.user.username, t.name)
     return {"id": t.id, "name": t.name}
@@ -497,6 +584,8 @@ def update_analysis_type(request, type_id: int, payload: AnalysisTypeIn):
         t.default_window_end = _parse_dt(payload.default_window_end)
     elif payload.default_window_end is None:
         t.default_window_end = None
+    if payload.max_repetitions is not None:
+        t.max_repetitions = payload.max_repetitions
     t.save()
     if payload.ion_ids is not None:
         t.possible_ions.set(payload.ion_ids)
@@ -837,6 +926,10 @@ def _apply_grading_payload(gc: GradingConfig, payload: GradingConfigOut) -> None
     gc.max_submissions_per_analysis = payload.max_submissions_per_analysis
     gc.final_score_strategy = payload.final_score_strategy
     gc.passing_score = payload.passing_score
+    gc.submission_mode = payload.submission_mode
+    gc.retry_point_deduction = payload.retry_point_deduction
+    gc.mc_points_per_card = payload.mc_points_per_card
+    gc.mc_penalty_per_wrong = payload.mc_penalty_per_wrong
 
 
 def _grading_config_payload(gc: GradingConfig) -> dict:
@@ -850,6 +943,10 @@ def _grading_config_payload(gc: GradingConfig) -> dict:
         "max_submissions_per_analysis": gc.max_submissions_per_analysis,
         "final_score_strategy": gc.final_score_strategy,
         "passing_score": gc.passing_score,
+        "submission_mode": gc.submission_mode,
+        "retry_point_deduction": gc.retry_point_deduction,
+        "mc_points_per_card": gc.mc_points_per_card,
+        "mc_penalty_per_wrong": gc.mc_penalty_per_wrong,
     }
 
 
@@ -891,14 +988,30 @@ def get_app_settings(request):
     if not getattr(request.user, "is_authenticated", False):
         raise AuthenticationError(401, "Authentication required.")
     s = AppSettings.get_instance()
+    return _app_settings_payload(s)
+
+
+def _app_settings_payload(s: AppSettings) -> dict:
+    """The global app-settings payload (shared by GET and PUT /app-settings)."""
     return {
         "points_per_analysis": s.points_per_analysis,
         "analyses_per_course": s.analyses_per_course,
         "active_course_id": s.active_course_id,
+        "registration": s.registration,
         "backup_enabled": s.backup_enabled,
         "backup_interval_minutes": s.backup_interval_minutes,
         "backup_location": s.backup_location,
         "backup_keep": s.backup_keep,
+        "notify_assistant_on_submission": s.notify_assistant_on_submission,
+        "smtp_host": s.smtp_host,
+        "smtp_port": s.smtp_port,
+        "smtp_username": s.smtp_username,
+        "smtp_password": s.smtp_password,
+        "smtp_from_email": s.smtp_from_email,
+        "smtp_security": s.smtp_security,
+        "pgp_public_key": s.pgp_public_key,
+        "pgp_private_key": s.pgp_private_key,
+        "pgp_private_key_passphrase": s.pgp_private_key_passphrase,
     }
 
 
@@ -910,21 +1023,30 @@ def update_app_settings(request, payload: AppSettingsOut):
     s.points_per_analysis = payload.points_per_analysis
     s.analyses_per_course = payload.analyses_per_course
     s.active_course_id = payload.active_course_id
+    s.registration = (
+        payload.registration
+        if payload.registration in dict(AppSettings.Registration.choices)
+        else AppSettings.Registration.MANUAL
+    )
     s.backup_enabled = payload.backup_enabled
     s.backup_interval_minutes = max(1, payload.backup_interval_minutes)
     s.backup_location = payload.backup_location
     s.backup_keep = max(1, payload.backup_keep)
+    s.notify_assistant_on_submission = payload.notify_assistant_on_submission
+    s.smtp_host = payload.smtp_host.strip()
+    s.smtp_port = max(1, int(payload.smtp_port))
+    s.smtp_username = payload.smtp_username.strip()
+    s.smtp_password = payload.smtp_password
+    s.smtp_from_email = payload.smtp_from_email.strip()
+    s.smtp_security = (
+        payload.smtp_security if payload.smtp_security in dict(AppSettings.SMTPSecurity.choices) else "tls"
+    )
+    s.pgp_public_key = payload.pgp_public_key
+    s.pgp_private_key = payload.pgp_private_key
+    s.pgp_private_key_passphrase = payload.pgp_private_key_passphrase
     s.save()
     logger.info("Admin %s updated app settings", request.user.username)
-    return {
-        "points_per_analysis": s.points_per_analysis,
-        "analyses_per_course": s.analyses_per_course,
-        "active_course_id": s.active_course_id,
-        "backup_enabled": s.backup_enabled,
-        "backup_interval_minutes": s.backup_interval_minutes,
-        "backup_location": s.backup_location,
-        "backup_keep": s.backup_keep,
-    }
+    return _app_settings_payload(s)
 
 
 # ---- database backups ----------------------------------------------------------

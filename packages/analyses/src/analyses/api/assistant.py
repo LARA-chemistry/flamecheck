@@ -11,7 +11,7 @@ import csv
 import io
 
 from analyses.api.schemas import AnalysisSummary, AssistantCourseOut, AssistantRosterEntry
-from analyses.models import AnalysisInstance
+from analyses.models import AnalysisInstance, AnalysisNotification
 from config.models import GradingConfig
 from django.http import HttpResponse
 from ninja import Router
@@ -57,10 +57,13 @@ def list_courses(request):
             AssistantRosterEntry(
                 id=s.id,
                 username=s.username,
-                name=s.name or None,
+                first_name=s.first_name or None,
+                last_name=s.last_name or None,
+                full_name=(s.full_name or None),
                 barcode=s.barcodes.filter(active=True).first().value
                 if s.barcodes.filter(active=True).exists()
                 else None,
+                labspace_id=s.labspace_id or None,
                 analyses=[
                     AnalysisSummary.from_instance(i)
                     for i in AnalysisInstance.objects.for_student(s)
@@ -107,8 +110,11 @@ def course_detail(request, course_id: int):
         AssistantRosterEntry(
             id=s.id,
             username=s.username,
-            name=s.name or None,
+            first_name=s.first_name or None,
+            last_name=s.last_name or None,
+            full_name=(s.full_name or None),
             barcode=s.barcodes.filter(active=True).first().value if s.barcodes.filter(active=True).exists() else None,
+            labspace_id=s.labspace_id or None,
             analyses=[
                 AnalysisSummary.from_instance(i)
                 for i in AnalysisInstance.objects.for_student(s)
@@ -326,3 +332,51 @@ def course_csv_export(request, course_id: int):
     response = HttpResponse(buffer.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="course_{course.id}_submissions.csv"'
     return response
+
+
+# ---- re-trial notifications ------------------------------------------------------
+@router.get("/notifications", response=list[dict])
+def list_notifications(request):
+    """
+    Re-trial notifications for the courses this assistant supports.
+
+    Each entry reports whether the assistant has already acknowledged it
+    (``read``). Notifications are newest-first.
+    """
+    user = _assistant_user(request)
+    courses = [(entry.course if hasattr(entry, "course") else entry) for entry in _visible_courses(user)]
+    if not courses:
+        return []
+    notifications = (
+        AnalysisNotification.objects.filter(course__in=courses)
+        .select_related("instance", "instance__type", "course", "student")
+        .order_by("-created_at", "-id")
+    )
+    read_ids = set(AnalysisNotification.objects.filter(course__in=courses, read_by=user).values_list("id", flat=True))
+    return [
+        {
+            "id": n.id,
+            "course_id": n.course_id,
+            "course_name": n.course.name,
+            "student": n.student.username,
+            "student_name": n.student.full_name or n.student.username,
+            "type": n.instance.type.name,
+            "number": n.instance.number,
+            "instance_id": n.instance_id,
+            "created_at": n.created_at.isoformat(),
+            "read": n.id in read_ids,
+        }
+        for n in notifications
+    ]
+
+
+@router.post("/notifications/{notification_id}/read", response=dict)
+def mark_notification_read(request, notification_id: int):
+    """Acknowledge a re-trial notification (adds the assistant to ``read_by``)."""
+    user = _assistant_user(request)
+    courses = [(entry.course if hasattr(entry, "course") else entry) for entry in _visible_courses(user)]
+    notification = AnalysisNotification.objects.filter(id=notification_id, course__in=courses).first()
+    if notification is None:
+        raise HttpError(404, "Notification not found.")
+    notification.read_by.add(user)
+    return {"id": notification.id, "read": True}

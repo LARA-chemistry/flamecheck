@@ -110,7 +110,7 @@ submissions through the real `AnalysisInstance.submit()` logic.
 
 ## 3. High-level system architecture
 
-```mermaid
+```{mermaid}
 flowchart TB
     subgraph Browser["Student / Assistant / Admin browser"]
         SPA["Vue 3 SPA<br/>(Naive UI, Pinia, Vue Router, ZXing)"]
@@ -177,7 +177,7 @@ flowchart TB
 
 ## 4. Domain model (entities & relationships)
 
-```mermaid
+```{mermaid}
 erDiagram
     User ||--o{ StudentBarcode : "has (barcodes)"
     User }o--o| Course : "enrolled in (course)"
@@ -319,26 +319,29 @@ erDiagram
 Two HS256 tokens are issued together: an **access** token (30 min) and a **refresh**
 token (14 days). The payload:
 
-```jsonc
+```json
 {
-  "sub":  "<user id>",
-  "jti":  "<uuid hex>",        // unique per token
-  "type": "access" | "refresh",
-  "role": "student|assistant|admin",
-  "iat":  1720000000,
-  "exp":  1720001800,
-  "aud":  "flamecheck-api",
-  "iss":  "flamecheck",
-  "tv":   0                     // token_version (revocation)
+  "sub": "12",
+  "jti": "0f8a1c2e-9d4b-4e7a-b6c3-5d2e8f0a1b3c",
+  "type": "access",
+  "role": "student",
+  "iat": 1720000000,
+  "exp": 1720001800,
+  "aud": "flamecheck-api",
+  "iss": "flamecheck",
+  "tv": 0
 }
 ```
 
-`aud`/`iss` are embedded in the payload (PyJWT's `encode()` does not accept them as
-kwargs). **Revocation** works by comparing the `tv` claim against the user's current
+`jti` is unique per token; `type` is `access` or `refresh`; `role` is
+`student`, `assistant` or `admin`; `tv` is the user's current
+`token_version` at mint time. `aud`/`iss` are embedded in the payload (PyJWT's
+`encode()` does not accept them as kwargs). **Revocation** works by comparing the
+`tv` claim against the user's current
 `token_version`; `POST /auth/logout` bumps that column, instantly invalidating every
 token minted earlier.
 
-```mermaid
+```{mermaid}
 sequenceDiagram
     participant C as SPA (Pinia store)
     participant A as /api/v1 (django-ninja)
@@ -400,7 +403,7 @@ rate limit also caps request volume per key.
 
 ## 6. The submission lifecycle (core business flow)
 
-```mermaid
+```{mermaid}
 flowchart TD
     Start([Student opens analysis]) --> Check{"window_status()"}
     Check -->|too_early| Early["UI: disabled<br/>'Not Open Yet'"]
@@ -461,7 +464,7 @@ is the final arbiter under a concurrent replay race: if `create()` raises
 All routes are under `/api/v1/`. The OpenAPI schema is at `/api/v1/openapi.json` and the
 interactive docs at `/api/v1/docs` (DEBUG only).
 
-```mermaid
+```{mermaid}
 flowchart LR
     subgraph Public["No auth (auth=None)"]
         P1["POST /auth/barcode/scan"]
@@ -545,7 +548,7 @@ urlpatterns = [
 
 ## 8. Frontend architecture
 
-```mermaid
+```{mermaid}
 flowchart TB
     Main["main.js<br/>createApp + Pinia + Router"] --> App["App.vue<br/>&lt;n-config-provider&gt;"]
     App --> Router["router/index.js<br/>role-guarded routes"]
@@ -621,7 +624,7 @@ WhiteNoise maps `dist/assets/*` â†’ `/static/assets/*` and `dist/favicon.svg` â†
 |---------|---------|--------|
 | `import_catalog` | substances | Loads `ions.json` (22 ions) + `substances.json` (35 substances) idempotently (`get_or_create` by `(symbol, kind)` / `name`) |
 | `load_examples` | analyses | Loads the `examples/datasets/` demo environment (courses, users, types, per-student instances, assignments, singletons, seeded submissions); idempotent, `--reset` to wipe first |
-| `seed_demo` | analyses | Staging seeder that builds the demo dataset from the `factory.py` modules (catalog, 4 courses with Chemistry the active/default one, 16 users sharing the `FlameCheck32!` password, types, per-student instances across open/too-early/too-late windows, assignments, global + per-course grading configs, app settings, seeded submissions); idempotent, `--reset` to wipe first |
+| `seed_demo` | analyses | Staging seeder that builds the demo dataset from the `factory.py` modules (extended ion catalog + the `examples/substance_list.csv` salts, 5 courses with Geology the active/default one, 21 users sharing the `FlameCheck32!` password, 12 types, per-student instances across open/too-early/too-late windows labelled `<type>_<labspace_id>`, assignments, global + per-course grading configs, MC cards incl. the all-or-nothing EP monograph, app settings, seeded submissions); idempotent, `--reset` to wipe first |
 | `init_barcode` | users | Creates a test barcode `FC-<id>-<uuid8>` (`--reset` to regenerate) |
 | `init_admin` | users | Creates an admin user |
 | `init_django` | users | Legacy bootstrap (references `LOCAL_APPS`/`FIXTURES`) |

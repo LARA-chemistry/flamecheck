@@ -59,33 +59,30 @@ class TestCheckMigrations:
 
     def test_check_mode_exits_when_schema_is_out_of_sync(self) -> None:
         """``--check`` raises CommandError without modifying the database."""
-        if not _drop_supported("analyses_analysistype", "default_window_start"):
+        if not _drop_supported("config_appsettings", "active_course_id"):
             pytest.skip("DROP COLUMN unavailable in this SQLite build")
-        # The 0005 migration is still recorded as applied; only its DDL is gone.
+        # The config 0002 migration is still recorded as applied; only its DDL is gone.
         with pytest.raises(CommandError):
             call_command("check_migrations", check=True)
         # --check must not have repaired anything.
-        assert not _has_column("analyses_analysistype", "default_window_start")
+        assert not _has_column("config_appsettings", "active_course_id")
 
     @pytest.mark.django_db(transaction=True)
     def test_repair_reapplies_missing_columns(self) -> None:
         """Without ``--check`` the missing columns are re-created."""
-        # Drop every column the config 0005 migration adds, so the re-`migrate`
-        # is a clean whole-migration re-apply (as in the real corruption).
-        for col in (
-            "backup_enabled",
-            "backup_interval_minutes",
-            "backup_keep",
-            "backup_location",
-            "last_backup_at",
-            "last_backup_file",
-            "last_restore_at",
-            "last_restore_file",
+        # Drop every column the config 0002 migration adds (all FKs), so the
+        # repair is a clean whole-migration re-apply (as in the real corruption).
+        for table, col in (
+            ("config_assistantcourse", "assistant_id"),
+            ("config_assistantcourse", "course_id"),
+            ("config_appsettings", "active_course_id"),
+            ("config_gradingconfig", "course_id"),
         ):
-            if not _drop_supported("config_appsettings", col):
+            if not _drop_supported(table, col):
                 pytest.skip("DROP COLUMN unavailable in this SQLite build")
         call_command("check_migrations")
-        assert _has_column("config_appsettings", "backup_enabled")
+        assert _has_column("config_appsettings", "active_course_id")
+        assert _has_column("config_gradingconfig", "course_id")
 
     @pytest.mark.django_db(transaction=True)
     def test_repair_is_idempotent_on_a_clean_db(self) -> None:
@@ -96,13 +93,17 @@ class TestCheckMigrations:
 
     @pytest.mark.django_db(transaction=True)
     def test_repair_restores_a_corrupt_analyses_schema(self) -> None:
-        """The exact staging failure: analyses 0005 columns missing but recorded."""
-        for col in ("default_window_start", "default_window_end"):
-            if not _drop_supported("analyses_analysistype", col):
+        """A half-applied analyses 0002 (FK columns missing) is re-applied."""
+        for table, col in (
+            ("analyses_analysisinstance", "course_id"),
+            ("analyses_analysisnotification", "course_id"),
+            ("analyses_analysisnotification", "instance_id"),
+        ):
+            if not _drop_supported(table, col):
                 pytest.skip("DROP COLUMN unavailable in this SQLite build")
         call_command("check_migrations")
-        assert _has_column("analyses_analysistype", "default_window_start")
-        assert _has_column("analyses_analysistype", "default_window_end")
+        assert _has_column("analyses_analysisinstance", "course_id")
+        assert _has_column("analyses_analysisnotification", "instance_id")
 
 
 class TestAddedColumnsHelper:

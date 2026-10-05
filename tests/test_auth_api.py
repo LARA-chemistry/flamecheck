@@ -56,6 +56,69 @@ class TestLogin:
         )
         assert resp.status_code == 401
 
+    def test_login_lockout_after_repeated_failures(self, client, student):
+        """After LOGIN_MAX_ATTEMPTS failures the account is locked, even for the right password."""
+        from django.conf import settings
+        from django.core.cache import cache
+
+        for _ in range(settings.LOGIN_MAX_ATTEMPTS):
+            resp = client.post(
+                "/api/v1/auth/login",
+                {"username": "student1", "password": "wrong"},
+                content_type="application/json",
+            )
+            # 401 while the per-IP rate limit still lets attempts through,
+            # 400 once it kicks in — either way no login succeeds.
+            assert resp.status_code in (400, 401)
+
+        # Drop the per-IP rate-limit counters so the persistent, IP-independent
+        # lockout is what answers next.
+        cache.clear()
+        resp = client.post(
+            "/api/v1/auth/login",
+            {"username": "student1", "password": "testpass123"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 423
+
+    def test_successful_login_resets_lockout_counter(self, client, student):
+        from django.conf import settings
+        from django.core.cache import cache
+
+        for _ in range(settings.LOGIN_MAX_ATTEMPTS - 1):
+            client.post(
+                "/api/v1/auth/login",
+                {"username": "student1", "password": "wrong"},
+                content_type="application/json",
+            )
+        cache.clear()
+        # Success clears the failure counter …
+        resp = client.post(
+            "/api/v1/auth/login",
+            {"username": "student1", "password": "testpass123"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+
+        # … so the same number of later failures does not trigger the lockout.
+        cache.clear()
+        for _ in range(settings.LOGIN_MAX_ATTEMPTS - 1):
+            resp = client.post(
+                "/api/v1/auth/login",
+                {"username": "student1", "password": "wrong"},
+                content_type="application/json",
+            )
+            assert resp.status_code == 401
+
+    def test_client_ip_uses_last_xff_entry(self):
+        """Only the last (proxy-appended) X-Forwarded-For entry is trusted."""
+        from users.api.views import _client_ip
+
+        class _Req:
+            META = {"HTTP_X_FORWARDED_FOR": "203.0.113.7, 198.51.100.23"}
+
+        assert _client_ip(_Req()) == "198.51.100.23"
+
 
 class TestTokenLifecycle:
     def test_refresh_rotates_tokens(self, client, student, student_barcode):

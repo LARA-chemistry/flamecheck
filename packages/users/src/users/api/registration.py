@@ -1,0 +1,284 @@
+"""
+Ninja API views for registration (self-registration, e-mail confirmation, OAuth).
+
+Endpoints:
+
+* ``GET  /registration/config``      — public; which registration mode is active
+  and which OAuth providers are offered (drives the login page).
+* ``POST /auth/register``            — public; create a student account pending
+  e-mail confirmation (self-registration mode only).
+* ``POST /auth/oauth/exchange``      — exchange the allauth session (created by
+  an OAuth sign-in) for a JWT pair (the SPA is JWT-based, not session-based).
+* ``GET  /registration/courses``     — active courses for the registration page.
+* ``POST /registration/complete``    — enrol the (OAuth) student in a course,
+  fill missing metadata (random labspace if absent) and generate their analyses.
+
+The e-mail-confirmation *link* itself is a plain Django view
+(:func:`users.views.verify_email`) so it can be opened from the e-mail without
+any token in the URL query string.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Any
+from urllib.parse import urlsplit
+
+from django.conf import settings
+from django.contrib.auth import logout
+from django.core.mail import send_mail
+from django.urls import reverse
+from ninja import Router
+from ninja.errors import AuthenticationError, HttpError, ValidationError
+from users import email_verification
+from users.api.schemas import (
+    CourseOptionOut,
+    RegisterIn,
+    RegisterOut,
+    RegistrationConfigOut,
+    RegistrationIn,
+    UserOut,
+)
+from users.api.views import _client_ip, _login_out, _rate_limited
+from users.models import User, generate_labspace_id
+
+logger = logging.getLogger("flamecheck.audit")
+
+router = Router(tags=["registration"])
+
+# Throttle public account creation per client IP.
+_REGISTER_RATE_LIMIT = 10
+_REGISTER_WINDOW_SECONDS = 60
+
+
+def _check_same_site(request) -> None:
+    """
+    CSRF protection for the session-consuming OAuth exchange.
+
+    django-ninja marks every API view ``csrf_exempt`` at the middleware level
+    (safe for JWT bearer auth, which carries no cookie), but this endpoint
+    consumes the allauth *session* cookie. It therefore verifies the
+    ``Origin`` header itself: same-origin browsers always send it, while a
+    cross-site form or fetch carries the attacker's origin and is rejected.
+    """
+    origin = request.META.get("HTTP_ORIGIN")
+    if not origin:
+        raise HttpError(403, "Origin header is required.")
+    parsed = urlsplit(origin)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HttpError(403, "Invalid Origin header.")
+    if parsed.netloc.lower() != request.get_host().lower():
+        raise HttpError(403, "Cross-site request not allowed.")
+
+
+def _registration_mode() -> str:
+    """Return the active registration mode (from the settings singleton)."""
+    from config.models import AppSettings
+
+    return AppSettings.get_registration_mode()
+
+
+def _configured_providers() -> list[dict[str, str]]:
+    """
+    The OAuth providers configured for this deployment, as login entries.
+
+    Each entry carries the ``id`` (used as the button key/label fallback), a
+    display ``name`` and the allauth ``login_url`` to redirect to. Standard
+    providers are keyed by their provider id (e.g. ``google`` →
+    ``/google/login/``); the generic OpenID Connect provider (``openid_connect``)
+    contributes one entry per app, keyed by that app's ``provider_id`` (e.g.
+    ``keycloak`` → ``/oidc/keycloak/login/``).
+    """
+    from django.urls import NoReverseMatch, reverse
+
+    providers = getattr(settings, "SOCIALACCOUNT_PROVIDERS", {}) or {}
+    entries: list[dict[str, str]] = []
+    for provider_id, config in providers.items():
+        if provider_id == "openid_connect":
+            # ``APPS`` is a list of app-config dicts (one per realm).
+            for app in config.get("APPS") or []:
+                if not (pid := app.get("provider_id")):
+                    continue
+                url = reverse("openid_connect_login", kwargs={"provider_id": pid})
+                entries.append({"id": pid, "name": app.get("name") or pid, "login_url": url})
+        else:
+            try:
+                url = reverse(f"{provider_id}_login")
+            except NoReverseMatch:
+                # Provider configured but not installed; fall back to allauth's
+                # conventional URL so the button is still offered.
+                url = f"/{provider_id}/login/"
+            entries.append({"id": provider_id, "name": provider_id, "login_url": url})
+    return entries
+
+
+def _derive_username(email: str) -> str:
+    """Derive a unique, valid username from the local part of an e-mail address."""
+    base = email.split("@", 1)[0].lower()
+    base = re.sub(r"[^a-z0-9._-]", "", base)[:30] or "student"
+    candidate = base
+    suffix = 2
+    while User.objects.filter(username__iexact=candidate).exists():
+        candidate = f"{base[:29]}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def _send_verification_email(request: Any, user: User) -> None:
+    """Send the e-mail-confirmation link for ``user`` (console backend in dev)."""
+    token = email_verification.make_verification_token(user.username)
+    url = request.build_absolute_uri(reverse("users:verify-email", kwargs={"token": token}))
+    prefix = getattr(settings, "EMAIL_SUBJECT_PREFIX", "")
+    subject = f"{prefix}Confirm your FlameCheck account"
+    message = (
+        f"Hi {user.full_name or user.username},\n\n"
+        "your FlameCheck student account has been created. Please confirm your "
+        "e-mail address by opening the link below (it stays valid for 48 hours):\n\n"
+        f"{url}\n\n"
+        "If you did not register for FlameCheck, you can ignore this e-mail.\n"
+    )
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+
+
+@router.get("/registration/config", response=RegistrationConfigOut, auth=None)
+def registration_config(request):
+    """Public registration configuration (active mode + available OAuth providers)."""
+    return {"registration": _registration_mode(), "providers": _configured_providers()}
+
+
+@router.post("/auth/register", response={202: RegisterOut}, auth=None)
+def register(request, payload: RegisterIn):
+    """
+    Create a student account pending e-mail confirmation (self-registration only).
+
+    The account is inactive until the confirmation link in the e-mail is opened.
+    Registration is only possible while the registration mode is
+    ``self_registration``; it always creates a *student*.
+    """
+    ip = _client_ip(request)
+    if _rate_limited(f"register:{ip or 'no-ip'}", _REGISTER_RATE_LIMIT, _REGISTER_WINDOW_SECONDS):
+        raise ValidationError({"email": ["Too many registration attempts. Try again later."]})
+
+    if _registration_mode() != "self_registration":
+        raise HttpError(403, "Registration is not available. Accounts are managed by your instructor.")
+
+    email = payload.email.strip().lower()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise ValidationError({"email": ["Enter a valid e-mail address."]})
+    if User.objects.filter(email__iexact=email).exists():
+        raise HttpError(409, "An account with this e-mail address already exists.")
+    if not payload.first_name.strip() and not payload.last_name.strip():
+        raise ValidationError({"first_name": ["A first or last name is required."]})
+
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    try:
+        validate_password(payload.password)
+    except DjangoValidationError as exc:
+        raise ValidationError({"password": list(exc.messages)}) from exc
+
+    user = User.objects.create_user(
+        username=_derive_username(email),
+        email=email,
+        password=payload.password,
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+        role=User.Role.STUDENT,
+        matriculation_no=payload.matriculation_no.strip(),
+        lab=payload.lab.strip(),
+        telephone=payload.telephone.strip(),
+        is_active=False,  # activated by the e-mail confirmation link
+    )
+    logger.info("Self-registration: pending account %s created (email %s)", user.username, email)
+    _send_verification_email(request, user)
+    return 202, {"message": f"Registration received. Please confirm your e-mail address at {email}."}
+
+
+@router.post("/auth/oauth/exchange", auth=None)
+def oauth_exchange(request):
+    """
+    Exchange an allauth session (from an OAuth sign-in) for a JWT pair.
+
+    The SPA is JWT-based, so after the browser is redirected back from the
+    identity provider (with a Django session set by allauth) this endpoint mints
+    the access/refresh tokens the SPA stores, then clears the session.
+    """
+    _check_same_site(request)
+    user = getattr(request, "user", None)
+    if user is None or not getattr(user, "is_authenticated", False):
+        raise AuthenticationError(401, "No active sign-in session to exchange.")
+
+    out = _login_out(user, request)
+    logger.info("OAuth exchange: %s (%s) obtained a JWT pair", user.username, user.role)
+    logout(request)  # the SPA now relies on the JWT, not the session
+    return out
+
+
+@router.get("/registration/courses", response=list[CourseOptionOut])
+def registration_courses(request):
+    """List the active courses a (student) may pick on the registration page."""
+    user = request.user
+    if not getattr(user, "is_student", False):
+        raise HttpError(403, "Only students can view registration courses.")
+    from config.models import Course
+
+    courses = Course.objects.filter(is_active=True).order_by("name")
+    return [{"id": c.id, "name": c.name} for c in courses]
+
+
+@router.post("/registration/complete", response=UserOut)
+def registration_complete(request, payload: RegistrationIn):
+    """
+    Complete registration for an (OAuth) student.
+
+    Enrols the student in the chosen course, fills in metadata the identity
+    provider did not supply (a random labspace id when none is provided), marks
+    the student registered and generates the course's analyses for them.
+    """
+    user = request.user
+    if not getattr(user, "is_student", False):
+        raise HttpError(403, "Only students can complete registration.")
+    if getattr(user, "registered", True):
+        raise HttpError(409, "Registration was already completed for this account.")
+
+    from config.models import Course
+
+    course = Course.objects.filter(id=payload.course_id, is_active=True).first()
+    if course is None:
+        raise HttpError(404, "Course not found (or inactive).")
+
+    # Preserve values the identity provider already supplied; only override with
+    # non-empty registration input. The labspace is always set (provided or random).
+    if payload.first_name.strip():
+        user.first_name = payload.first_name.strip()
+    if payload.last_name.strip():
+        user.last_name = payload.last_name.strip()
+    if payload.matriculation_no.strip():
+        user.matriculation_no = payload.matriculation_no.strip()
+    if payload.lab.strip():
+        user.lab = payload.lab.strip()
+    if payload.telephone.strip():
+        user.telephone = payload.telephone.strip()
+    user.labspace_id = payload.labspace_id.strip() or generate_labspace_id()
+    user.course = course
+    user.role = User.Role.STUDENT
+    user.registered = True
+    user.is_active = True
+    user.save()
+
+    from analyses.services.registration import NoAnalysisTypeError, generate_course_analyses
+
+    try:
+        instances = generate_course_analyses(user, course)
+    except NoAnalysisTypeError as exc:
+        logger.error("Registration for %s: could not generate analyses (%s)", user.username, exc)
+        raise HttpError(400, "No analysis types are available to generate analyses yet.") from exc
+    logger.info(
+        "Registration complete: %s enrolled in %s (%d analyses generated)",
+        user.username,
+        course.name,
+        len(instances),
+    )
+    return UserOut.from_user(user)

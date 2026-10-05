@@ -20,6 +20,12 @@ from users.api.views import router as auth_router  # noqa: E402
 
 api.add_router("", auth_router)
 
+# Registration endpoints (self-registration, OAuth exchange, course enrolment
+# and analysis generation). Their paths carry their own prefixes, so mount at root.
+from users.api.registration import router as registration_router  # noqa: E402
+
+api.add_router("", registration_router)
+
 # Substances (ions, substances)
 from substances.api.views import router as substances_router  # noqa: E402
 
@@ -39,6 +45,14 @@ api.add_router("assistant", assistant_router)
 from analyses.api.admin import router as admin_router  # noqa: E402
 
 api.add_router("admin", admin_router)
+
+# Multiple choice: student endpoints (own paths /mc-sheets) at root, admin
+# designer endpoints under /admin/multichoice.
+from multichoice.api.admin import router as mc_admin_router  # noqa: E402
+from multichoice.api.student import router as mc_student_router  # noqa: E402
+
+api.add_router("", mc_student_router)
+api.add_router("admin/multichoice", mc_admin_router)
 
 # Login-page branding (public logo/QR + admin upload). Its endpoints carry
 # their own full paths (/branding, /admin/branding/...), so mount at root.

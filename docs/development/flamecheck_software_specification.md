@@ -44,6 +44,13 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 ### 3.3 Admin Configuration
 - **Ion catalog:** Master list of all cations (e.g. Group I–IV/V: Na⁺, K⁺, NH₄⁺, Mg²⁺, Ca²⁺, Ba²⁺, Cu²⁺, Fe²⁺/Fe³⁺, Al³⁺, Zn²⁺, Mn²⁺, etc.) and anions (Cl⁻, Br⁻, I⁻, SO₄²⁻, SO₃²⁻, CO₃²⁻, PO₄³⁻, NO₃⁻, NO₂⁻, S²⁻, etc.).
                   - importable from CSV or JSON for easy updates.
+                  - every ion is stored under a single **canonical symbol** of the
+                    form `<formula><sign><magnitude>` (e.g. `Na+1`, `Mg+2`, `SO4-2`);
+                    the magnitude digit is always present. Human input is
+                    normalized to this form (Unicode IUPAC charges such as `SO₄²⁻`
+                    and whitespace are accepted) and the `charge` / `kind` are
+                    derived from the symbol. See
+                    {doc}`ion_symbol_convention` for the full specification.
 - **Substance catalog:** Optional mapping of ions to common salts (e.g., NaCl, KBr, CuSO₄) for reference.
                       - substance catalog should be importable from CSV or JSON for easy updates.
                       - ions should be deducible from substances, but the system should allow for ions to be defined independently of substances.
@@ -53,8 +60,15 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 - **Time windows:** Per-analysis start/end date and time for each submission controlled by the admin (e.g., "3rd analysis: 2026-11-01-2026-11-30 10:00–12:00h") [1].
                     - UI should display the current status: "open", "too early", "too late", or "submitted".
 - **Barcodes:** Generate and assign unique barcodes (Code128 or QR) to students/analysis sheets.
-
-
+- **Multiple choice (per course):** In addition to the analyses, a course can
+  carry multiple-choice cards. An admin defines, per course:
+  - **Questions:** a text, a list of options with exactly one marked correct,
+    plus a *description* and *remarks* field (admin-only documentation,
+    editable in the designer UI).
+  - **Cards:** a grouping of **1 to 3 questions** (the unit a student answers).
+  - **Sheets:** a time-windowed presentation of a card, assigned to chosen
+    students (mirroring the analysis instance window/assignment model).
+  A dedicated admin *Multiple Choice* page is the designer for all three.
 
 ### 3.3 Grading Logic
 - **Per-ion mode (default, as described):** 
@@ -64,6 +78,12 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
     - number of submissions per analysis can be limited (e.g., 1–3) by admin.
     - optionally configurable to deduct points for false positives.
 - **Per-analysis mode (alternative, admin-selectable):** 10 points only if the full ion set is exactly correct.
+- **Multiple choice (per course):** a fully correct card earns the course's
+  *points per card* (default **10**); each wrongly answered question deducts
+  the course's *penalty per wrong answer* (default **2**). The card score is
+  the points minus the penalty times the number of wrong answers, floored at
+  zero. Both values are per-course configurable (alongside the analysis
+  grading).
 - Results are final upon submission (no editing), consistent with the "Kontrollabfrage → Ergebnis" flow [1].
 
 ## 4. Technical Architecture
@@ -74,14 +94,16 @@ Additionally, some user defined analysis types should be possible, e.g. for spec
 - **SQLite** (default) or **PostgreSQL** database. The backend is selected through the `DATABASE_URL` variable in the `.env` file (see `.env-template`); the default is a local SQLite file, and PostgreSQL is opt-in.
 - **Authentication:** Token-based (JWT) for API; session cookie for web frontend. Django allauth (with shibboleth support) for login (students, assistants, admins).
 - **Models (core):
-  - separate apps for `users`, `analyses`, `substances`, `config`:
+  - separate apps for `users`, `analyses`, `substances`, `config`, `multichoice`:
   - `User` (extends Django user; role: student/assistant/admin), `StudentBarcode` (unique barcode value, FK student)
   - `Ion` (name, symbol, charge, type: cation/anion, group)
   - `Substance` (name, synonyms, formula, ions M2M, pubchem ids, wikipedia link)
   - `AnalysisType` (name, list of possible ions)
   - `AnalysisInstance` (FK AnalysisType, FK assigned student, correct ion set, time window start/end, status, score)
   - `Submission` (FK AnalysisInstance, selected ions M2M, timestamp, score, auto-graded)
-  - `Config` (points per correct analysis, analyses per course, active course)
+  - `Config` (points per correct analysis, analyses per course, active course; also the per-course multiple-choice grading: points per card, penalty per wrong answer)
+  - `MCQuestion` (FK course, text, description, remarks, options), `MCOption` (FK question, text, is_correct, order)
+  - `MCCard` (FK course, title, description, remarks; 1–3 ordered questions), `MCSheet` (FK card, FK course, time window, number, student assignments), `MCSubmission` (FK sheet, FK student, answers, timestamp, score, auto-graded)
 - **API endpoints:**
   - `POST /api/v1/auth/barcode/scan/` → validates a barcode server-side, applies rate limits, and returns a short-lived access/refresh token pair plus the authenticated user's role and assigned analyses. It must not disclose whether an unrecognized barcode belongs to another user.
   - `POST /api/v1/auth/login/` → username/password login for users without barcode access; institutional SSO uses the configured OIDC/Shibboleth callback and issues the same token format.

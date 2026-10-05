@@ -25,6 +25,11 @@ role.
    dialog is shown first.
 4. After submitting (or once the window has closed) the **result** is revealed,
    including the score, the per-ion breakdown and the correct answer key.
+5. **Multiple-choice cards** (when the course has any) are listed below the
+   analyses, each with its own time window. Open a card while the window is
+   **open**, pick one option per question, and submit. A fully correct card
+   earns the course's points-per-card; each wrong answer deducts the configured
+   penalty.
 
 Submissions are immutable and timestamped. A client-generated idempotency key
 guarantees that a retried submission does not create a duplicate. Retries are
@@ -55,17 +60,40 @@ penalised according to the grading configuration (second attempt, third attempt)
    per concern:
    - **Settings** — every setting of the submission system in one place:
      the *application settings* (points per analysis, analyses per course,
-     the currently active course) and the *grading configuration* (points per
-     ion, retry penalties, false-positive deduction, grading mode per ion /
-     per analysis, submission limit, final-score strategy best / last).
+     the currently active course), the *global grading configuration*
+     (mode, points, penalties, submission limit, final-score strategy,
+     pass mark, multiple-choice points), the *registration mode*, the
+     *e-mail notification* settings (SMTP + PGP) and the *database* backup
+     controls.
    - **Courses** — create, edit and delete courses (name, semester, track,
-     active). Open *Students* on any course to see who is enrolled there and
-     remove students; assign a student to a course from here.
+     active, and the per-course *notify the student* e-mail switch). Open
+     *Students* on any course to see who is enrolled there and remove
+     students; assign a student to a course from here. Each course also has a
+     *Grading* card with its own (overriding) grading configuration — see
+     {ref}`Grading <grading>`.
    - **Analysis Types** — the user-defined analysis catalog. Create, edit and
-     delete types and pick each type's possible ion set.
+     delete types and pick each type's possible ion set; click a row to open
+     the edit form.
+   - **Substances** — the substance catalog. Import and export the catalog as
+     CSV; click a row to edit a substance (name, synonyms, formula, ion set
+     and the PubChem / Wikipedia reference).
+   - **Multiple Choice** — the per-course multiple-choice designer. Select a
+     course, then define *questions* (text, options with one correct answer,
+     plus a description and remarks for your own documentation), group up to
+     three questions into a *card*, and present a time-windowed *sheet* to
+     chosen students. The page also holds the course's multiple-choice
+     grading (points per fully correct card, penalty per wrong answer).
    - **Assignments** — pick a course to see its analysis sheets (instances);
      open *Manage* on a sheet to choose which students receive it (and the
      announcement number).
+   - **Ion symbols** — ions are written in one canonical form,
+     `<formula><sign><magnitude>` with the digit always present (e.g. `Na+1`,
+     `Mg+2`, `SO4-2`). When you create an ion or import substances by CSV the
+     symbol is normalized to this form automatically (Unicode IUPAC charges
+     such as `SO₄²⁻` and extra whitespace are accepted); the charge and
+     cation/anion kind are derived from the symbol. The full rule set, the
+     IUPAC display form and the migration from the old notation are described
+     in {doc}`the ion symbol convention <development/ion_symbol_convention>`.
 3. The same settings are also editable in the standard Django admin
    (`/admin-django/`, reachable via the "Django admin" link in the SPA admin
    panel). Each setting has its own edit page: open *Grading configuration* or
@@ -90,3 +118,12 @@ Authentication is via JWT bearer tokens:
 - `POST /api/v1/auth/token/refresh` — rotate the access token.
 - `POST /api/v1/auth/logout` — invalidate the current token version.
 - `GET /api/v1/me` — current user profile.
+
+The full setup — how accounts are created, all sign-in methods (password,
+barcode, self-registration, OAuth/Keycloak), the token lifecycle and the
+registration modes — is described on the
+{ref}`Registration & authentication <registration>` page.
+
+For the mechanics of the tasks themselves, see
+{ref}`Analyses <analyses>`, {ref}`Multiple choice <multichoice>` and
+{ref}`Grading <grading>`.

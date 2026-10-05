@@ -2,8 +2,31 @@ import { useAuthStore } from '../stores/auth'
 
 const BASE = '/api/v1'
 
+/**
+ * Refresh the access token before a request if it is expired or about to
+ * expire, so the request goes out authenticated and does not 401 on token
+ * expiry. If the refresh itself fails (e.g. the refresh token is also
+ * expired) this resolves silently and the caller's 401 handling surfaces it.
+ *
+ * `raw` requests are skipped: the token-refresh call itself is a `raw`
+ * request, and re-entering the refresh here would wait on the same
+ * in-flight promise (a deadlock). The refresh endpoint is public and
+ * validates the refresh token in the body, not the access token.
+ */
+async function ensureFreshToken(auth, opts = {}) {
+  if (opts.raw) return
+  if (auth.accessToken && auth.refreshToken && auth.needsTokenRefresh) {
+    try {
+      await auth.refresh()
+    } catch {
+      /* fall through to the request, which will 401 and surface the error */
+    }
+  }
+}
+
 async function request(method, path, body, opts = {}) {
   const auth = useAuthStore()
+  await ensureFreshToken(auth, opts)
   const headers = { 'Content-Type': 'application/json' }
   if (auth.accessToken) {
     headers['Authorization'] = `Bearer ${auth.accessToken}`
@@ -52,6 +75,7 @@ async function request(method, path, body, opts = {}) {
  */
 async function upload(path, file, fields = {}) {
   const auth = useAuthStore()
+  await ensureFreshToken(auth)
   const form = new FormData()
   form.append('file', file)
   for (const [key, value] of Object.entries(fields)) {
@@ -75,6 +99,7 @@ async function upload(path, file, fields = {}) {
  */
 async function download(path, filename) {
   const auth = useAuthStore()
+  await ensureFreshToken(auth)
   const headers = {}
   if (auth.accessToken) headers['Authorization'] = `Bearer ${auth.accessToken}`
   const res = await fetch(`${BASE}${path}`, { headers })

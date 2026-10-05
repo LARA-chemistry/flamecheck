@@ -6,21 +6,296 @@
         <n-button type="primary" size="small" @click="openCreate">+ New Course</n-button>
       </div>
 
-      <n-data-table :columns="courseCols" :data="courses" size="small" :loading="loading" />
+      <!-- Clicking a course row opens the course detail view below (like the
+           assistant's course view). -->
+      <n-data-table
+        :columns="courseCols"
+        :data="courses"
+        size="small"
+        :loading="loading"
+        :row-props="courseRowProps"
+      />
     </n-card>
 
-    <!-- Students in the selected course -->
+    <!-- Course detail view: tabbed navigation over the per-course work areas. -->
     <n-card v-if="selected" size="small" :bordered="false">
       <div class="page-head">
-        <h2 class="page-title">Students — {{ selected.name }}</h2>
+        <h2 class="page-title">
+          {{ selected.name }}
+          <span class="muted">({{ selected.semester }}{{ selected.track ? ', ' + selected.track : '' }})</span>
+        </h2>
         <n-space size="small">
-          <n-button type="primary" size="small" @click="openAddStudent">+ Add Student</n-button>
-          <n-button size="small" @click="openImport">Import CSV</n-button>
-          <n-button size="small" @click="loadStudents(selected.id)">Refresh</n-button>
+          <n-button size="small" @click="openEdit(selected)">Edit</n-button>
         </n-space>
       </div>
-      <n-empty v-if="!loadingStudents && courseStudents.length === 0" description="No students in this course yet." size="small" />
-      <n-data-table v-else :columns="studentCols" :data="courseStudents" size="small" :loading="loadingStudents" />
+
+      <n-radio-group
+        :value="courseView"
+        size="small"
+        class="course-nav"
+        @update:value="switchCourseView"
+      >
+        <n-radio-button value="assign">Assign</n-radio-button>
+        <n-radio-button value="members">Members</n-radio-button>
+        <n-radio-button value="analyses">Analyses</n-radio-button>
+        <n-radio-button value="multichoice">Multiple Choice</n-radio-button>
+        <n-radio-button value="grading">Grading</n-radio-button>
+        <n-radio-button value="calendar">Calendar</n-radio-button>
+      </n-radio-group>
+
+      <!-- View content, keyed by course + active view so Vue swaps the whole
+           subtree (avoids mis-patching the v-for lists). -->
+      <div :key="`${selected.id}:${courseView}`">
+        <!-- Members: the course roster (students and assistants). -->
+        <template v-if="courseView === 'members'">
+          <n-space align="center" style="margin-bottom: 8px">
+            <n-button type="primary" size="small" @click="openAddMember('student')">+ Add Student</n-button>
+            <n-button type="primary" size="small" secondary @click="openAddMember('assistant')">+ Add Assistant</n-button>
+            <n-button size="small" @click="openImport">Import CSV</n-button>
+            <n-button size="small" @click="loadMembers()">Refresh</n-button>
+          </n-space>
+          <n-empty v-if="!loadingMembers && courseMembers.length === 0" description="No members in this course yet." size="small" />
+          <n-data-table
+            v-else
+            :columns="memberCols"
+            :data="courseMembers"
+            size="small"
+            :loading="loadingMembers"
+            :row-props="memberRowProps"
+          />
+        </template>
+
+        <!-- Assign: enroll (or move) members into this course. -->
+        <template v-else-if="courseView === 'assign'">
+          <n-space vertical>
+            <n-text depth="3" style="font-size: 13px">
+              Members you select are enrolled in this course (their current course, if any, is replaced).
+            </n-text>
+            <n-select
+              v-model:value="assignMemberIds"
+              :options="assignableMemberOptions"
+              multiple
+              filterable
+              placeholder="Select students or assistants to add to this course"
+              style="max-width: 560px"
+            />
+            <n-text v-if="alreadyInCourseCount" depth="3" style="font-size: 13px">
+              {{ alreadyInCourseCount }} member{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
+            </n-text>
+            <n-button
+              type="primary"
+              size="small"
+              :loading="assignSaving"
+              :disabled="assignMemberIds.length === 0"
+              @click="saveAssign"
+            >
+              Assign {{ assignMemberIds.length || '' }} Member{{ assignMemberIds.length === 1 ? '' : 's' }}
+            </n-button>
+          </n-space>
+        </template>
+
+        <!-- Analyses: this course's analysis instances. -->
+        <template v-else-if="courseView === 'analyses'">
+          <n-space align="center" style="margin-bottom: 8px">
+            <n-button type="primary" size="small" @click="goToAssignments">Manage Assignments</n-button>
+            <n-button size="small" @click="loadCourseInstances()">Refresh</n-button>
+          </n-space>
+          <n-empty v-if="!loadingInstances && courseInstances.length === 0" description="No analyses for this course yet." size="small" />
+          <n-data-table
+            v-else
+            :columns="analysisCols"
+            :data="courseInstances"
+            size="small"
+            :loading="loadingInstances"
+            :row-props="analysisRowProps"
+          />
+        </template>
+
+        <!-- Multiple Choice: per-course questions, cards, sheets and grading. -->
+        <template v-else-if="courseView === 'multichoice'">
+          <MCDesigner :course-id="selected.id" />
+        </template>
+
+        <!-- Grading: per-course grading configuration. -->
+        <template v-else-if="courseView === 'grading'">
+          <n-space vertical>
+            <n-text depth="3" style="font-size: 13px">
+              Overrides the default grading configuration for this course only.
+            </n-text>
+            <n-form label-placement="left" label-width="200" style="max-width: 640px">
+              <n-form-item label="Grading mode">
+                <n-select
+                  v-model:value="gradingForm.grading_mode"
+                  :options="[{ label: 'Per Ion', value: 'per_ion' }, { label: 'Per Analysis', value: 'per_analysis' }]"
+                />
+              </n-form-item>
+              <n-form-item :label="pointsLabel">
+                <n-input-number v-model:value="gradingForm.points_per_correct_ion" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_ion'" label="Penalty 2nd submission">
+                <n-input-number v-model:value="gradingForm.penalty_second_submission" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_ion'" label="Penalty 3rd submission">
+                <n-input-number v-model:value="gradingForm.penalty_third_submission" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_ion'" label="False positive deduction">
+                <n-input-number v-model:value="gradingForm.false_positive_deduction" :min="0" />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.grading_mode === 'per_analysis'" label=" " :show-label="false">
+                <n-text depth="3" style="font-size: 12px">
+                  Per-analysis mode is all-or-nothing: full points only when every ion is correct.
+                  Retry penalties do not apply.
+                </n-text>
+              </n-form-item>
+              <n-form-item label="Max submissions per analysis">
+                <n-input-number v-model:value="gradingForm.max_submissions_per_analysis" :min="1" />
+              </n-form-item>
+              <n-form-item label="Final score strategy">
+                <n-select
+                  v-model:value="gradingForm.final_score_strategy"
+                  :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
+                />
+              </n-form-item>
+              <n-form-item label="Submission mode">
+                <n-select
+                  v-model:value="gradingForm.submission_mode"
+                  :options="[
+                    { label: 'Resubmit (default)', value: 'resubmit' },
+                    { label: 'New analysis on wrong submission', value: 'new_analysis' },
+                  ]"
+                />
+              </n-form-item>
+              <n-form-item v-if="gradingForm.submission_mode === 'new_analysis'" label="Retry point deduction">
+                <n-input-number v-model:value="gradingForm.retry_point_deduction" :min="0" />
+              </n-form-item>
+              <n-form-item label="Min. points to pass">
+                <n-input-number v-model:value="gradingForm.passing_score" :min="0" />
+              </n-form-item>
+              <n-form-item label="MC: points per card (all correct)">
+                <n-input-number v-model:value="gradingForm.mc_points_per_card" :min="0" />
+              </n-form-item>
+              <n-form-item label="MC: penalty per wrong answer">
+                <n-input-number v-model:value="gradingForm.mc_penalty_per_wrong" :min="0" />
+              </n-form-item>
+            </n-form>
+            <n-button type="primary" size="small" :loading="gradingSaving" @click="saveGrading">
+              Save Course Grading
+            </n-button>
+          </n-space>
+        </template>
+
+        <!-- Calendar: the course's analysis windows (week / month views). -->
+        <template v-else-if="courseView === 'calendar'">
+          <n-space vertical size="medium">
+            <div class="cal-toolbar">
+              <n-radio-group v-model:value="calendarView" size="small">
+                <n-space :wrap="false">
+                  <n-radio-button value="week">Week</n-radio-button>
+                  <n-radio-button value="month">Month</n-radio-button>
+                </n-space>
+              </n-radio-group>
+              <span class="cal-toolbar__spacer" />
+              <n-text depth="3" class="cal-legend-text" style="font-size: 12px">
+                <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
+                <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
+                <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
+                <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
+              </n-text>
+            </div>
+
+            <n-spin :show="loadingInstances">
+              <n-empty v-if="!loadingInstances && courseInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
+
+              <!-- WEEK VIEW: one row per analysis, a bar across the days it spans -->
+              <div v-else-if="calendarView === 'week'" class="weekcal">
+                <div class="weekcal__head">
+                  <div class="weekcal__corner">Analysis</div>
+                  <div class="weekcal__head-days">
+                    <div
+                      v-for="d in calendarDays"
+                      :key="d.dateKey"
+                      class="weekcal__day"
+                      :class="{ 'weekcal__day--weekend': d.isWeekend }"
+                      :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
+                    >
+                      <span class="weekcal__day-dow">{{ d.dowLabel }}</span>
+                      <span class="weekcal__day-date">{{ d.dayNum }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="weekcal__body">
+                  <div class="weekcal__grid-layer" aria-hidden="true">
+                    <div
+                      v-for="d in calendarWeekendDays"
+                      :key="'wk-' + d.dateKey"
+                      class="weekcal__weekend"
+                      :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
+                    ></div>
+                    <div
+                      v-for="d in calendarDays"
+                      :key="'ln-' + d.dateKey"
+                      class="weekcal__vline"
+                      :class="{ 'weekcal__vline--week': d.isSunday }"
+                      :style="{ left: d.leftPct + '%' }"
+                    ></div>
+                  </div>
+
+                  <div v-for="inst in calendarInstances" :key="inst.id" class="weekcal__row">
+                    <div class="weekcal__row-label" :title="inst.type">
+                      <span class="weekcal__num">#{{ inst.number }}</span>
+                      <span class="weekcal__type">{{ inst.type }}</span>
+                    </div>
+                    <div class="weekcal__track">
+                      <div
+                        class="weekcal__bar"
+                        :class="`weekcal__bar--${windowStatus(inst)}`"
+                        :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
+                        :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
+                      >
+                        <span class="weekcal__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- MONTH VIEW: a Sun..Sat week grid; each day cell lists the analyses
+                   whose window covers that day -->
+              <div v-else class="monthcal">
+                <div class="monthcal__dow">
+                  <span v-for="d in DOW" :key="d" class="monthcal__dow-cell" :class="{ 'monthcal__dow-cell--weekend': d === 'Sun' || d === 'Sat' }">{{ d }}</span>
+                </div>
+                <div v-for="(week, wi) in calendarMonthWeeks" :key="wi" class="monthcal__week">
+                  <div
+                    v-for="cell in week"
+                    :key="cell.dateKey"
+                    class="monthcal__cell"
+                    :class="{
+                      'monthcal__cell--weekend': cell.isWeekend,
+                      'monthcal__cell--other': !cell.inRange,
+                    }"
+                  >
+                    <span class="monthcal__cell-date" :title="cell.monthLabel + ' ' + cell.dayNum">{{ cell.dayNum }}</span>
+                    <div class="monthcal__chips">
+                      <div
+                        v-for="inst in cell.instances"
+                        :key="inst.id"
+                        class="monthcal__chip"
+                        :class="`monthcal__chip--${inst.status}`"
+                        :title="`${inst.type} #${inst.number}: ${fmt(inst.start)} → ${fmt(inst.end)}`"
+                      >
+                        <span class="monthcal__chip-num">#{{ inst.number }}</span>
+                        <span class="monthcal__chip-type">{{ inst.type }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </n-spin>
+          </n-space>
+        </template>
+      </div>
     </n-card>
 
     <!-- Create / edit modal -->
@@ -38,6 +313,13 @@
         <n-form-item label="Active">
           <n-switch v-model:value="modal.form.is_active" />
         </n-form-item>
+        <n-form-item label="Notify student">
+          <n-switch v-model:value="modal.form.notify_student_on_submission" />
+          <div class="form-hint">
+            Send the student a PGP-encrypted e-mail confirmation for every submission
+            (requires ALLOW_EMAILS to be enabled in the container).
+          </div>
+        </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
@@ -48,140 +330,57 @@
       </template>
     </n-modal>
 
-    <!-- Per-course grading settings -->
-    <n-modal v-model:show="grading.show" preset="card" :title="`Grading — ${grading.courseName}`" style="width: 500px; max-width: 94vw">
-      <n-text depth="3" style="font-size: 13px; display:block; margin-bottom: 12px">
-        Overrides the default grading configuration for this course only.
-      </n-text>
-      <n-form label-placement="left" label-width="200">
-        <n-form-item label="Grading mode">
-          <n-select
-            v-model:value="grading.form.grading_mode"
-            :options="[{ label: 'Per Ion', value: 'per_ion' }, { label: 'Per Analysis', value: 'per_analysis' }]"
-          />
-        </n-form-item>
-        <n-form-item :label="pointsLabel">
-          <n-input-number v-model:value="grading.form.points_per_correct_ion" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="Penalty 2nd submission">
-          <n-input-number v-model:value="grading.form.penalty_second_submission" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="Penalty 3rd submission">
-          <n-input-number v-model:value="grading.form.penalty_third_submission" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_ion'" label="False positive deduction">
-          <n-input-number v-model:value="grading.form.false_positive_deduction" :min="0" />
-        </n-form-item>
-        <n-form-item v-if="grading.form.grading_mode === 'per_analysis'" label=" " :show-label="false">
-          <n-text depth="3" style="font-size: 12px">
-            Per-analysis mode is all-or-nothing: full points only when every ion is correct.
-            Retry penalties do not apply.
-          </n-text>
-        </n-form-item>
-        <n-form-item label="Max submissions per analysis">
-          <n-input-number v-model:value="grading.form.max_submissions_per_analysis" :min="1" />
-        </n-form-item>
-        <n-form-item label="Final score strategy">
-          <n-select
-            v-model:value="grading.form.final_score_strategy"
-            :options="[{ label: 'Best', value: 'best' }, { label: 'Last', value: 'last' }]"
-          />
-        </n-form-item>
-        <n-form-item label="Min. points to pass">
-          <n-input-number v-model:value="grading.form.passing_score" :min="0" />
-        </n-form-item>
-        <n-text depth="3" style="font-size: 12px; display:block; padding-left: 200px">
-          Minimum total points across all analyses of this course to pass it (0 disables).
-        </n-text>
-      </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="grading.show = false">Cancel</n-button>
-          <n-button type="primary" :loading="grading.saving" @click="saveGrading">Save Course Grading</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
-    <!-- Assign (enroll) students into the course -->
-    <n-modal v-model:show="assign.show" preset="card" :title="`Assign students — ${assign.courseName}`" style="width: 520px; max-width: 94vw">
+    <!-- Add / edit a member (student or assistant) account -->
+    <n-modal v-model:show="memberModal.show" preset="card" :title="memberModalTitle" style="width: 520px; max-width: 94vw">
       <n-space vertical>
-        <n-text depth="3" style="font-size: 13px; display:block">
-          Students you select are enrolled in this course (their current course, if any, is replaced).
-        </n-text>
-        <n-select
-          v-model:value="assign.studentIds"
-          :options="assignableStudentOptions"
-          multiple
-          filterable
-          placeholder="Select students to add to this course"
-        />
-        <n-text v-if="alreadyInCourseCount" depth="3" style="font-size: 13px">
-          {{ alreadyInCourseCount }} student{{ alreadyInCourseCount === 1 ? '' : 's' }} already in this course.
-        </n-text>
-      </n-space>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="assign.show = false">Cancel</n-button>
-          <n-button
-            type="primary"
-            :loading="assign.saving"
-            :disabled="assign.studentIds.length === 0"
-            @click="saveAssign"
-          >
-            Assign {{ assign.studentIds.length || '' }} Student{{ assign.studentIds.length === 1 ? '' : 's' }}
-          </n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
-    <!-- Add / edit a student account -->
-    <n-modal v-model:show="studentModal.show" preset="card" :title="studentModal.editing ? `Edit student — ${studentModal.form.username}` : 'Add student'" style="width: 520px; max-width: 94vw">
-      <n-space vertical>
-        <n-alert v-if="studentModal.generatedPassword" type="success" title="Student created">
+        <n-alert v-if="memberModal.generatedPassword" type="success" title="Account created">
           The initial (auto-generated) password is
-          <code style="font-weight: 700">{{ studentModal.generatedPassword }}</code> — share it with the student and have them change it after first login.
+          <code style="font-weight: 700">{{ memberModal.generatedPassword }}</code> — share it with the member and have them change it after first login.
         </n-alert>
         <n-form label-placement="left" label-width="130">
           <n-form-item label="Username">
-            <n-input v-model:value="studentModal.form.username" placeholder="e.g. jdoe" />
+            <n-input v-model:value="memberModal.form.username" placeholder="e.g. jdoe" />
           </n-form-item>
-          <n-form-item :label="studentModal.editing ? 'New password' : 'Password'">
+          <n-form-item :label="memberModal.editing ? 'New password' : 'Password'">
             <n-input
-              v-model:value="studentModal.form.password"
-              :placeholder="studentModal.editing ? 'Leave blank to keep the current password' : 'Leave blank to auto-generate'"
+              v-model:value="memberModal.form.password"
+              :placeholder="memberModal.editing ? 'Leave blank to keep the current password' : 'Leave blank to auto-generate'"
             />
           </n-form-item>
-          <n-form-item label="Name">
-            <n-input v-model:value="studentModal.form.name" placeholder="e.g. Jane Doe" />
+          <n-form-item label="First name">
+            <n-input v-model:value="memberModal.form.first_name" placeholder="e.g. Jane" />
+          </n-form-item>
+          <n-form-item label="Last name">
+            <n-input v-model:value="memberModal.form.last_name" placeholder="e.g. Doe" />
           </n-form-item>
           <n-form-item label="Email">
-            <n-input v-model:value="studentModal.form.email" placeholder="e.g. jane.doe@example.com" />
+            <n-input v-model:value="memberModal.form.email" placeholder="e.g. jane.doe@example.com" />
           </n-form-item>
-          <n-form-item label="Matriculation no.">
-            <n-input v-model:value="studentModal.form.matriculation_no" placeholder="e.g. M123456" />
+          <n-form-item v-if="memberModal.role === 'student'" label="Matriculation no.">
+            <n-input v-model:value="memberModal.form.matriculation_no" placeholder="e.g. M123456" />
           </n-form-item>
           <n-form-item label="Lab">
-            <n-input v-model:value="studentModal.form.lab" placeholder="e.g. Inorganic Chemistry, Biology track" />
+            <n-input v-model:value="memberModal.form.lab" placeholder="e.g. Inorganic Chemistry, Biology track" />
           </n-form-item>
           <n-form-item label="Labspace ID">
-            <n-input v-model:value="studentModal.form.labspace_id" placeholder="e.g. LS-000123" />
+            <n-input v-model:value="memberModal.form.labspace_id" placeholder="e.g. LS-000123" />
           </n-form-item>
           <n-form-item label="Telephone">
-            <n-input v-model:value="studentModal.form.telephone" placeholder="e.g. +49 151 2345678" />
+            <n-input v-model:value="memberModal.form.telephone" placeholder="e.g. +49 151 2345678" />
           </n-form-item>
-          <n-form-item v-if="!studentModal.editing" label="Course">
-            <n-select v-model:value="studentModal.form.course_id" :options="courseOptions" clearable placeholder="No course" />
+          <n-form-item v-if="!memberModal.editing" label="Course">
+            <n-select v-model:value="memberModal.form.course_id" :options="courseOptions" clearable placeholder="No course" />
           </n-form-item>
           <n-form-item v-else label="Active">
-            <n-switch v-model:value="studentModal.form.is_active" />
+            <n-switch v-model:value="memberModal.form.is_active" />
           </n-form-item>
         </n-form>
       </n-space>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="studentModal.show = false">Close</n-button>
-          <n-button type="primary" :loading="studentModal.saving" @click="saveStudent">
-            {{ studentModal.editing ? 'Save' : 'Create' }}
+          <n-button @click="memberModal.show = false">Close</n-button>
+          <n-button type="primary" :loading="memberModal.saving" @click="saveMember">
+            {{ memberModal.editing ? 'Save' : 'Create' }}
           </n-button>
         </n-space>
       </template>
@@ -234,119 +433,54 @@
       </template>
     </n-modal>
 
-    <!-- Window calendar (week / month views) for the course's analyses -->
-    <n-modal v-model:show="calendar.show" preset="card" :title="`Window calendar — ${calendar.courseName}`" style="width: 96vw; max-width: 1040px">
+    <!-- Edit a single analysis instance (opened by clicking an Analyses row). -->
+    <n-modal
+      v-model:show="instanceModal.show"
+      preset="card"
+      :title="instanceModal.instance ? `Edit ${instanceModal.instance.type} #${instanceModal.instance.number}` : 'Edit analysis'"
+      style="width: 560px; max-width: 94vw"
+    >
       <n-space vertical size="medium">
-        <div class="cal-toolbar">
-          <n-radio-group v-model:value="calendar.view" size="small">
-            <n-space :wrap="false">
-              <n-radio-button value="week">Week</n-radio-button>
-              <n-radio-button value="month">Month</n-radio-button>
-            </n-space>
-          </n-radio-group>
-          <span class="cal-toolbar__spacer" />
-          <n-text depth="3" class="cal-legend-text" style="font-size: 12px">
-            <span class="cal-legend"><i class="cal-legend__swatch cal-legend__swatch--weekend"></i>weekend</span>
-            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--open"></i>open</span>
-            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--early"></i>too early</span>
-            <span class="cal-legend"><i class="cal-legend__dot cal-legend__dot--late"></i>too late</span>
-          </n-text>
-        </div>
-
-        <n-spin :show="calendar.loading">
-          <n-empty v-if="!calendar.loading && calendarInstances.length === 0" description="No analyses (windows) for this course yet." size="small" />
-
-          <!-- WEEK VIEW: one row per analysis, a bar across the days it spans -->
-          <div v-else-if="calendar.view === 'week'" class="weekcal">
-            <div class="weekcal__head">
-              <div class="weekcal__corner">Analysis</div>
-              <div class="weekcal__head-days">
-                <div
-                  v-for="d in calendarDays"
-                  :key="d.dateKey"
-                  class="weekcal__day"
-                  :class="{ 'weekcal__day--weekend': d.isWeekend }"
-                  :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
-                >
-                  <span class="weekcal__day-dow">{{ d.dowLabel }}</span>
-                  <span class="weekcal__day-date">{{ d.dayNum }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="weekcal__body">
-              <div class="weekcal__grid-layer" aria-hidden="true">
-                <div
-                  v-for="d in calendarWeekendDays"
-                  :key="'wk-' + d.dateKey"
-                  class="weekcal__weekend"
-                  :style="{ left: d.leftPct + '%', width: d.widthPct + '%' }"
-                ></div>
-                <div
-                  v-for="d in calendarDays"
-                  :key="'ln-' + d.dateKey"
-                  class="weekcal__vline"
-                  :class="{ 'weekcal__vline--week': d.isSunday }"
-                  :style="{ left: d.leftPct + '%' }"
-                ></div>
-              </div>
-
-              <div v-for="inst in calendarInstances" :key="inst.id" class="weekcal__row">
-                <div class="weekcal__row-label" :title="inst.type">
-                  <span class="weekcal__num">#{{ inst.number }}</span>
-                  <span class="weekcal__type">{{ inst.type }}</span>
-                </div>
-                <div class="weekcal__track">
-                  <div
-                    class="weekcal__bar"
-                    :class="`weekcal__bar--${windowStatus(inst)}`"
-                    :style="{ left: barPosition(inst).left + '%', width: barPosition(inst).width + '%' }"
-                    :title="`${inst.type} #${inst.number}: ${fmt(inst.window_start)} → ${fmt(inst.window_end)}`"
-                  >
-                    <span class="weekcal__bar-text">{{ fmtShort(inst.window_start) }} – {{ fmtShort(inst.window_end) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- MONTH VIEW: a Sun..Sat week grid; each day cell lists the analyses
-               whose window covers that day -->
-          <div v-else class="monthcal">
-            <div class="monthcal__dow">
-              <span v-for="d in DOW" :key="d" class="monthcal__dow-cell" :class="{ 'monthcal__dow-cell--weekend': d === 'Sun' || d === 'Sat' }">{{ d }}</span>
-            </div>
-            <div v-for="(week, wi) in calendarMonthWeeks" :key="wi" class="monthcal__week">
-              <div
-                v-for="cell in week"
-                :key="cell.dateKey"
-                class="monthcal__cell"
-                :class="{
-                  'monthcal__cell--weekend': cell.isWeekend,
-                  'monthcal__cell--other': !cell.inRange,
-                }"
-              >
-                <span class="monthcal__cell-date" :title="cell.monthLabel + ' ' + cell.dayNum">{{ cell.dayNum }}</span>
-                <div class="monthcal__chips">
-                  <div
-                    v-for="inst in cell.instances"
-                    :key="inst.id"
-                    class="monthcal__chip"
-                    :class="`monthcal__chip--${inst.status}`"
-                    :title="`${inst.type} #${inst.number}: ${fmt(inst.start)} → ${fmt(inst.end)}`"
-                  >
-                    <span class="monthcal__chip-num">#{{ inst.number }}</span>
-                    <span class="monthcal__chip-type">{{ inst.type }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </n-spin>
+        <n-form label-placement="left" label-width="130">
+          <n-form-item label="Announcement no.">
+            <n-input-number v-model:value="instanceModal.form.number" :min="1" :max="999" style="width: 120px" />
+          </n-form-item>
+          <n-form-item label="Window opens">
+            <n-date-picker
+              v-model:formatted-value="instanceModal.form.window_start"
+              type="datetime"
+              value-format="yyyy-MM-dd HH:mm"
+              format="yyyy-MM-dd HH:mm"
+              placeholder="yyyy-MM-dd HH:mm"
+            />
+          </n-form-item>
+          <n-form-item label="Window closes">
+            <n-date-picker
+              v-model:formatted-value="instanceModal.form.window_end"
+              type="datetime"
+              value-format="yyyy-MM-dd HH:mm"
+              format="yyyy-MM-dd HH:mm"
+              placeholder="yyyy-MM-dd HH:mm"
+            />
+          </n-form-item>
+          <n-form-item label="Correct ions">
+            <n-select
+              v-model:value="instanceModal.form.correct_ion_ids"
+              :options="instanceModal.possibleIons.map((i) => ({ label: `${i.symbol} — ${i.name}`, value: i.id }))"
+              multiple
+              filterable
+              placeholder="Select the ions present in this analysis"
+            />
+          </n-form-item>
+        </n-form>
+        <n-text depth="3" style="font-size: 12px">
+          The correct ions are the answer key for this analysis; they are chosen from the type's possible ions.
+        </n-text>
       </n-space>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="calendar.show = false">Close</n-button>
+          <n-button @click="instanceModal.show = false">Cancel</n-button>
+          <n-button type="primary" :loading="instanceModal.saving" @click="saveInstance">Save</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -361,8 +495,9 @@ import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NText, NDataTable, NCard, NForm, NFormItem,
-  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload,
+  NModal, NSwitch, NEmpty, NAlert, NRadioGroup, NRadioButton, NUpload, NSpin, NDatePicker,
 } from 'naive-ui'
+import MCDesigner from '../components/MCDesigner.vue'
 
 const router = useRouter()
 
@@ -372,93 +507,124 @@ const loading = ref(true)
 const courses = ref([])
 const selected = ref(null)
 
+// Course members: students and assistants (fetched in parallel, kept apart).
 const students = ref([])
-const loadingStudents = ref(false)
+const assistants = ref([])
+const loadingMembers = ref(false)
 
 const modal = ref({
   show: false,
   editing: false,
   saving: false,
-  form: { id: null, name: '', semester: '', track: '', is_active: true },
+  form: { id: null, name: '', semester: '', track: '', is_active: true, notify_student_on_submission: false },
+})
+
+// Active tab of the course detail view: 'assign' | 'members' | 'analyses'
+// | 'multichoice' | 'grading' | 'calendar'.
+const courseView = ref('members')
+
+// Per-course analysis instances (shared by the Analyses and Calendar tabs).
+const courseInstances = ref([])
+const loadingInstances = ref(false)
+
+// Editor for a single analysis instance (opened by clicking an Analyses row).
+const instanceModal = ref({
+  show: false,
+  saving: false,
+  instance: null,
+  possibleIons: [],
+  form: { number: null, window_start: null, window_end: null, correct_ion_ids: [] },
 })
 
 // Per-course grading settings (overrides the global default for one course).
-const grading = ref({
-  show: false,
-  saving: false,
-  courseId: null,
-  courseName: '',
-  form: {
-    points_per_correct_ion: 10,
-    penalty_second_submission: 2,
-    penalty_third_submission: 4,
-    false_positive_deduction: 0,
-    grading_mode: 'per_ion',
-    max_submissions_per_analysis: 3,
-    final_score_strategy: 'best',
-    passing_score: 50,
-  },
+const gradingForm = ref({
+  points_per_correct_ion: 10,
+  penalty_second_submission: 2,
+  penalty_third_submission: 4,
+  false_positive_deduction: 0,
+  grading_mode: 'per_ion',
+  max_submissions_per_analysis: 3,
+  final_score_strategy: 'best',
+  submission_mode: 'resubmit',
+  retry_point_deduction: 0,
+  passing_score: 50,
+  mc_points_per_card: 10,
+  mc_penalty_per_wrong: 2,
 })
+const gradingSaving = ref(false)
 
 // In per-analysis mode the same field holds the points per *completed*
 // analysis, so the label adapts to the selected grading mode.
 const pointsLabel = computed(
-  () => (grading.value.form.grading_mode === 'per_analysis' ? 'Points per analysis' : 'Points per correct ion'),
+  () => (gradingForm.value.grading_mode === 'per_analysis' ? 'Points per analysis' : 'Points per correct ion'),
 )
 
-// Assign (enroll) students into a course.
-const assign = ref({
-  show: false,
-  saving: false,
-  courseId: null,
-  courseName: '',
-  studentIds: [],
+// Assign (enroll) members into the open course.
+const assignMemberIds = ref([])
+const assignSaving = ref(false)
+
+// Calendar tab: 'week' (Gantt timeline) or 'month' (a classic month grid with
+// one chip per analysis/day it covers).
+const calendarView = ref('week')
+
+// The open course's roster: students and assistants in one list (each entry
+// carries its member_role so rows can be rendered and edited role-aware).
+const courseMembers = computed(() => {
+  const cid = selected.value?.id
+  return [
+    ...students.value.filter((m) => m.course_id === cid).map((m) => ({ ...m, member_role: 'student' })),
+    ...assistants.value.filter((m) => m.course_id === cid).map((m) => ({ ...m, member_role: 'assistant' })),
+  ]
 })
 
-// Per-course window calendar. view is 'week' (Gantt timeline) or 'month'
-// (a classic month grid with one chip per analysis/day it covers).
-const calendar = ref({
-  show: false,
-  loading: false,
-  courseId: null,
-  courseName: '',
-  instances: [],
-  view: 'week',
-})
-
-const courseStudents = computed(() =>
-  students.value.filter((s) => s.course_id === selected.value?.id),
-)
-
-// Students that can be enrolled into the course being assigned to. Everyone is
-// a candidate (a student can be moved from one course to another); those already
-// in the target course are flagged so the admin knows.
-const assignableStudentOptions = computed(() =>
-  students.value.map((s) => {
-    const inTarget = s.course_id === assign.value.courseId
+// All members (both roles) that can be enrolled into the open course.
+// Everyone is a candidate (a member can be moved from one course to another);
+// those already in the target course are flagged so the admin knows.
+const assignableMemberOptions = computed(() => {
+  const all = [
+    ...students.value.map((m) => ({ ...m, member_role: 'student' })),
+    ...assistants.value.map((m) => ({ ...m, member_role: 'assistant' })),
+  ]
+  return all.map((m) => {
+    const inTarget = m.course_id === selected.value?.id
+    const where = m.course_name ? 'in ' + m.course_name : 'no course'
     return {
-      label: inTarget ? `${s.name || s.username} (already in course)` : `${s.name || s.username} (${s.course_name ? 'in ' + s.course_name : 'no course'})`,
-      value: s.id,
+      label: inTarget ? `${m.name || m.username} (${m.member_role}, already in course)` : `${m.name || m.username} (${m.member_role}, ${where})`,
+      value: m.id,
       disabled: inTarget,
+      member_role: m.member_role,
     }
-  }),
+  })
+})
+
+const alreadyInCourseCount = computed(() =>
+  students.value.filter((m) => m.course_id === selected.value?.id).length +
+  assistants.value.filter((m) => m.course_id === selected.value?.id).length,
 )
 
-const alreadyInCourseCount = computed(
-  () => students.value.filter((s) => s.course_id === assign.value.courseId).length,
-)
+// Role of a member id (ids live in one shared User PK space).
+function memberRoleById(id) {
+  return assistants.value.some((a) => a.id === id) ? 'assistant' : 'student'
+}
 
-// ---- add / edit a student account -------------------------------------------
-const studentModal = ref({
+// API base for a role's member endpoints.
+function memberBase(role) {
+  return role === 'assistant' ? '/admin/assistants' : '/admin/students'
+}
+
+// ---- add / edit a member (student or assistant) account ---------------------
+const memberModal = ref({
   show: false,
   editing: false,
   saving: false,
+  role: 'student',
   generatedPassword: null,
   form: {
     id: null,
     username: '',
     password: '',
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     matriculation_no: '',
     lab: '',
@@ -468,6 +634,12 @@ const studentModal = ref({
     is_active: true,
   },
 })
+
+const memberModalTitle = computed(() =>
+  memberModal.value.editing
+    ? `Edit ${memberModal.value.role} — ${memberModal.value.form.username}`
+    : `Add ${memberModal.value.role}`,
+)
 
 // ---- bulk student import (CSV) ------------------------------------------------
 const importModal = ref({
@@ -480,11 +652,21 @@ const importModal = ref({
 
 const courseOptions = computed(() => courses.value.map((c) => ({ label: c.name, value: c.id })))
 
-// Student table for the "Students — <course>" panel.
-const studentCols = [
-  { title: 'Name', key: 'name', render: (row) => row.name || '—' },
+// Member table for the Members tab of the course detail view.
+const memberCols = [
+  {
+    title: 'Role',
+    key: 'member_role',
+    render: (row) => (row.member_role === 'assistant' ? 'Assistant' : 'Student'),
+    width: 100,
+  },
+  { title: 'Name', key: 'full_name', render: (row) => row.full_name || '—' },
   { title: 'Username', key: 'username' },
-  { title: 'Matriculation no.', key: 'matriculation_no', render: (row) => row.matriculation_no || '—' },
+  {
+    title: 'Matriculation no.',
+    key: 'matriculation_no',
+    render: (row) => (row.member_role === 'student' ? row.matriculation_no || '—' : '—'),
+  },
   { title: 'Labspace', key: 'labspace_id', render: (row) => row.labspace_id || '—' },
   { title: 'Telephone', key: 'telephone', render: (row) => row.telephone || '—' },
   { title: 'Active', key: 'is_active', render: (row) => (row.is_active ? '✓' : '—') },
@@ -493,24 +675,26 @@ const studentCols = [
     key: 'actions',
     render: (row) =>
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditStudent(row) }, () => 'Edit'),
-        h(NButton, { size: 'tiny', tertiary: true, onClick: () => detachStudent(row) }, () => 'Detach'),
-        h(NButton, { size: 'tiny', tertiary: true, type: 'error', onClick: () => deleteStudent(row) }, () => 'Delete'),
+        h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditMember(row) }, () => 'Edit'),
+        h(NButton, { size: 'tiny', tertiary: true, onClick: () => detachMember(row) }, () => 'Detach'),
+        h(NButton, { size: 'tiny', tertiary: true, type: 'error', onClick: () => deleteMember(row) }, () => 'Delete'),
       ]),
   },
 ]
 
-function openAddStudent() {
-  studentModal.value = {
+function openAddMember(role) {
+  memberModal.value = {
     show: true,
     editing: false,
     saving: false,
+    role,
     generatedPassword: null,
     form: {
       id: null,
       username: '',
       password: '',
-      name: '',
+      first_name: '',
+      last_name: '',
       email: '',
       matriculation_no: '',
       lab: '',
@@ -522,87 +706,167 @@ function openAddStudent() {
   }
 }
 
-function openEditStudent(s) {
-  studentModal.value = {
+function openEditMember(m) {
+  memberModal.value = {
     show: true,
     editing: true,
     saving: false,
+    role: m.member_role,
     generatedPassword: null,
     form: {
-      id: s.id,
-      username: s.username,
+      id: m.id,
+      username: m.username,
       password: '',
-      name: s.name || '',
-      email: s.email || '',
-      matriculation_no: s.matriculation_no || '',
-      lab: s.lab || '',
-      labspace_id: s.labspace_id || '',
-      telephone: s.telephone || '',
-      course_id: s.course_id,
-      is_active: s.is_active,
+      first_name: m.first_name || '',
+      last_name: m.last_name || '',
+      email: m.email || '',
+      matriculation_no: m.matriculation_no || '',
+      lab: m.lab || '',
+      labspace_id: m.labspace_id || '',
+      telephone: m.telephone || '',
+      course_id: m.course_id,
+      is_active: m.is_active,
     },
   }
 }
 
-async function saveStudent() {
-  const f = studentModal.value.form
+// Open the single-instance editor for an analysis instance (Analyses tab row).
+// Fetches the instance's type so the ion picker offers only that type's
+// possible ions, then pre-fills the current answer key and window.
+async function openEditInstance(row) {
+  let possibleIons = []
+  try {
+    const types = await api.get('/admin/analysis-types')
+    const t = types.find((x) => x.id === row.type_id)
+    possibleIons = t ? t.ions : []
+  } catch {
+    /* fall back to the current answer key below */
+  }
+  if (!possibleIons.length) possibleIons = row.correct_ions || []
+  instanceModal.value = {
+    show: true,
+    saving: false,
+    instance: row,
+    possibleIons,
+    form: {
+      number: row.number,
+      window_start: isoToPicker(row.window_start),
+      window_end: isoToPicker(row.window_end),
+      correct_ion_ids: (row.correct_ions || []).map((i) => i.id),
+    },
+  }
+}
+
+async function saveInstance() {
+  const f = instanceModal.value.form
+  const inst = instanceModal.value.instance
+  instanceModal.value.saving = true
+  try {
+    await api.put(`/admin/analysis-instances/${inst.id}`, {
+      number: f.number,
+      window_start: timestampToIso(f.window_start),
+      window_end: timestampToIso(f.window_end),
+      correct_ion_ids: f.correct_ion_ids,
+    })
+    message.value = `Analysis ${inst.type} #${inst.number} updated.`
+    msgType.value = 'success'
+    instanceModal.value.show = false
+    await loadCourseInstances()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    instanceModal.value.saving = false
+  }
+}
+
+// Clickable rows: a member row opens that member's edit dialog; an analysis
+// row opens the instance editor. Clicks on the in-row action buttons are
+// ignored so they keep their own handlers (no double-trigger).
+function memberRowProps(rowData) {
+  return {
+    style: 'cursor: pointer',
+    onClick: (e) => {
+      if (e.target.closest('button')) return
+      openEditMember(rowData)
+    },
+  }
+}
+
+function analysisRowProps(rowData) {
+  return {
+    style: 'cursor: pointer',
+    onClick: (e) => {
+      if (e.target.closest('button')) return
+      openEditInstance(rowData)
+    },
+  }
+}
+
+async function saveMember() {
+  const f = memberModal.value.form
+  const role = memberModal.value.role
   if (!f.username) {
     message.value = 'Username is required.'
     msgType.value = 'error'
     return
   }
-  studentModal.value.saving = true
+  memberModal.value.saving = true
   try {
-    if (studentModal.value.editing) {
+    if (memberModal.value.editing) {
       const payload = {
         username: f.username,
-        name: f.name,
+        first_name: f.first_name,
+        last_name: f.last_name,
         email: f.email,
-        matriculation_no: f.matriculation_no,
         lab: f.lab,
         labspace_id: f.labspace_id,
         telephone: f.telephone,
         is_active: f.is_active,
       }
+      if (role === 'student') payload.matriculation_no = f.matriculation_no
       if (f.password) payload.password = f.password
-      const res = await api.put(`/admin/students/${f.id}`, payload)
+      const res = await api.put(`${memberBase(role)}/${f.id}`, payload)
       message.value = f.password
-        ? `Student ${res.username} updated (password reset).`
-        : `Student ${res.username} updated.`
-      studentModal.value.show = false
+        ? `${role[0].toUpperCase() + role.slice(1)} ${res.username} updated (password reset).`
+        : `${role[0].toUpperCase() + role.slice(1)} ${res.username} updated.`
+      memberModal.value.show = false
     } else {
-      const res = await api.post('/admin/students', {
+      const payload = {
         username: f.username,
         password: f.password,
-        name: f.name,
+        first_name: f.first_name,
+        last_name: f.last_name,
         email: f.email,
-        matriculation_no: f.matriculation_no,
         lab: f.lab,
         labspace_id: f.labspace_id,
         telephone: f.telephone,
         course_id: f.course_id,
-      })
+      }
+      if (role === 'student') payload.matriculation_no = f.matriculation_no
+      const res = await api.post(memberBase(role), payload)
       // Keep the modal open so an auto-generated initial password can be copied.
-      if (res.password) studentModal.value.generatedPassword = res.password
-      message.value = `Student ${res.username} created.`
+      if (res.password) memberModal.value.generatedPassword = res.password
+      message.value = `${role[0].toUpperCase() + role.slice(1)} ${res.username} created.`
     }
     msgType.value = 'success'
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
-    studentModal.value.saving = false
+    memberModal.value.saving = false
   }
 }
 
-async function deleteStudent(s) {
-  if (!confirm(`Delete student ${s.username} (including assignments and barcodes)? This cannot be undone.`)) return
+async function deleteMember(m) {
+  const label = m.member_role === 'assistant' ? 'assistant' : 'student'
+  if (!confirm(`Delete ${label} ${m.username} (including assignments and barcodes)? This cannot be undone.`)) return
   try {
-    await api.delete(`/admin/students/${s.id}`)
-    message.value = `Student ${s.username} deleted.`
+    await api.delete(`${memberBase(m.member_role)}/${m.id}`)
+    message.value = `${label[0].toUpperCase() + label.slice(1)} ${m.username} deleted.`
     msgType.value = 'success'
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -630,7 +894,7 @@ async function doImport() {
   importModal.value.uploading = true
   try {
     importModal.value.result = await api.upload('/admin/students/import-csv', importModal.value.file)
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -643,7 +907,7 @@ async function doImport() {
 // Sort the course's analyses by their window start so the rows read in
 // chronological order.
 const calendarInstances = computed(() =>
-  [...calendar.value.instances].sort(
+  [...courseInstances.value].sort(
     (a, b) => new Date(a.window_start) - new Date(b.window_start),
   ),
 )
@@ -798,6 +1062,21 @@ function fmtShort(iso) {
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
+// Convert an ISO timestamp to the "yyyy-MM-dd HH:mm" string the datetime
+// picker (value-format) understands.
+function isoToPicker(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+// Convert the picker's value back to an ISO string for the API.
+function timestampToIso(v) {
+  if (v == null) return null
+  const d = new Date(typeof v === 'string' ? v.replace(' ', 'T') : v)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
 
 const courseCols = [
   {
@@ -814,24 +1093,46 @@ const courseCols = [
     render: (row) =>
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
         h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => openEdit(row) }, () => 'Edit'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openAssign(row) }, () => 'Assign'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => selectCourse(row) }, () => 'Students'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openAnalyses(row) }, () => 'Analyses'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openCalendar(row) }, () => 'Calendar'),
-        h(NButton, { size: 'tiny', secondary: true, onClick: () => openGrading(row) }, () => 'Grading'),
       ]),
   },
 ]
 
-function selectCourse(row) {
+// Clickable course rows: opening a row selects the course and shows the
+// detail view below the table (like the assistant's course view).
+function courseRowProps(row) {
+  return {
+    style: 'cursor: pointer',
+    class: row.id === selected.value?.id ? 'course-row--selected' : '',
+    onClick: () => openCourseDetail(row),
+  }
+}
+
+// Open the detail view for a course and preload all tab data.
+function openCourseDetail(row, view = 'members') {
   selected.value = row
-  loadStudents()
+  courseView.value = view
+  assignMemberIds.value = []
+  loadMembers()
+  loadCourseInstances(row.id)
+  loadGrading(row.id)
+}
+
+function switchCourseView(view) {
+  courseView.value = view
+}
+
+// Keep the open detail row in sync after the course list is refreshed
+// (e.g. after creating or editing a course).
+function refreshSelected() {
+  if (!selected.value?.id) return
+  selected.value = courses.value.find((c) => c.id === selected.value.id) ?? null
 }
 
 async function loadCourses() {
   loading.value = true
   try {
     courses.value = await api.get('/admin/courses')
+    refreshSelected()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -840,19 +1141,42 @@ async function loadCourses() {
   }
 }
 
-async function loadStudents() {
-  loadingStudents.value = true
+// Load the open course's analysis instances (shared by the Analyses and
+// Calendar tabs).
+async function loadCourseInstances(courseId = selected.value?.id) {
+  if (!courseId) return
+  loadingInstances.value = true
   try {
-    students.value = await api.get('/admin/students')
+    courseInstances.value = await api.get(`/admin/analysis-instances?course_id=${courseId}`)
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    loadingInstances.value = false
+  }
+}
+
+// Load all members (students and assistants in parallel).
+async function loadMembers() {
+  loadingMembers.value = true
+  try {
+    const [st, as] = await Promise.all([api.get('/admin/students'), api.get('/admin/assistants')])
+    students.value = st
+    assistants.value = as
   } catch (e) {
     /* ignore */
   } finally {
-    loadingStudents.value = false
+    loadingMembers.value = false
   }
 }
 
 function openCreate() {
-  modal.value = { show: true, editing: false, saving: false, form: { id: null, name: '', semester: '', track: '', is_active: true } }
+  modal.value = {
+    show: true,
+    editing: false,
+    saving: false,
+    form: { id: null, name: '', semester: '', track: '', is_active: true, notify_student_on_submission: false },
+  }
 }
 
 function openEdit(row) {
@@ -860,7 +1184,14 @@ function openEdit(row) {
     show: true,
     editing: true,
     saving: false,
-    form: { id: row.id, name: row.name, semester: row.semester || '', track: row.track || '', is_active: row.is_active },
+    form: {
+      id: row.id,
+      name: row.name,
+      semester: row.semester || '',
+      track: row.track || '',
+      is_active: row.is_active,
+      notify_student_on_submission: row.notify_student_on_submission ?? false,
+    },
   }
 }
 
@@ -907,12 +1238,13 @@ async function removeCourse() {
   }
 }
 
-async function detachStudent(s) {
+async function detachMember(m) {
+  const key = m.member_role === 'assistant' ? 'assistant_id' : 'student_id'
   try {
-    await api.put(`/admin/students/${s.id}/course`, { student_id: s.id, course_id: null })
-    message.value = `${s.username} removed from course.`
+    await api.put(`${memberBase(m.member_role)}/${m.id}/course`, { [key]: m.id, course_id: null })
+    message.value = `${m.username} removed from course.`
     msgType.value = 'success'
-    await loadStudents()
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -920,27 +1252,12 @@ async function detachStudent(s) {
 }
 
 // ---- per-course grading settings ---------------------------------------------
-async function openGrading(row) {
-  // Mutate fields (rather than reassigning the ref) so the open <n-modal>'s
-  // v-model:show binding stays reactive.
-  grading.value.show = true
-  grading.value.saving = false
-  grading.value.courseId = row.id
-  grading.value.courseName = row.name
-  grading.value.form = {
-    points_per_correct_ion: 10,
-    penalty_second_submission: 2,
-    penalty_third_submission: 4,
-    false_positive_deduction: 0,
-    grading_mode: 'per_ion',
-    max_submissions_per_analysis: 3,
-    final_score_strategy: 'best',
-    passing_score: 50,
-  }
+async function loadGrading(courseId = selected.value?.id) {
+  if (!courseId) return
   try {
     // The endpoint returns the course's own config or the global default, so the
     // form is always populated with usable starting values.
-    grading.value.form = await api.get(`/admin/courses/${row.id}/grading-config`)
+    gradingForm.value = await api.get(`/admin/courses/${courseId}/grading-config`)
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
@@ -948,83 +1265,94 @@ async function openGrading(row) {
 }
 
 async function saveGrading() {
-  grading.value.saving = true
+  if (!selected.value) return
+  gradingSaving.value = true
   try {
-    grading.value.form = await api.put(
-      `/admin/courses/${grading.value.courseId}/grading-config`,
-      grading.value.form,
+    gradingForm.value = await api.put(
+      `/admin/courses/${selected.value.id}/grading-config`,
+      gradingForm.value,
     )
-    message.value = `Grading saved for ${grading.value.courseName}.`
+    message.value = `Grading saved for ${selected.value.name}.`
     msgType.value = 'success'
-    grading.value.show = false
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
-    grading.value.saving = false
+    gradingSaving.value = false
   }
 }
 
-// ---- assign (enroll) students into a course --------------------------------
-function openAssign(row) {
-  assign.value = { show: true, saving: false, courseId: row.id, courseName: row.name, studentIds: [] }
-  // Make sure we have a fresh student list (with current course assignments).
-  loadStudents()
-}
-
+// ---- assign (enroll) members into the open course --------------------------
 async function saveAssign() {
-  const a = assign.value
-  if (a.studentIds.length === 0) return
-  a.saving = true
+  if (!selected.value || assignMemberIds.value.length === 0) return
+  assignSaving.value = true
   let ok = 0
   try {
-    for (const sid of a.studentIds) {
-      await api.put(`/admin/students/${sid}/course`, { student_id: sid, course_id: a.courseId })
+    for (const id of assignMemberIds.value) {
+      const role = memberRoleById(id)
+      const key = role === 'assistant' ? 'assistant_id' : 'student_id'
+      await api.put(`${memberBase(role)}/${id}/course`, { [key]: id, course_id: selected.value.id })
       ok += 1
     }
-    message.value = `${ok} student${ok === 1 ? '' : 's'} assigned to ${a.courseName}.`
+    message.value = `${ok} member${ok === 1 ? '' : 's'} assigned to ${selected.value.name}.`
     msgType.value = 'success'
-    a.show = false
-    // Refresh the student list; the "Students" panel (if open) re-filters itself.
-    await loadStudents()
+    assignMemberIds.value = []
+    // Refresh the member lists; the "Members" tab (if open) re-filters itself.
+    await loadMembers()
   } catch (e) {
     message.value = e.message
     msgType.value = 'error'
   } finally {
-    a.saving = false
+    assignSaving.value = false
   }
 }
 
 // ---- analyses: open the per-course analysis-assignment workflow ------------
-function openAnalyses(row) {
+function goToAssignments() {
   // Reuse the Assignments page, pre-selecting this course via the query param.
-  router.push({ name: 'admin-assignments', query: { course: String(row.id) } })
+  router.push({ name: 'admin-assignments', query: { course: String(selected.value.id) } })
 }
 
-// ---- window calendar: visualise the course's analysis windows -------------
-async function openCalendar(row) {
-  calendar.value.show = true
-  calendar.value.loading = true
-  calendar.value.courseId = row.id
-  calendar.value.courseName = row.name
-  calendar.value.instances = []
-  try {
-    calendar.value.instances = await api.get(`/admin/analysis-instances?course_id=${row.id}`)
-  } catch (e) {
-    message.value = e.message
-    msgType.value = 'error'
-  } finally {
-    calendar.value.loading = false
-  }
-}
+// Window status label for the Analyses tab.
+const STATUS_LABEL = { open: 'Open', too_early: 'Too early', too_late: 'Too late' }
+
+// Columns for the course's analysis instances (Analyses tab).
+const analysisCols = [
+  { title: '#', key: 'number', render: (row) => `#${row.number}`, width: 56 },
+  { title: 'Type', key: 'type' },
+  {
+    title: 'Window',
+    key: 'window',
+    render: (row) => `${fmt(row.window_start)} → ${fmt(row.window_end)}`,
+  },
+  { title: 'Status', key: 'status', render: (row) => STATUS_LABEL[windowStatus(row)] ?? windowStatus(row), width: 100 },
+  {
+    title: 'Students',
+    key: 'assigned_students',
+    render: (row) => h('span', { title: row.assigned_students.join(', ') || '—' }, String(row.assigned_students.length)),
+    width: 90,
+  },
+  {
+    title: '',
+    key: 'actions',
+    render: (row) => h(NButton, { size: 'tiny', secondary: true, onClick: () => openEditInstance(row) }, () => 'Edit'),
+    width: 64,
+  },
+]
 
 onMounted(() => {
   loadCourses()
-  loadStudents()
+  loadMembers()
 })
 </script>
 
 <style scoped>
+.form-hint {
+  width: 100%;
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-muted, #8a8f99);
+  line-height: 1.4;
+}
 .page-head {
   display: flex;
   align-items: center;
@@ -1035,6 +1363,21 @@ onMounted(() => {
   font-size: var(--fc-fs-md);
   font-weight: 700;
   color: var(--fc-ink);
+}
+.muted {
+  font-size: var(--fc-fs-sm);
+  font-weight: 400;
+  color: var(--fc-muted);
+}
+/* Course detail view: tab navigation sits between the title and the view. */
+.course-nav {
+  margin-bottom: var(--fc-space-sm);
+}
+/* Selected course row (the detail view below shows its data). Rows render
+   inside the data table, so the selectors need :deep(). */
+:deep(.course-row--selected .n-data-table-td),
+:deep(.course-row--selected:hover .n-data-table-td) {
+  background: var(--fc-flame-soft);
 }
 /* Error / generated-password lists in the CSV import result. */
 .err-list {

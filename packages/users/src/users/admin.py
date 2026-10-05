@@ -18,7 +18,8 @@ class UserAdmin(auth_admin.UserAdmin):
             _("Profile"),
             {
                 "fields": (
-                    "name",
+                    "first_name",
+                    "last_name",
                     "email",
                     "telephone",
                     "role",
@@ -35,9 +36,9 @@ class UserAdmin(auth_admin.UserAdmin):
         ),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
-    list_display = ["username", "name", "role", "course", "is_active"]
+    list_display = ["username", "first_name", "last_name", "role", "course", "is_active"]
     list_filter = ["role", "is_active"]
-    search_fields = ["name", "username", "matriculation_no"]
+    search_fields = ["first_name", "last_name", "username", "matriculation_no"]
 
 
 @admin.register(StudentBarcode)

@@ -17,6 +17,8 @@ from analyses.api.schemas import (
     ion_ids_to_dicts,
 )
 from analyses.models import AnalysisInstance, student_course_result
+from analyses.services.retry_analysis import maybe_generate_retry
+from config.services.notifications import notify_submission
 from ninja import Router
 from ninja.errors import AuthenticationError, HttpError
 from ninja.errors import ValidationError as NinjaValidationError
@@ -64,6 +66,7 @@ def analysis_detail(request, analysis_id: int):
         "type": type_.name,
         "type_description": type_.description,
         "number": instance.number,
+        "label": instance.label,
         "window_status": instance.window_status(),
         "window_start": instance.window_start.isoformat(),
         "window_end": instance.window_end.isoformat(),
@@ -143,13 +146,31 @@ def create_submission(request, analysis_id: int, payload: SubmissionIn):
             detail = [str(exc)]
         raise HttpError(400, str(detail)) from exc
 
-    return _submission_result_payload(instance, submission)
+    # In the "new analysis" submission mode a wrong submission may hand the
+    # student a fresh re-trial analysis of the same type (and notify the course's
+    # assistants). The new analysis id is surfaced so the client can jump to it.
+    new_instance = maybe_generate_retry(instance, request.user, submission)
+
+    # Optionally notify the student / assistants (PGP e-mail). Gated by the
+    # course switch, the global switch and the ALLOW_EMAILS environment variable.
+    notify_submission(
+        course=instance.course,
+        student=request.user,
+        analysis_name=instance.type.name,
+        score=submission.score,
+        ideal_score=submission.ideal_score,
+        submission_number=submission.submission_number,
+        submission_kind="analysis",
+    )
+    return _submission_result_payload(instance, submission, new_instance)
 
 
-def _submission_result_payload(instance: AnalysisInstance, submission) -> dict:
+def _submission_result_payload(
+    instance: AnalysisInstance, submission, new_instance: AnalysisInstance | None = None
+) -> dict:
     """Assemble the response body for a (just created) submission."""
     breakdown = submission.ion_breakdown()
-    return {
+    payload = {
         "submission": {
             "id": submission.id,
             "submission_number": submission.submission_number,
@@ -169,6 +190,14 @@ def _submission_result_payload(instance: AnalysisInstance, submission) -> dict:
             "ideal_score": instance.ideal_score(),
         },
     }
+    if new_instance is not None:
+        payload["retry"] = {
+            "generated": True,
+            "new_analysis_id": new_instance.id,
+            "type": new_instance.type.name,
+            "number": new_instance.number,
+        }
+    return payload
 
 
 @router.get("/analyses/{analysis_id}/result", response=dict)

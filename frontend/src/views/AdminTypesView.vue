@@ -5,7 +5,15 @@
         <h2 class="page-title">Analysis Types</h2>
         <n-button type="primary" size="small" @click="openCreate">+ New Type</n-button>
       </div>
-      <n-data-table :columns="typeCols" :data="types" size="small" :loading="loading" />
+      <n-data-table
+        :columns="typeCols"
+        :data="types"
+        size="small"
+        :loading="loading"
+        :row-key="(row) => row.id"
+        :row-props="(row) => ({ style: 'cursor: pointer', onClick: (e) => onRowClick(row, e) })"
+      />
+      <n-text depth="3" style="font-size: 12px">Click a row to edit the type.</n-text>
     </n-card>
 
     <n-modal v-model:show="modal.show" preset="card" :title="modal.editing ? 'Edit Analysis Type' : 'New Analysis Type'" style="width: 600px; max-width: 94vw">
@@ -50,6 +58,12 @@
         <n-text depth="3" style="font-size: 12px">
           New sessions (announcements) of this type inherit this window unless overridden per session.
         </n-text>
+        <n-form-item label="Max re-trials">
+          <n-input-number v-model:value="modal.form.max_repetitions" :min="0" :max="20" />
+          <template #feedback>
+            "New analysis" mode: re-trial analyses a student may get per announcement after a wrong submission.
+          </template>
+        </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
@@ -118,6 +132,7 @@ import {
   NSpace, NButton, NInput, NInputNumber, NSelect, NDataTable, NCard, NForm, NFormItem,
   NModal, NAlert, NEmpty, NText, NDatePicker,
 } from 'naive-ui'
+import IonSymbol from '../components/IonSymbol.vue'
 
 const message = ref('')
 const msgType = ref('success')
@@ -133,7 +148,7 @@ const modal = ref({
   show: false,
   editing: false,
   saving: false,
-  form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null },
+  form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null, max_repetitions: 2 },
 })
 
 // Per-type sessions (concrete analyses) + their windows.
@@ -170,6 +185,7 @@ const typeCols = [
   { title: 'Name', key: 'name', render: (row) => row.name },
   { title: 'Description', key: 'description', ellipsis: { tooltip: true } },
   { title: 'Ions', key: 'ions', render: (row) => `${row.ions.length}` },
+  { title: 'Max re-trials', key: 'max_repetitions', render: (row) => `${row.max_repetitions ?? 2}` },
   {
     title: 'Default window',
     key: 'default_window',
@@ -248,7 +264,7 @@ async function loadIons() {
   try {
     ions.value = await api.get('/ions')
     ionOptions.value = ions.value.map((i) => ({
-      label: `${i.symbol} (${i.name})`,
+      label: h('span', [h(IonSymbol, { symbol: i.symbol }), ` (${i.name})`]),
       value: i.id,
     }))
   } catch (e) {
@@ -258,12 +274,18 @@ async function loadIons() {
   }
 }
 
+// Open the edit modal for a row, but ignore clicks on the row's action buttons.
+function onRowClick(row, event) {
+  if (event && event.target.closest('button, a')) return
+  openEdit(row)
+}
+
 function openCreate() {
   modal.value = {
     show: true,
     editing: false,
     saving: false,
-    form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null },
+    form: { id: null, name: '', description: '', ion_ids: [], default_window_start: null, default_window_end: null, max_repetitions: 2 },
   }
 }
 
@@ -279,6 +301,7 @@ function openEdit(row) {
       ion_ids: row.ions.map((i) => i.id),
       default_window_start: isoToPicker(row.default_window_start),
       default_window_end: isoToPicker(row.default_window_end),
+      max_repetitions: row.max_repetitions ?? 2,
     },
   }
 }
@@ -303,6 +326,7 @@ async function saveType() {
       ion_ids: f.ion_ids,
       default_window_start: timestampToIso(f.default_window_start),
       default_window_end: timestampToIso(f.default_window_end),
+      max_repetitions: f.max_repetitions ?? 2,
     }
     if (modal.value.editing) {
       await api.put(`/admin/analysis-types/${f.id}`, payload)

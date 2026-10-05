@@ -16,9 +16,9 @@ The module exercises the full factory-boy / Faker toolbox:
   passwords are hashed, plus ``AdminUserFactory`` / ``AssistantUserFactory``
   sub-factories for the common role cases.
 
-``User`` is a custom :class:`~django.contrib.auth.models.AbstractUser` with
-``first_name``/``last_name`` removed and a single ``name`` field, so the factory
-sets ``name`` and leaves the abstract fields alone.
+``User`` is a custom :class:`~django.contrib.auth.models.AbstractUser` with the
+abstract ``first_name``/``last_name`` fields redefined as plain ``CharField``s,
+so the factory populates them directly with Faker values.
 """
 
 from __future__ import annotations
@@ -45,7 +45,8 @@ class UserFactory(DjangoModelFactory):
 
     # -- identity ----------------------------------------------------------
     username = Sequence(lambda n: f"user{n}")
-    name = Faker("name")  # single name field (first/last removed on the model)
+    first_name = Faker("first_name")
+    last_name = Faker("last_name")
     email = Faker("email")
     # A 5-digit matriculation number as a string (the model field is a CharField).
     # ``bothify`` with ``#`` placeholders yields a digit string, e.g. "48291".

@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "flamecheck"
-version = "0.0.5"
+version = "0.1.0"
 description = "A qualitative analysis submission system for students in chemistry."
 readme = "README.md"
 license = { text = "GNU General Public License v3" }
@@ -39,11 +39,14 @@ dependencies = [
   "substances",
   "analyses",
   "config",
+  "multichoice",
   "django-ninja>=1.7",
   "django-cors-headers>=4.9",
   "whitenoise>=6.12",
   "PyJWT>=2.15",
   "gunicorn>=26.0",
+  "python-gnupg>=0.5.7",
+  "requests>=2.32",
 ]
 
 [project.optional-dependencies]
@@ -77,12 +80,14 @@ docs = [
   "python-docs-theme>=2026.9.1",
   # alternative theme:
   "furo>=2025.12.19",
+  "sphinxcontrib-mermaid>=1.0",
 ]
 [tool.uv.sources]
 users = { workspace = true }
 substances = { workspace = true }
 analyses = { workspace = true }
 config = { workspace = true }
+multichoice = { workspace = true }
 
 
 [tool.uv.workspace]
@@ -91,6 +96,7 @@ members = [
   "packages/substances",
   "packages/analyses",
   "packages/config",
+  "packages/multichoice",
   # "packages/",
 ]
 
@@ -130,10 +136,13 @@ lint.per-file-ignores."tests/**/*" = [
   "D103",
   "D104",
   "S101",
+  "S106",  # tests legitimately assign short test passwords
   "S311",  # seeded stdlib `random.Random` for deterministic test fixtures, not crypto
 ]
 # Non-cryptographic randomness: lab-sample assignment (not security-relevant).
 lint.per-file-ignores."packages/analyses/src/analyses/services/randomize.py" = [ "S311" ]
+lint.per-file-ignores."packages/analyses/src/analyses/services/registration.py" = [ "S311" ]
+lint.per-file-ignores."packages/analyses/src/analyses/services/retry_analysis.py" = [ "S311" ]
 lint.per-file-ignores."packages/*/src/*/tests/**/*" = [
   "D100",
   "D101",
@@ -160,6 +169,7 @@ lint.per-file-ignores."packages/users/src/users/admin.py" = [ "D102" ]
 lint.per-file-ignores."packages/users/src/users/templatetags/model_descriptions.py" = [ "D103" ]
 lint.per-file-ignores."packages/users/src/users/management/commands/init_barcode.py" = [ "D102" ]
 lint.per-file-ignores."packages/analyses/src/analyses/models.py" = [ "D105", "D106" ]
+lint.per-file-ignores."packages/multichoice/src/multichoice/models.py" = [ "D105", "D106" ]
 lint.per-file-ignores."packages/analyses/src/analyses/admin.py" = [ "D102" ]
 lint.per-file-ignores."packages/config/src/config/models.py" = [ "D105", "D106" ]
 lint.per-file-ignores."packages/substances/src/substances/models.py" = [ "D105", "D106" ]

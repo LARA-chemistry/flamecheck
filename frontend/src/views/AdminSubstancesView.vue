@@ -12,7 +12,7 @@
           <code>formula</code>, <code>ions</code>, <code>pubchem_id</code>,
           <code>wikipedia_link</code>. Columns are separated by
           <code>;</code> and several ions or synonyms are separated by
-          <code>,</code> (e.g. <code>Na+,Cl-</code>), so a cell may hold commas
+          <code>,</code> (e.g. <code>Na+1,Cl-1</code>), so a cell may hold commas
           without quoting. Rows are matched by name - a match updates the existing
           substance, otherwise a new one is created.
         </n-text>
@@ -57,10 +57,60 @@
     <n-card size="small" :bordered="false">
       <div class="page-head">
         <h2 class="page-title">Substances</h2>
-        <n-button size="small" @click="loadSubstances">Refresh</n-button>
+        <n-space size="small">
+          <n-button size="small" @click="loadSubstances">Refresh</n-button>
+          <n-button size="small" secondary :disabled="!substances.length" @click="doExport">
+            Export to CSV
+          </n-button>
+        </n-space>
       </div>
-      <n-data-table :columns="subCols" :data="substances" size="small" :loading="loading" />
+      <n-data-table
+        :columns="subCols"
+        :data="substances"
+        size="small"
+        :loading="loading"
+        :row-key="(row) => row.id"
+        :row-props="(row) => ({ style: 'cursor: pointer', onClick: (e) => onRowClick(row, e) })"
+      />
+      <n-text depth="3" style="font-size: 12px">Click a row to edit the substance.</n-text>
     </n-card>
+
+    <!-- Edit substance (opened by clicking a table row) -->
+    <n-modal v-model:show="modal.show" preset="card" title="Edit substance" style="width: 620px; max-width: 94vw">
+      <n-form label-placement="left" label-width="110">
+        <n-form-item label="Name">
+          <n-input v-model:value="modal.form.name" placeholder="e.g. Sodium chloride" />
+        </n-form-item>
+        <n-form-item label="Synonyms">
+          <n-select v-model:value="modal.form.synonyms" multiple tag :options="[]" placeholder="Type a synonym and press Enter" />
+        </n-form-item>
+        <n-form-item label="Formula">
+          <n-input v-model:value="modal.form.formula" placeholder="e.g. NaCl" />
+        </n-form-item>
+        <n-form-item label="Ions">
+          <n-select
+            v-model:value="modal.form.ion_ids"
+            :options="ionOptions"
+            multiple
+            filterable
+            :loading="loadingIons"
+            placeholder="Select the ions contained in this substance"
+          />
+        </n-form-item>
+        <n-form-item label="PubChem ID">
+          <n-input v-model:value="modal.form.pubchem_id" placeholder="e.g. 5234" />
+        </n-form-item>
+        <n-form-item label="Wikipedia">
+          <n-input v-model:value="modal.form.wikipedia_link" placeholder="https://en.wikipedia.org/wiki/Sodium_chloride" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="modal.show = false">Cancel</n-button>
+          <n-button type="primary" :loading="modal.saving" @click="saveSubstance">Save</n-button>
+        </n-space>
+      </template>
+    </n-modal>
 
     <n-alert v-if="message" :type="msgType" closable @close="message = ''">{{ message }}</n-alert>
   </n-space>
@@ -71,8 +121,9 @@ import { ref, onMounted, h } from 'vue'
 import { api } from '../api/client'
 import {
   NSpace, NButton, NCard, NDataTable, NUpload, NCheckbox, NAlert,
-  NTag, NText,
+  NTag, NText, NModal, NForm, NFormItem, NInput, NSelect,
 } from 'naive-ui'
+import IonSymbol from '../components/IonSymbol.vue'
 
 const message = ref('')
 const msgType = ref('success')
@@ -83,6 +134,18 @@ const uploading = ref(false)
 const createMissingIons = ref(false)
 const file = ref(null)
 const fileList = ref([])
+
+// Ion options for the edit modal (loaded from the ion catalog).
+const ions = ref([])
+const loadingIons = ref(false)
+const ionOptions = ref([])
+
+// Edit modal (opened by clicking a table row).
+const modal = ref({
+  show: false,
+  saving: false,
+  form: { id: null, name: '', synonyms: [], formula: '', ion_ids: [], pubchem_id: '', wikipedia_link: '' },
+})
 
 // External reference links (PubChem / Wikipedia) render as real hyperlinks that
 // open in a new tab; a dash is shown when the substance has no such reference.
@@ -99,7 +162,7 @@ const subCols = [
     key: 'ions',
     render: (row) =>
       row.ions.length
-        ? h(NSpace, { size: 'small', wrap: true }, row.ions.map((ion) => h(NTag, { size: 'small', bordered: false, type: 'info' }, () => ion.symbol)))
+        ? h(NSpace, { size: 'small', wrap: true }, row.ions.map((ion) => h(NTag, { size: 'small', bordered: false, type: 'info' }, () => h(IonSymbol, { symbol: ion.symbol }))))
         : '-',
   },
   {
@@ -122,6 +185,17 @@ function onFileChange(list) {
 function downloadTemplate() {
   api
     .download('/substances/import-template', 'substances_import_template.csv')
+    .catch((e) => {
+      message.value = e.message
+      msgType.value = 'error'
+    })
+}
+
+// Download the full catalog as a ";"-separated CSV in the import format, so the
+// file can be edited and re-imported directly.
+function doExport() {
+  api
+    .download('/substances/export-csv', 'substances.csv')
     .catch((e) => {
       message.value = e.message
       msgType.value = 'error'
@@ -161,8 +235,75 @@ async function loadSubstances() {
   }
 }
 
+async function loadIons() {
+  loadingIons.value = true
+  try {
+    ions.value = await api.get('/ions')
+    ionOptions.value = ions.value.map((i) => ({
+      label: h('span', [h(IonSymbol, { symbol: i.symbol }), ` (${i.name})`]),
+      value: i.id,
+    }))
+  } catch (e) {
+    /* ignore - the edit modal simply has no ion options then */
+  } finally {
+    loadingIons.value = false
+  }
+}
+
+// Open the edit modal for a row, but ignore clicks on cell links/buttons.
+function onRowClick(row, event) {
+  if (event && event.target.closest('a, button')) return
+  openEdit(row)
+}
+
+function openEdit(row) {
+  modal.value = {
+    show: true,
+    saving: false,
+    form: {
+      id: row.id,
+      name: row.name,
+      synonyms: row.synonyms || [],
+      formula: row.formula || '',
+      ion_ids: row.ions.map((i) => i.id),
+      pubchem_id: row.pubchem_id || '',
+      wikipedia_link: row.wikipedia_link || '',
+    },
+  }
+}
+
+async function saveSubstance() {
+  const f = modal.value.form
+  if (!f.name) {
+    message.value = 'Name is required.'
+    msgType.value = 'error'
+    return
+  }
+  modal.value.saving = true
+  try {
+    await api.put(`/substances/${f.id}`, {
+      name: f.name,
+      synonyms: f.synonyms,
+      formula: f.formula,
+      ion_ids: f.ion_ids,
+      pubchem_id: f.pubchem_id,
+      wikipedia_link: f.wikipedia_link,
+    })
+    message.value = 'Substance updated.'
+    msgType.value = 'success'
+    modal.value.show = false
+    await loadSubstances()
+  } catch (e) {
+    message.value = e.message
+    msgType.value = 'error'
+  } finally {
+    modal.value.saving = false
+  }
+}
+
 onMounted(() => {
   loadSubstances()
+  loadIons()
 })
 </script>
 

@@ -97,9 +97,14 @@ ENV LANG=C.UTF-8 \
     UV_PROJECT_ENVIRONMENT=/opt/.venv \
     DJANGO_SETTINGS_MODULE=flamecheck.settings.production
 
-# Create a non-root user for security.
-RUN adduser --disabled-password --gecos "" appuser \
-    && mkdir -p /opt/staticfiles /opt/db \
+# Create a non-root user for security. ``gnupg`` (the ``gpg`` binary) is needed
+# at runtime to build the PGP-encrypted/signed submission e-mails (see
+# config.services.notifications); e-mail itself only happens when ALLOW_EMAILS is set.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && adduser --disabled-password --gecos "" appuser \
+    && mkdir -p /opt/staticfiles /opt/db /opt/media \
     && chown -R appuser:appuser /opt
 
 WORKDIR /opt
@@ -111,6 +116,9 @@ COPY --from=build_image --chown=appuser:appuser /opt/.venv /opt/.venv
 COPY --chown=appuser:appuser src/ src/
 COPY --chown=appuser:appuser packages/ packages/
 COPY --chown=appuser:appuser manage.py pyproject.toml uv.lock ./
+# The demo seeder (SEED_DEMO, staging) imports examples/substance_list.csv and
+# load_examples reads examples/datasets/, so ship the examples directory too.
+COPY --chown=appuser:appuser examples/ examples/
 # Copy the built frontend so Django can serve it via WhiteNoise.
 COPY --from=frontend_build --chown=appuser:appuser /app/dist frontend/dist
 # Copy the production entrypoint.
@@ -121,6 +129,12 @@ ENV PATH="/opt/.venv/bin:$PATH"
 USER appuser
 
 EXPOSE 8000
+
+# Liveness probe for the orchestrator: the public branding endpoint answers
+# 200 once migrations have run and gunicorn is up. Python stdlib only — the
+# final image deliberately ships no curl/wget.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/branding', timeout=4).status == 200 else 1)"
 
 # SQLite database lives in /opt/db (a volume target for compose).
 ENV DATABASE_URL=sqlite:////opt/db/db.sqlite3

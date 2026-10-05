@@ -14,6 +14,7 @@ class AnalysisSummary(BaseModel):
     id: int
     type: str
     number: int
+    label: str = ""
     window_status: str
     submission_count: int
     submission_limit: int
@@ -28,6 +29,7 @@ class AnalysisSummary(BaseModel):
             id=instance.id,
             type=instance.type.name,
             number=instance.number,
+            label=getattr(instance, "label", "") or "",
             window_status=instance.window_status(),
             submission_count=instance.submission_count(),
             submission_limit=instance.submission_limit(),
@@ -44,6 +46,7 @@ class AnalysisDetailOut(Schema):
     type: str
     type_description: str
     number: int
+    label: str = ""
     window_status: str
     window_start: str
     window_end: str
@@ -114,8 +117,11 @@ class AssistantRosterEntry(Schema):
 
     id: int
     username: str
-    name: str | None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
     barcode: str | None
+    labspace_id: str | None = None
     analyses: list[AnalysisSummary]
 
 
@@ -149,6 +155,8 @@ class AnalysisTypeIn(Schema):
     # Default submission window inherited by new sessions of this type.
     default_window_start: str | None = None
     default_window_end: str | None = None
+    # "New analysis" mode: max re-trial analyses per student/announcement.
+    max_repetitions: int | None = None
 
 
 class AnalysisInstanceIn(Schema):
@@ -221,6 +229,10 @@ class GradingConfigOut(Schema):
     max_submissions_per_analysis: int
     final_score_strategy: str
     passing_score: int
+    submission_mode: str = "resubmit"
+    retry_point_deduction: int = 0
+    mc_points_per_card: int = 10
+    mc_penalty_per_wrong: int = 2
 
 
 class AppSettingsOut(Schema):
@@ -229,10 +241,22 @@ class AppSettingsOut(Schema):
     points_per_analysis: int
     analyses_per_course: int
     active_course_id: int | None
+    registration: str = "manual"
     backup_enabled: bool = False
     backup_interval_minutes: int = 60
     backup_location: str = "backups"
     backup_keep: int = 10
+    # ---- e-mail notifications (submission confirmations) --------------------
+    notify_assistant_on_submission: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_security: str = "tls"
+    pgp_public_key: str = ""
+    pgp_private_key: str = ""
+    pgp_private_key_passphrase: str = ""
 
 
 class DatabaseBackupOut(Schema):
@@ -274,6 +298,7 @@ class CourseIn(Schema):
     semester: str = ""
     track: str = ""
     is_active: bool = True
+    notify_student_on_submission: bool = False
 
 
 class StudentOut(Schema):
@@ -281,7 +306,9 @@ class StudentOut(Schema):
 
     id: int
     username: str
-    name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
     email: str = ""
     matriculation_no: str = ""
     lab: str = ""
@@ -297,7 +324,8 @@ class StudentIn(Schema):
 
     username: str
     password: str = ""  # empty => a random password is generated and reported
-    name: str = ""
+    first_name: str = ""
+    last_name: str = ""
     email: str = ""
     matriculation_no: str = ""
     lab: str = ""
@@ -317,7 +345,8 @@ class StudentUpdateIn(Schema):
 
     username: str | None = None
     password: str | None = None
-    name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     email: str | None = None
     matriculation_no: str | None = None
     lab: str | None = None
@@ -352,6 +381,78 @@ class StudentCourseAssignIn(Schema):
     """Payload for assigning a student to a course (or detaching with ``null``)."""
 
     student_id: int
+    course_id: int | None
+
+
+class AssistantOut(Schema):
+    """An assistant, as shown in the admin's member-management views."""
+
+    id: int
+    username: str
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
+    email: str = ""
+    matriculation_no: str = ""
+    lab: str = ""
+    labspace_id: str = ""
+    telephone: str = ""
+    course_id: int | None = None
+    course_name: str | None = None
+    is_active: bool = True
+
+
+class AssistantIn(Schema):
+    """Payload for creating an assistant account (admin)."""
+
+    username: str
+    password: str = ""  # empty => a random password is generated and reported
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
+    matriculation_no: str = ""
+    lab: str = ""
+    labspace_id: str = ""
+    telephone: str = ""
+    course_id: int | None = None
+
+
+class AssistantUpdateIn(Schema):
+    """
+    Payload for updating an assistant account (admin).
+
+    All fields are optional; only the provided ones are changed. ``password``,
+    when non-empty, replaces the assistant's password. The course assignment is
+    managed by the dedicated ``PUT /assistants/{id}/course`` endpoint.
+    """
+
+    username: str | None = None
+    password: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    matriculation_no: str | None = None
+    lab: str | None = None
+    labspace_id: str | None = None
+    telephone: str | None = None
+    is_active: bool | None = None
+
+
+class AssistantCreatedOut(AssistantOut):
+    """
+    :class:`AssistantOut` plus the password.
+
+    ``password`` is set when a password was generated for a new account (empty
+    ``password`` on create) or when the admin just reset it; ``None`` otherwise.
+    """
+
+    password: str | None = None
+
+
+class AssistantCourseAssignIn(Schema):
+    """Payload for assigning an assistant to a course (or detaching with ``null``)."""
+
+    assistant_id: int
     course_id: int | None
 
 

@@ -48,8 +48,10 @@ services:
       SEED_DEMO: ${SEED_DEMO-true}
       # DATABASE_URL is taken from .env (SQLite default, or postgres://).
     volumes:
+      # /opt/media is MEDIA_ROOT (uploaded login branding images).
       - flamecheck_db:/opt/db
       - flamecheck_static:/opt/staticfiles
+      - flamecheck_media:/opt/media
     depends_on:
       db:
         condition: service_healthy
@@ -77,4 +79,5 @@ services:
 volumes:
   flamecheck_db:
   flamecheck_static:
+  flamecheck_media:
   db_data:

@@ -79,11 +79,65 @@
           answer key and the submission window.
         </p>
       </HelpSection>
+      <HelpSection title="Multiple choice">
+        <p>
+          In addition to the analyses, students can answer <em>multiple-choice
+          cards</em>. The designer is reachable from the <strong>Multiple
+          Choice</strong> page (pick a course) or per course under
+          <strong>Courses → Multiple Choice</strong>: define <em>questions</em>
+          (text, options, one correct answer, plus a description and remarks for
+          your own documentation), group up to three questions into a
+          <em>card</em>, and present a time-windowed <em>sheet</em> to chosen
+          students.
+        </p>
+        <p>
+          Grading is per course (on the same page): points awarded for a fully
+          correct card (default 10) and the penalty per wrong answer (default
+          2). A card's score is the points minus the penalty times the number
+          of wrong answers, floored at zero.
+        </p>
+      </HelpSection>
+      <HelpSection title="Ion symbols">
+        <p>
+          An ion is written as one canonical symbol:
+          <code>formula&nbsp;+&nbsp;sign&nbsp;+&nbsp;magnitude</code>, with the
+          digit <em>always</em> present - e.g. <code>Na+1</code>, <code>Mg+2</code>,
+          <code>Fe+3</code>, <code>SO4-2</code>, <code>Cl-1</code>. The charge is
+          the part from the last <code>+</code>/<code>-</code> to the end, so
+          multi-valent cations are unambiguous (<code>Fe+2</code> vs <code>Fe+3</code>).
+        </p>
+        <p>
+          You may type a bare sign (<code>Na+</code>) or paste the IUPAC
+          superscript form (<code>SO&#8324;&#178;&#8315;</code>, <code>Mg&#178;&#8314;</code>);
+          the system normalizes it to the canonical form and derives the charge
+          and cation/anion kind from the symbol.
+        </p>
+        <p>
+          In the UI ions are rendered with the IUPAC superscript
+          (magnitude before the sign, unit charge without the 1):
+          SO<sub>4</sub><sup>2&#8722;</sup>, Na<sup>+</sup>, Mg<sup>2+</sup>.
+        </p>
+      </HelpSection>
       <HelpSection title="Substances (CSV import)">
         <p>
           Upload a CSV of substances to grow the catalog. Separate several ions
-          or synonyms with a semicolon (e.g. <code>Na+;Cl-</code>). Rows are
-          matched by name - a match updates the existing substance.
+          or synonyms with a semicolon (e.g. <code>Na+1;Cl-1</code>). Ions use
+          the canonical symbol (see "Ion symbols" above). Rows are matched by
+          name - a match updates the existing substance.
+        </p>
+      </HelpSection>
+      <HelpSection title="Authentication &amp; registration">
+        <p>
+          Everyone signs in with a JWT (username/password). Students can
+          additionally scan a personal barcode, or - if your course uses OAuth -
+          sign in via an external identity provider such as Keycloak.
+        </p>
+        <p>
+          How <em>student</em> accounts are created is set in <strong>Settings
+          → Registration</strong>: <code>manual</code> (you create them under
+          Courses → Members), <code>self-registration</code> (they register and
+          confirm their e-mail) or <code>oauth</code> (they sign in via the
+          provider and then complete a registration page).
         </p>
       </HelpSection>
       <HelpSection title="Settings">
@@ -121,6 +175,7 @@ const navItems = [
   { to: 'admin-courses', label: 'Courses' },
   { to: 'admin-types', label: 'Analysis Types' },
   { to: 'admin-substances', label: 'Substances' },
+  { to: 'admin-multichoice', label: 'Multiple Choice' },
 ]
 
 function isCurrent(name) {
