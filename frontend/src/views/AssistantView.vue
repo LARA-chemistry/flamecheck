@@ -465,11 +465,6 @@ const cols = [
     render: (row) => renderProgress(row),
   },
   {
-    title: 'Avg',
-    key: 'avg',
-    render: (row) => avgFor(row) ?? '—',
-  },
-  {
     title: '',
     key: 'actions',
     width: 90,
@@ -510,12 +505,6 @@ function rowProps(row) {
     style: 'cursor: pointer',
     onClick: () => openStudent(row),
   }
-}
-
-function avgFor(row) {
-  const scores = row.analyses.map((a) => a.score).filter((s) => s != null)
-  if (!scores.length) return null
-  return Math.round((scores.reduce((x, y) => x + y, 0) / scores.length) * 100) / 100
 }
 
 // ---- per-student statistics ----------------------------------------------
