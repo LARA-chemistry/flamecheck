@@ -29,10 +29,12 @@ SLEEP_WIKI = 0.2
 
 def http_get_json(url: str) -> dict | None:
     """Fetch a URL and decode JSON, returning None on failure."""
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    if not url.startswith(("http://", "https://")):
+        return None
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
             if attempt == 2:
@@ -106,6 +108,7 @@ def candidate_queries(row: dict[str, str]) -> list[str]:
 
 
 def main() -> None:
+    """Enrich the substance CSV in place with PubChem CIDs and Wikipedia links."""
     raw_lines = CSV_PATH.read_text(encoding="utf-8").splitlines()
     # Layout: line 1 = note, line 2 = blank, line 3 = header, rest = data rows.
     header = raw_lines[2]
@@ -115,7 +118,7 @@ def main() -> None:
     for row in rows:
         if len(row) < 6:
             continue
-        row_map = dict(zip(header.split(";"), row))
+        row_map = dict(zip(header.split(";"), row, strict=False))
         queries = candidate_queries(row_map)
 
         if not row_map.get("pubchem_id", "").strip():

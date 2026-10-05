@@ -1,4 +1,5 @@
-"""Verify and repair PubChem IDs and Wikipedia links in examples/substance_list.csv.
+"""
+Verify and repair PubChem IDs and Wikipedia links in examples/substance_list.csv.
 
 - Batch-resolves Wikipedia article titles through a small number of MediaWiki
   ``titles=`` requests (with redirect following), avoiding the per-query
@@ -18,7 +19,6 @@ import json
 import time
 import urllib.parse
 import urllib.request
-
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -54,10 +54,12 @@ CANDIDATES: dict[str, list[str]] = {
 
 def http_get_json(url: str) -> dict | None:
     """Fetch a URL and decode JSON, returning None on failure."""
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    if not url.startswith(("http://", "https://")):
+        return None
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode("utf-8"))
                 if isinstance(data, dict) and "error" in data:
                     print(f"  WARN: {url} -> API error: {data['error']}")
@@ -97,7 +99,8 @@ def save_cache(cache: dict[str, str]) -> None:
 
 
 def resolve_titles(titles: list[str]) -> dict[str, str]:
-    """Map each requested title to its canonical article title, '' if missing.
+    """
+    Map each requested title to its canonical article title, '' if missing.
 
     Returns an empty dict when the API call fails entirely, so callers can
     fall back to previously stored links instead of wiping them.
@@ -110,7 +113,7 @@ def resolve_titles(titles: list[str]) -> dict[str, str]:
         )
         data = http_get_json(f"{WIKI_URL}?{params}")
         if not isinstance(data, dict) or "query" not in data:
-            print(f"  WARN: title batch failed; keeping previously stored links")
+            print("  WARN: title batch failed; keeping previously stored links")
             return resolved
         query = data["query"]
         redirects = {r["from"]: r["to"] for r in query.get("redirects", [])}
@@ -126,7 +129,8 @@ def resolve_titles(titles: list[str]) -> dict[str, str]:
 
 
 def verify_cids(cids: list[str]) -> dict[str, str]:
-    """Map each CID to the PubChem record title, '' if the CID does not exist.
+    """
+    Map each CID to the PubChem record title, '' if the CID does not exist.
 
     CIDs already in the local cache are not re-verified against PubChem.
     """
@@ -147,9 +151,7 @@ def verify_cids(cids: list[str]) -> dict[str, str]:
             print("  batch CID check failed; falling back to per-CID requests")
             for cid in fresh:
                 single = http_get_json(PUBCHEM_PROPERTY_URL.format(cids=cid))
-                single_props = (
-                    single.get("PropertyTable", {}).get("Properties", []) if isinstance(single, dict) else []
-                )
+                single_props = single.get("PropertyTable", {}).get("Properties", []) if isinstance(single, dict) else []
                 titles[cid] = single_props[0].get("Title", "") if single_props else ""
                 time.sleep(0.5)
         for cid, title in titles.items():
@@ -165,6 +167,7 @@ def link_title(row: list[str]) -> str:
 
 
 def main() -> None:
+    """Verify and repair the CSV's PubChem CIDs and Wikipedia links in place."""
     raw_lines = CSV_PATH.read_text(encoding="utf-8").splitlines()
     header = raw_lines[2]
     rows = list(csv.reader(io.StringIO("\n".join(raw_lines[3:])), delimiter=";"))
