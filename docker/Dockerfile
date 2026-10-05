@@ -130,6 +130,12 @@ USER appuser
 
 EXPOSE 8000
 
+# Liveness probe for the orchestrator: the public branding endpoint answers
+# 200 once migrations have run and gunicorn is up. Python stdlib only — the
+# final image deliberately ships no curl/wget.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/branding', timeout=4).status == 200 else 1)"
+
 # SQLite database lives in /opt/db (a volume target for compose).
 ENV DATABASE_URL=sqlite:////opt/db/db.sqlite3
 

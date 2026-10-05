@@ -222,8 +222,12 @@ URLs use, so a realm configured this way appears on the login page as a
   works through the per-user `token_version` counter. (The OAuth callback
   itself uses a short-lived Django session that is exchanged for JWTs.)
 - **Rate limiting** — 5 logins / 10 barcode scans per minute (per
-  username + IP / per IP); `LOGIN_MAX_ATTEMPTS` adds a lockout after repeated
-  failures.
+  username + IP / per IP); on top of that, `LOGIN_MAX_ATTEMPTS` adds a
+  persistent, IP-independent lockout after repeated failures (for
+  `LOGIN_LOCKOUT_SECONDS`) that a successful login resets, so rotating source
+  addresses cannot keep an account unlocked. Behind a reverse proxy the
+  rate limits key on the *last* `X-Forwarded-For` entry (the one the trusted
+  proxy appended), not on the client-forged first one.
 - **Audit** — every password login attempt is stored in `LoginAttempt` with
   the client IP.
 - **Opaque barcode errors** — an unknown barcode is indistinguishable from an

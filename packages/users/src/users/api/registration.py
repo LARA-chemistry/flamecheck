@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import logout
@@ -39,11 +40,36 @@ from users.api.schemas import (
     RegistrationIn,
     UserOut,
 )
+from users.api.views import _client_ip, _login_out, _rate_limited
 from users.models import User, generate_labspace_id
 
 logger = logging.getLogger("flamecheck.audit")
 
 router = Router(tags=["registration"])
+
+# Throttle public account creation per client IP.
+_REGISTER_RATE_LIMIT = 10
+_REGISTER_WINDOW_SECONDS = 60
+
+
+def _check_same_site(request) -> None:
+    """
+    CSRF protection for the session-consuming OAuth exchange.
+
+    django-ninja marks every API view ``csrf_exempt`` at the middleware level
+    (safe for JWT bearer auth, which carries no cookie), but this endpoint
+    consumes the allauth *session* cookie. It therefore verifies the
+    ``Origin`` header itself: same-origin browsers always send it, while a
+    cross-site form or fetch carries the attacker's origin and is rejected.
+    """
+    origin = request.META.get("HTTP_ORIGIN")
+    if not origin:
+        raise HttpError(403, "Origin header is required.")
+    parsed = urlsplit(origin)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HttpError(403, "Invalid Origin header.")
+    if parsed.netloc.lower() != request.get_host().lower():
+        raise HttpError(403, "Cross-site request not allowed.")
 
 
 def _registration_mode() -> str:
@@ -130,6 +156,10 @@ def register(request, payload: RegisterIn):
     Registration is only possible while the registration mode is
     ``self_registration``; it always creates a *student*.
     """
+    ip = _client_ip(request)
+    if _rate_limited(f"register:{ip or 'no-ip'}", _REGISTER_RATE_LIMIT, _REGISTER_WINDOW_SECONDS):
+        raise ValidationError({"email": ["Too many registration attempts. Try again later."]})
+
     if _registration_mode() != "self_registration":
         raise HttpError(403, "Registration is not available. Accounts are managed by your instructor.")
 
@@ -175,10 +205,10 @@ def oauth_exchange(request):
     identity provider (with a Django session set by allauth) this endpoint mints
     the access/refresh tokens the SPA stores, then clears the session.
     """
+    _check_same_site(request)
     user = getattr(request, "user", None)
     if user is None or not getattr(user, "is_authenticated", False):
         raise AuthenticationError(401, "No active sign-in session to exchange.")
-    from users.api.views import _login_out
 
     out = _login_out(user, request)
     logger.info("OAuth exchange: %s (%s) obtained a JWT pair", user.username, user.role)

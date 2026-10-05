@@ -268,6 +268,17 @@ class TestSelfRegistration:
         # An inactive account fails authentication outright (401), not 403.
         assert resp.status_code == 401
 
+    def test_register_is_rate_limited_per_ip(self, client):
+        """Public account creation is throttled per client IP."""
+        from users.api.registration import _REGISTER_RATE_LIMIT
+
+        AppSettingsFactory(registration="self_registration")
+        for _ in range(_REGISTER_RATE_LIMIT):
+            self._register(client)  # first 202, then 409 (duplicate e-mail)
+        resp = self._register(client)
+        assert resp.status_code == 422
+        assert "Too many registration attempts" in str(resp.json())
+
 
 # --------------------------------------------------------------------------- #
 # OAuth adapter                                                               #
@@ -307,20 +318,50 @@ class TestOAuthAdapter:
 # --------------------------------------------------------------------------- #
 class TestOauthExchange:
     def test_no_session_401(self, client):
-        resp = client.post("/api/v1/auth/oauth/exchange", {}, content_type="application/json")
+        resp = client.post(
+            "/api/v1/auth/oauth/exchange",
+            {},
+            content_type="application/json",
+            HTTP_ORIGIN="http://testserver",
+        )
         assert resp.status_code == 401
 
     def test_session_user_gets_jwt(self, client, student):
         client.force_login(student)
-        resp = client.post("/api/v1/auth/oauth/exchange", {}, content_type="application/json")
+        resp = client.post(
+            "/api/v1/auth/oauth/exchange",
+            {},
+            content_type="application/json",
+            HTTP_ORIGIN="http://testserver",
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["user"]["username"] == student.username
         assert data["tokens"]["access"]
         assert data["tokens"]["refresh"]
         # The session is cleared after the exchange (the SPA now uses the JWT).
-        resp2 = client.post("/api/v1/auth/oauth/exchange", {}, content_type="application/json")
+        resp2 = client.post(
+            "/api/v1/auth/oauth/exchange",
+            {},
+            content_type="application/json",
+            HTTP_ORIGIN="http://testserver",
+        )
         assert resp2.status_code == 401
+
+    def test_exchange_requires_origin_header(self, client):
+        """The session-consuming exchange rejects requests without an Origin (CSRF)."""
+        resp = client.post("/api/v1/auth/oauth/exchange", {}, content_type="application/json")
+        assert resp.status_code == 403
+
+    def test_exchange_rejects_cross_site_origin(self, client):
+        """A cross-site form/fetch cannot consume the victim's sign-in session."""
+        resp = client.post(
+            "/api/v1/auth/oauth/exchange",
+            {},
+            content_type="application/json",
+            HTTP_ORIGIN="http://evil.example.com",
+        )
+        assert resp.status_code == 403
 
 
 # --------------------------------------------------------------------------- #

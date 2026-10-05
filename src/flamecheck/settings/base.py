@@ -196,6 +196,21 @@ LOGIN_MAX_ATTEMPTS = env.int("LOGIN_MAX_ATTEMPTS", default=5)
 LOGIN_LOCKOUT_SECONDS = env.int("LOGIN_LOCKOUT_SECONDS", default=300)
 
 # ---------------------------------------------------------------------------
+# Caching
+# ---------------------------------------------------------------------------
+# The database cache backend is *shared* across all gunicorn workers, so the
+# per-IP/per-user rate limits actually apply to the whole server (the default
+# local-memory cache is per-process and would weaken them by the worker count).
+# It needs no extra service and works unchanged with SQLite and Postgres.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "flamecheck_cache",
+        "TIMEOUT": 300,
+    }
+}
+
+# ---------------------------------------------------------------------------
 # External reference links
 # ---------------------------------------------------------------------------
 # Base URL for PubChem compound pages. A substance's PubChem CID is appended to
