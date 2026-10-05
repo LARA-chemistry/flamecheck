@@ -84,6 +84,8 @@ def _question_payload(q: MCQuestion) -> dict:
     """Serialize a question for the admin (with the correct-option flag)."""
     return {
         "id": q.id,
+        "course_id": q.course_id,
+        "course_name": q.course.name,
         "text": q.text,
         "description": q.description,
         "remarks": q.remarks,
@@ -118,7 +120,7 @@ def _replace_options(question: MCQuestion, options: list) -> None:
 def list_questions(request, course_id: int | None = None):
     """List questions (optionally filtered by course; assistants see their courses)."""
     user = _staff_user(request)
-    qs = MCQuestion.objects.all().prefetch_related("options_set")
+    qs = MCQuestion.objects.all().select_related("course").prefetch_related("options_set")
     if course_id is not None:
         _visible_course(user, course_id)
     elif not user.is_admin:
@@ -196,6 +198,8 @@ def _card_payload(card: MCCard) -> dict:
     """Serialize a card for the admin (ordered questions)."""
     return {
         "id": card.id,
+        "course_id": card.course_id,
+        "course_name": card.course.name,
         "title": card.title,
         "description": card.description,
         "remarks": card.remarks,
@@ -208,7 +212,7 @@ def _card_payload(card: MCCard) -> dict:
 def list_cards(request, course_id: int | None = None):
     """List cards (optionally filtered by course; assistants see their courses)."""
     user = _staff_user(request)
-    qs = MCCard.objects.all().prefetch_related("card_questions__question")
+    qs = MCCard.objects.all().select_related("course").prefetch_related("card_questions__question")
     if course_id is not None:
         _visible_course(user, course_id)
     elif not user.is_admin:
@@ -313,14 +317,16 @@ def _set_students(sheet: MCSheet, course: Course, student_ids: list[int], number
 
 
 @router.get("/sheets", response=list[dict])
-def list_sheets(request, course_id: int | None = None):
-    """List sheets (optionally filtered by course; assistants see their courses)."""
+def list_sheets(request, course_id: int | None = None, card_id: int | None = None):
+    """List sheets (optionally filtered by course/card; assistants see their courses)."""
     user = _staff_user(request)
     qs = MCSheet.objects.all().select_related("card", "course").prefetch_related("assignments")
     if course_id is not None:
         _visible_course(user, course_id)
     elif not user.is_admin:
         qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
+    if card_id is not None:
+        qs = qs.filter(card_id=card_id)
     return [_sheet_payload(s) for s in qs]
 
 
@@ -388,10 +394,12 @@ def update_sheet(request, sheet_id: int, payload: MCSheetIn):
 
 @router.delete("/sheets/{sheet_id}", response=None)
 def delete_sheet(request, sheet_id: int):
-    """Delete a sheet (admin/assistant)."""
+    """Delete a sheet that has no submissions (admin/assistant)."""
     user = _staff_user(request)
     sheet = MCSheet.objects.filter(pk=sheet_id).first()
     if sheet is None or not _course_visible_to(user, sheet.course_id):
         raise HttpError(404, "Sheet not found.")
+    if sheet.submissions.exists():
+        raise HttpError(409, "Sheet has submissions and cannot be deleted.")
     sheet.delete()
     logger.info("Admin %s deleted MC sheet %d", request.user.username, sheet_id)

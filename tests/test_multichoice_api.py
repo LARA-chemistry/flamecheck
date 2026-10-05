@@ -134,6 +134,22 @@ class TestCardAdmin:
     def _two_questions(self, course) -> list:
         return [MCQuestionFactory(course=course), MCQuestionFactory(course=course)]
 
+    def test_card_payload_includes_course(self, client, admin_user, course, auth_headers):
+        card = MCCardFactory(course=course)
+        resp = client.get("/api/v1/admin/multichoice/cards", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        entry = next(c for c in resp.json() if c["id"] == card.id)
+        assert entry["course_id"] == course.id
+        assert entry["course_name"] == course.name
+
+    def test_question_payload_includes_course(self, client, admin_user, course, auth_headers):
+        q = MCQuestionFactory(course=course)
+        resp = client.get("/api/v1/admin/multichoice/questions", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        entry = next(item for item in resp.json() if item["id"] == q.id)
+        assert entry["course_id"] == course.id
+        assert entry["course_name"] == course.name
+
     def test_create_card(self, client, admin_user, course, auth_headers):
         qs = self._two_questions(course)
         resp = client.post(
@@ -219,6 +235,26 @@ class TestSheetAdmin:
             **auth_headers(admin_user),
         )
         assert resp.status_code == 422
+
+    def test_list_sheets_filtered_by_card(self, client, admin_user, course, auth_headers):
+        card_a = MCCardFactory(course=course)
+        card_b = MCCardFactory(course=course)
+        sheet_a = MCSheetFactory(card=card_a, course=course)
+        sheet_b = MCSheetFactory(card=card_b, course=course)
+        resp = client.get(f"/api/v1/admin/multichoice/sheets?card_id={card_a.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        ids = {s["id"] for s in resp.json()}
+        assert ids == {sheet_a.id}
+        assert sheet_b.id not in ids
+
+    def test_delete_sheet_with_submissions_rejected(self, client, admin_user, course, auth_headers):
+        sheet = MCSheetFactory(course=course)
+        student = UserFactory(course=course)
+        MCStudentAssignmentFactory(sheet=sheet, student=student, course=course)
+        answers = {q.id: q.correct_option().id for q in sheet.questions()}
+        sheet.submit(student, answers, idempotency_key="k-delete")
+        resp = client.delete(f"/api/v1/admin/multichoice/sheets/{sheet.id}", **auth_headers(admin_user))
+        assert resp.status_code == 409
 
 
 class TestStudentEndpoints:
