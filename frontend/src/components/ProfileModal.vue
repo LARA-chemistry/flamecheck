@@ -8,6 +8,8 @@ const props = defineProps({
   show: { type: Boolean, required: true },
   user: { type: Object, required: true },
   analyses: { type: Array, required: true },
+  // Time-windowed multiple-choice sheets (the student's /mc-sheets payload).
+  mcSheets: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:show'])
 
@@ -24,6 +26,56 @@ const expanded = ref({})
 const submittedAnalyses = computed(() =>
   props.analyses.filter((a) => a.window_status === 'submitted'),
 )
+
+// Multiple-choice state: which submitted sheets are expanded, the lazily
+// fetched per-sheet detail (questions with revealed answers + the graded
+// result) and per-sheet loading flags. Details are only fetched on first
+// expand — a course can have many sheets, so the list stays cheap.
+const expandedMc = ref({})
+const mcDetails = ref({})
+const mcLoading = ref({})
+
+const submittedMc = computed(() => props.mcSheets.filter((m) => m.window_status === 'submitted'))
+
+async function fetchMcDetail(sheet) {
+  mcLoading.value = { ...mcLoading.value, [sheet.id]: true }
+  try {
+    const payload = await api.get(`/mc-sheets/${sheet.id}`)
+    mcDetails.value = { ...mcDetails.value, [sheet.id]: payload }
+  } catch {
+    mcDetails.value = { ...mcDetails.value, [sheet.id]: null }
+  } finally {
+    mcLoading.value = { ...mcLoading.value, [sheet.id]: false }
+  }
+}
+
+function toggleExpandMc(sheet) {
+  expandedMc.value = { ...expandedMc.value, [sheet.id]: !expandedMc.value[sheet.id] }
+  if (expandedMc.value[sheet.id] && !mcDetails.value[sheet.id] && !mcLoading.value[sheet.id]) {
+    fetchMcDetail(sheet)
+  }
+}
+function onMcHeadClick(sheet) {
+  if (sheet.window_status === 'submitted') toggleExpandMc(sheet)
+}
+
+// Per-question lookup into the fetched detail (result.per_question maps
+// question id -> selected/correct option ids + verdict).
+function mcPq(sheet, q) {
+  return (mcDetails.value[sheet.id]?.result?.per_question || []).find((p) => p.question_id === q.id)
+}
+function mcSelectedText(sheet, q) {
+  const pq = mcPq(sheet, q)
+  if (!pq) return null
+  const opt = (q.options || []).find((o) => o.id === pq.selected_option_id)
+  return opt ? opt.text : '?'
+}
+function mcIsCorrect(sheet, q) {
+  return !!mcPq(sheet, q)?.is_correct
+}
+function mcCorrectText(q) {
+  return (q.options || []).find((o) => o.is_correct)?.text || '—'
+}
 
 async function fetchResults() {
   if (submittedAnalyses.value.length === 0) {
@@ -138,6 +190,9 @@ watch(
   (val) => {
     if (val) {
       expanded.value = {}
+      expandedMc.value = {}
+      mcDetails.value = {}
+      mcLoading.value = {}
       fetchResults()
     }
   },
@@ -299,6 +354,84 @@ watch(
             {{ error }}
           </n-alert>
         </template>
+      </section>
+
+      <!-- Multiple-choice results ------------------------------------------ -->
+      <section v-if="mcSheets.length" class="profile__results">
+        <h3 class="profile__section-title">
+          Multiple choice results
+          <span class="profile__section-count">{{ submittedMc.length }} of {{ mcSheets.length }} submitted</span>
+        </h3>
+
+        <n-scrollbar style="max-height: 46vh; min-height: 120px">
+          <div class="profile__list">
+            <article
+              v-for="m in mcSheets"
+              :key="m.id"
+              class="result-row"
+              :class="{ 'result-row--expandable': m.window_status === 'submitted' }"
+            >
+              <header class="result-row__head" @click="onMcHeadClick(m)">
+                <span class="result-row__num">MC #{{ m.number }}</span>
+                <h4 class="result-row__title">{{ m.card_title }}</h4>
+                <n-tag :type="windowTagType(m.window_status)" round size="small">
+                  {{ windowLabel(m.window_status) }}
+                </n-tag>
+                <span v-if="m.window_status === 'submitted'" class="result-row__score">
+                  <strong>{{ m.score ?? '—' }}</strong>
+                  <small v-if="mcDetails[m.id]?.result">/ {{ mcDetails[m.id].result.ideal_score }}</small>
+                </span>
+                <svg
+                  v-if="m.window_status === 'submitted'"
+                  class="result-row__chevron"
+                  :class="{ 'result-row__chevron--open': expandedMc[m.id] }"
+                  viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"
+                >
+                  <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </header>
+
+              <!-- Submitted: per-question breakdown (fetched on expand) -->
+              <div v-if="m.window_status === 'submitted'" class="result-row__body">
+                <div v-if="!expandedMc[m.id]" class="result-row__summary">
+                  <span class="result-row__meta">
+                    <template v-if="mcDetails[m.id]?.result">
+                      {{ mcDetails[m.id].result.correct_count }} right · {{ mcDetails[m.id].result.wrong_count }} wrong
+                      <template v-if="mcDetails[m.id].result.submitted_at"> · {{ fmtDateTime(mcDetails[m.id].result.submitted_at) }}</template>
+                    </template>
+                    <template v-else>Score {{ m.score ?? '—' }}</template>
+                  </span>
+                  <button class="result-row__link" @click="toggleExpandMc(m)">Show breakdown</button>
+                </div>
+
+                <div v-else class="result-row__detail">
+                  <div v-if="mcLoading[m.id]" class="result-row__note">Loading…</div>
+                  <div v-else-if="!mcDetails[m.id]" class="result-row__note">Result not yet available.</div>
+                  <template v-else>
+                    <div v-for="q in mcDetails[m.id].questions" :key="q.id" class="mcq">
+                      <p class="mcq__text">{{ q.text }}</p>
+                      <div class="mcq__answers">
+                        <n-tag :type="mcIsCorrect(m, q) ? 'success' : 'error'" :bordered="false" round size="small">
+                          {{ mcSelectedText(m, q) }}
+                        </n-tag>
+                        <template v-if="!mcIsCorrect(m, q)">
+                          <span class="mcq__correct-label">correct:</span>
+                          <n-tag type="success" :bordered="false" round size="small">{{ mcCorrectText(q) }}</n-tag>
+                        </template>
+                      </div>
+                    </div>
+                    <button class="result-row__link" @click="toggleExpandMc(m)">Hide breakdown</button>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Not submitted: a short status note -->
+              <div v-else class="result-row__note">
+                {{ m.window_status === 'too_early' ? 'Opens ' + (m.window_start ? fmtDateTime(m.window_start) : 'soon') : m.window_status === 'too_late' ? 'Window closed' : 'Window open — submit when ready.' }}
+              </div>
+            </article>
+          </div>
+        </n-scrollbar>
       </section>
     </div>
 
@@ -549,6 +682,33 @@ watch(
   font-size: var(--fc-fs-sm);
   color: var(--fc-muted);
   font-style: italic;
+}
+
+/* Multiple-choice per-question rows --------------------------------------- */
+.mcq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-xs);
+  padding: var(--fc-space-xs) var(--fc-space-sm);
+  border-radius: var(--fc-radius-sm);
+  background: var(--fc-bg);
+}
+.mcq__text {
+  margin: 0;
+  font-size: var(--fc-fs-sm);
+  font-weight: 600;
+  color: var(--fc-ink);
+}
+.mcq__answers {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fc-space-xs);
+}
+.mcq__correct-label {
+  font-size: var(--fc-fs-xs);
+  font-weight: 600;
+  color: var(--fc-muted);
 }
 
 @media (max-width: 520px) {

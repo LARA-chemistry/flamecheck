@@ -189,7 +189,7 @@
       </div>
     </footer>
 
-    <ProfileModal v-model:show="profileShow" :user="user" :analyses="analyses" />
+    <ProfileModal v-model:show="profileShow" :user="user" :analyses="analyses" :mc-sheets="mcSheets" />
   </div>
 </template>
 
