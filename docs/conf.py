@@ -15,7 +15,7 @@ from sphinx.ext import apidoc
 project = ""
 copyright = "2026, mark doerr"
 author = "mark doerr"
-release = "0.1.1"
+release = "0.1.2"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
