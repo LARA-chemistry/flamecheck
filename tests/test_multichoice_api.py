@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from config.factory import AssistantCourseFactory
+from config.factory import AssistantCourseFactory, CourseFactory
 from config.models import AssistantCourse, GradingConfig
 from multichoice.factory import (
     MCCardFactory,
@@ -255,6 +255,44 @@ class TestSheetAdmin:
         sheet.submit(student, answers, idempotency_key="k-delete")
         resp = client.delete(f"/api/v1/admin/multichoice/sheets/{sheet.id}", **auth_headers(admin_user))
         assert resp.status_code == 409
+
+
+class TestListCourseFilter:
+    """``?course_id=`` on the list endpoints must filter the results (not only check visibility)."""
+
+    @pytest.fixture
+    def assistant_course(self, assistant, course) -> AssistantCourse:
+        """Link the assistant fixture to the course fixture."""
+        return AssistantCourseFactory(assistant=assistant, course=course)
+
+    def test_questions_filtered_by_course(self, client, admin_user, course, auth_headers):
+        other = CourseFactory(name="Other Course")
+        q_here = MCQuestionFactory(course=course)
+        MCQuestionFactory(course=other)
+        resp = client.get(f"/api/v1/admin/multichoice/questions?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert {q["id"] for q in resp.json()} == {q_here.id}
+
+    def test_cards_filtered_by_course(self, client, admin_user, course, auth_headers):
+        other = CourseFactory(name="Other Course")
+        card_here = MCCardFactory(course=course)
+        MCCardFactory(course=other)
+        resp = client.get(f"/api/v1/admin/multichoice/cards?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert {c["id"] for c in resp.json()} == {card_here.id}
+
+    def test_sheets_filtered_by_course(self, client, admin_user, course, auth_headers):
+        other = CourseFactory(name="Other Course")
+        sheet_here = MCSheetFactory(card=MCCardFactory(course=course), course=course)
+        MCSheetFactory(card=MCCardFactory(course=other), course=other)
+        resp = client.get(f"/api/v1/admin/multichoice/sheets?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert {s["id"] for s in resp.json()} == {sheet_here.id}
+
+    def test_assistant_cannot_filter_by_foreign_course(self, client, assistant, assistant_course, course, auth_headers):
+        foreign = CourseFactory(name="Foreign Course")
+        resp = client.get(f"/api/v1/admin/multichoice/cards?course_id={foreign.id}", **auth_headers(assistant))
+        assert resp.status_code == 404
 
 
 class TestStudentEndpoints:

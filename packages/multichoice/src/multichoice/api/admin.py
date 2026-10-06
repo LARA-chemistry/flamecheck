@@ -123,6 +123,7 @@ def list_questions(request, course_id: int | None = None):
     qs = MCQuestion.objects.all().select_related("course").prefetch_related("options_set")
     if course_id is not None:
         _visible_course(user, course_id)
+        qs = qs.filter(course_id=course_id)
     elif not user.is_admin:
         qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
     return [_question_payload(q) for q in qs]
@@ -215,6 +216,7 @@ def list_cards(request, course_id: int | None = None):
     qs = MCCard.objects.all().select_related("course").prefetch_related("card_questions__question")
     if course_id is not None:
         _visible_course(user, course_id)
+        qs = qs.filter(course_id=course_id)
     elif not user.is_admin:
         qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
     return [_card_payload(c) for c in qs]
@@ -323,6 +325,7 @@ def list_sheets(request, course_id: int | None = None, card_id: int | None = Non
     qs = MCSheet.objects.all().select_related("card", "course").prefetch_related("assignments")
     if course_id is not None:
         _visible_course(user, course_id)
+        qs = qs.filter(course_id=course_id)
     elif not user.is_admin:
         qs = qs.filter(course_id__in=user.assistant_courses.values_list("course_id", flat=True))
     if card_id is not None:
