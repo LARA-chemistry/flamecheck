@@ -10,8 +10,8 @@ Covers:
   task programme with a per-student label and a valid (subset) answer key, and
   the per-analysis retry-penalty grading config is in place,
 - the Pharmacy showcase: the same CSV-salt programme with the pharmacy task
-  names, the per-salt EP monograph multiple-choice cards, and the per-analysis
-  grading config (10 / 8 / 6, min points to pass 30),
+  names, the EP monograph multiple-choice cards (four featured salts, one card
+  each), and the per-analysis grading config (10 / 8 / 6, min points to pass 30),
 - the announcement windows span the open / too_early / too_late / submitted
   states,
 - the per-course grading overrides (Geology, Pharmacy, Chemistry, Medicine,
@@ -232,7 +232,7 @@ class TestSubmissions:
 
 
 class TestPharmacySeed:
-    """The Pharmacy showcase: CSV-salt programme + per-salt EP monograph cards."""
+    """The Pharmacy showcase: CSV-salt programme + EP monograph cards (four featured salts)."""
 
     def test_types_and_scopes(self):
         # All seven pharmacy tasks exist with the syllabus ion scopes.
@@ -269,14 +269,19 @@ class TestPharmacySeed:
             assert correct.issubset(possible)
             assert inst.assigned_substances.count() >= 1
 
-    def test_ep_monograph_cards_per_salt(self):
-        # One "EP Monograph - <salt>" card per CSV salt, each with the three
-        # shared sub-test questions and one open sheet for all students.
+    def test_ep_monograph_cards(self):
+        # Four featured salts -> four "EP Monograph - <salt>" cards (the demo set
+        # each student gets), each with the three shared sub-test questions and
+        # one open sheet for all students.
         pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
         cards = MCCard.objects.filter(course=pharmacy)
-        assert cards.count() == 64
-        assert all(c.title.startswith("EP Monograph - ") for c in cards)
-        assert len({c.title for c in cards}) == 64
+        assert cards.count() == 4
+        assert {c.title for c in cards} == {
+            "EP Monograph - Aluminum acetate",
+            "EP Monograph - Calcium carbonate",
+            "EP Monograph - Sodium chloride",
+            "EP Monograph - Iron(II/III) bromide",
+        }
         assert MCQuestion.objects.filter(course=pharmacy).count() == 3
         for card in cards:
             assert [q.text for q in card.questions()] == [
@@ -284,8 +289,8 @@ class TestPharmacySeed:
                 "Is the salt pure?",
                 "Does it meet the monograph requirements?",
             ]
-        assert MCSheet.objects.filter(course=pharmacy).count() == 64
-        assert MCStudentAssignment.objects.filter(course=pharmacy).count() == 64 * 3
+        assert MCSheet.objects.filter(course=pharmacy).count() == 4
+        assert MCStudentAssignment.objects.filter(course=pharmacy).count() == 4 * 3
 
     def test_worked_submissions_graded(self):
         pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")

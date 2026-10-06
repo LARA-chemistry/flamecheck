@@ -17,7 +17,8 @@ What it creates, illustrating every feature of the system across six courses:
 * **Pharmacy** - the same CSV-salt task programme with the pharmacy task names
   (Practice Analysis (1 Salt), Analysis 1-5), graded per analysis with a retry
   penalty (10 -> 8 -> 6), min points to pass 30, plus the European-Pharmacopoeia
-  monograph as one multiple-choice card *per salt* (identity / purity / monograph).
+  monograph as multiple-choice cards - four featured salts, one card each
+  (identity / purity / monograph).
 * **Chemistry** - the "new analysis" (repeat) submission workflow: a wrong
   submission hands the student a fresh re-trial analysis of the same type.
 * **Medicine** - a simple per-analysis course (three analyses, three trials) plus a
@@ -326,6 +327,17 @@ _PHARMACY_MONOGRAPH: tuple[str, str] = (
     "European Pharmacopoeia Monography Analyses",
     "One identity test, one purity test and one monograph test on a salt; results are "
     "stated as complies or does not comply (run via the EP Monograph cards).",
+)
+
+# The salts featured as EP monograph cards in the Pharmacy demo: four different
+# metals with four different anions, so every student gets a small, navigable
+# set of four cards instead of one card per CSV salt (the full CSV list still
+# backs the classic analysis tasks).
+_PHARMACY_MONOGRAPH_SALTS = (
+    "Aluminum acetate",
+    "Calcium carbonate",
+    "Sodium chloride",
+    "Iron(II/III) bromide",
 )
 
 # Announcements for the non-Geology courses:
@@ -849,7 +861,7 @@ class Command(BaseCommand):
     def _seed_pharmacy(
         self, courses: dict[str, Course], users: dict[str, User], types: dict[str, AnalysisType]
     ) -> None:
-        """Seed the Pharmacy course: CSV salts, the pharmacy task programme and the per-salt EP monograph cards."""
+        """Seed the Pharmacy course: CSV salts, the pharmacy task programme and the EP monograph cards."""
         course = courses.get("Inorganic Chemistry WS 2026 - Pharmacy")
         if course is None:
             return
@@ -858,24 +870,30 @@ class Command(BaseCommand):
             return
         salts = self._load_csv_salts({i.symbol: i for i in Ion.objects.all()})
         self._seed_course_programme(course, students, _PHARMACY_TYPES, types, salts)
-        self._seed_pharmacy_monograph(course, students, salts)
+        card_count = self._seed_pharmacy_monograph(course, students, salts)
         self.stdout.write(
             self.style.SUCCESS(
                 f"  pharmacy:      {len(_PHARMACY_TYPES)} analyses x {len(students)} students, "
-                f"{len(salts)} EP monograph cards"
+                f"{card_count} EP monograph cards"
             )
         )
 
-    def _seed_pharmacy_monograph(self, course: Course, students: list[User], salts: list[dict[str, Any]]) -> None:
+    def _seed_pharmacy_monograph(self, course: Course, students: list[User], salts: list[dict[str, Any]]) -> int:
         """
         Seed the European Pharmacopoeia monograph cards for the Pharmacy course.
 
-        One card per CSV salt ("EP Monograph - <salt>", with a description naming
-        the monograph reference) carrying the three shared sub-test questions
-        (identity, purity, monograph compliance) and one open sheet per card for
-        all students. Two worked submissions on the first card exercise the real
-        grading logic: one fully compliant (10/10) and one with a failed purity
-        test (10 - 2 penalty = 8); the remaining student is left unsubmitted.
+        One card per featured salt ("EP Monograph - <salt>", with a description
+        naming the monograph reference) carrying the three shared sub-test
+        questions (identity, purity, monograph compliance) and one open sheet
+        per card for all students. Only a handful of salts is featured, so each
+        student gets four navigable cards instead of one per CSV salt. Two
+        worked submissions on the first card exercise the real grading logic:
+        one fully compliant (10/10) and one with a failed purity test (10 - 2
+        penalty = 8); the remaining student is left unsubmitted.
+
+        Returns:
+            The number of monograph cards created.
+
         """
         from datetime import timedelta
 
@@ -903,9 +921,12 @@ class Command(BaseCommand):
             make_question("Does it meet the monograph requirements?", "complies", "does not comply"),
         ]
 
+        by_name = {salt["substance"].name: salt for salt in salts}
+        monograph_salts = [by_name[name] for name in _PHARMACY_MONOGRAPH_SALTS if name in by_name] or salts[:4]
+
         now = timezone.now().replace(microsecond=0)
         first_sheet: MCSheet | None = None
-        for salt in salts:
+        for salt in monograph_salts:
             substance = salt["substance"]
             card, _ = MCCard.objects.update_or_create(
                 course=course,
@@ -939,13 +960,13 @@ class Command(BaseCommand):
             if first_sheet is None:
                 first_sheet = sheet
 
-        if first_sheet is None or len(students) < 2:
-            return
-        correct = {q.id: q.options_set.get(is_correct=True).id for q in questions}
-        first_sheet.submit(students[0], dict(correct), idempotency_key=f"seed-pharma-mc-ok-{students[0].id}")
-        impure_answers = dict(correct)
-        impure_answers[questions[1].id] = questions[1].options_set.get(is_correct=False).id
-        first_sheet.submit(students[1], impure_answers, idempotency_key=f"seed-pharma-mc-impure-{students[1].id}")
+        if first_sheet is not None and len(students) >= 2:
+            correct = {q.id: q.options_set.get(is_correct=True).id for q in questions}
+            first_sheet.submit(students[0], dict(correct), idempotency_key=f"seed-pharma-mc-ok-{students[0].id}")
+            impure_answers = dict(correct)
+            impure_answers[questions[1].id] = questions[1].options_set.get(is_correct=False).id
+            first_sheet.submit(students[1], impure_answers, idempotency_key=f"seed-pharma-mc-impure-{students[1].id}")
+        return len(monograph_salts)
 
     # -- singletons (grading + app settings) ---------------------------------
     def _seed_singletons(self, courses: dict[str, Course]) -> None:
