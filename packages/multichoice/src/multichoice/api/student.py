@@ -54,11 +54,13 @@ def list_my_mc_sheets(request):
             "id": s.id,
             "card_title": s.card.title,
             "number": s.number,
-            "window_status": s.window_status(),
+            # Per-student: a sheet shared with other students is still "open"
+            # (or "too_early" / "too_late") until this student has answered.
+            "window_status": s.student_window_status(user),
             "window_start": s.window_start.isoformat(),
             "window_end": s.window_end.isoformat(),
             "submission_count": s.submissions.filter(student=user).count(),
-            "score": s.score(),
+            "score": s.student_score(user),
             "question_count": s.card.question_count(),
         }
         for s in sheets
@@ -94,7 +96,7 @@ def mc_sheet_detail(request, sheet_id: int):
         "id": sheet.id,
         "card_title": card.title,
         "number": sheet.number,
-        "window_status": sheet.window_status(),
+        "window_status": sheet.student_window_status(user),
         "window_start": sheet.window_start.isoformat(),
         "window_end": sheet.window_end.isoformat(),
         "questions": questions,

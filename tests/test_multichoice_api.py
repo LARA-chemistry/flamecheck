@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from config.models import GradingConfig
+from config.factory import AssistantCourseFactory, CourseFactory
+from config.models import AssistantCourse, GradingConfig
 from multichoice.factory import (
     MCCardFactory,
     MCQuestionFactory,
@@ -133,6 +134,22 @@ class TestCardAdmin:
     def _two_questions(self, course) -> list:
         return [MCQuestionFactory(course=course), MCQuestionFactory(course=course)]
 
+    def test_card_payload_includes_course(self, client, admin_user, course, auth_headers):
+        card = MCCardFactory(course=course)
+        resp = client.get("/api/v1/admin/multichoice/cards", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        entry = next(c for c in resp.json() if c["id"] == card.id)
+        assert entry["course_id"] == course.id
+        assert entry["course_name"] == course.name
+
+    def test_question_payload_includes_course(self, client, admin_user, course, auth_headers):
+        q = MCQuestionFactory(course=course)
+        resp = client.get("/api/v1/admin/multichoice/questions", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        entry = next(item for item in resp.json() if item["id"] == q.id)
+        assert entry["course_id"] == course.id
+        assert entry["course_name"] == course.name
+
     def test_create_card(self, client, admin_user, course, auth_headers):
         qs = self._two_questions(course)
         resp = client.post(
@@ -218,6 +235,64 @@ class TestSheetAdmin:
             **auth_headers(admin_user),
         )
         assert resp.status_code == 422
+
+    def test_list_sheets_filtered_by_card(self, client, admin_user, course, auth_headers):
+        card_a = MCCardFactory(course=course)
+        card_b = MCCardFactory(course=course)
+        sheet_a = MCSheetFactory(card=card_a, course=course)
+        sheet_b = MCSheetFactory(card=card_b, course=course)
+        resp = client.get(f"/api/v1/admin/multichoice/sheets?card_id={card_a.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        ids = {s["id"] for s in resp.json()}
+        assert ids == {sheet_a.id}
+        assert sheet_b.id not in ids
+
+    def test_delete_sheet_with_submissions_rejected(self, client, admin_user, course, auth_headers):
+        sheet = MCSheetFactory(course=course)
+        student = UserFactory(course=course)
+        MCStudentAssignmentFactory(sheet=sheet, student=student, course=course)
+        answers = {q.id: q.correct_option().id for q in sheet.questions()}
+        sheet.submit(student, answers, idempotency_key="k-delete")
+        resp = client.delete(f"/api/v1/admin/multichoice/sheets/{sheet.id}", **auth_headers(admin_user))
+        assert resp.status_code == 409
+
+
+class TestListCourseFilter:
+    """``?course_id=`` on the list endpoints must filter the results (not only check visibility)."""
+
+    @pytest.fixture
+    def assistant_course(self, assistant, course) -> AssistantCourse:
+        """Link the assistant fixture to the course fixture."""
+        return AssistantCourseFactory(assistant=assistant, course=course)
+
+    def test_questions_filtered_by_course(self, client, admin_user, course, auth_headers):
+        other = CourseFactory(name="Other Course")
+        q_here = MCQuestionFactory(course=course)
+        MCQuestionFactory(course=other)
+        resp = client.get(f"/api/v1/admin/multichoice/questions?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert {q["id"] for q in resp.json()} == {q_here.id}
+
+    def test_cards_filtered_by_course(self, client, admin_user, course, auth_headers):
+        other = CourseFactory(name="Other Course")
+        card_here = MCCardFactory(course=course)
+        MCCardFactory(course=other)
+        resp = client.get(f"/api/v1/admin/multichoice/cards?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert {c["id"] for c in resp.json()} == {card_here.id}
+
+    def test_sheets_filtered_by_course(self, client, admin_user, course, auth_headers):
+        other = CourseFactory(name="Other Course")
+        sheet_here = MCSheetFactory(card=MCCardFactory(course=course), course=course)
+        MCSheetFactory(card=MCCardFactory(course=other), course=other)
+        resp = client.get(f"/api/v1/admin/multichoice/sheets?course_id={course.id}", **auth_headers(admin_user))
+        assert resp.status_code == 200
+        assert {s["id"] for s in resp.json()} == {sheet_here.id}
+
+    def test_assistant_cannot_filter_by_foreign_course(self, client, assistant, assistant_course, course, auth_headers):
+        foreign = CourseFactory(name="Foreign Course")
+        resp = client.get(f"/api/v1/admin/multichoice/cards?course_id={foreign.id}", **auth_headers(assistant))
+        assert resp.status_code == 404
 
 
 class TestStudentEndpoints:
@@ -342,6 +417,34 @@ class TestStudentEndpoints:
         assert resp.status_code == 200
         assert resp.json()["score"] == 8
 
+    def test_shared_sheet_status_is_per_student(self, client, course, auth_headers):
+        # Two students on one sheet: the non-submitter still sees the sheet as
+        # open with no score/result, while the submitter sees the graded result.
+        sheet, student = self._setup_sheet(course)
+        other = UserFactory(course=course)
+        MCStudentAssignmentFactory(sheet=sheet, student=other, course=course)
+        answers = {str(q.id): q.correct_option().id for q in sheet.questions()}
+        resp = client.post(
+            f"/api/v1/mc-sheets/{sheet.id}/submissions",
+            {"answers": answers, "idempotency_key": "k-shared"},
+            content_type="application/json",
+            **auth_headers(student),
+        )
+        assert resp.status_code == 200
+
+        body = client.get("/api/v1/mc-sheets", **auth_headers(other)).json()
+        assert body[0]["window_status"] == "open"
+        assert body[0]["score"] is None
+        assert body[0]["submission_count"] == 0
+
+        detail = client.get(f"/api/v1/mc-sheets/{sheet.id}", **auth_headers(other)).json()
+        assert detail["window_status"] == "open"
+        assert detail["result"] is None
+
+        mine = client.get(f"/api/v1/mc-sheets/{sheet.id}", **auth_headers(student)).json()
+        assert mine["window_status"] == "submitted"
+        assert mine["result"]["score"] == 10
+
 
 class TestPerCourseGradingConfig:
     def test_mc_fields_in_grading_config_payload(self, client, admin_user, course, auth_headers):
@@ -370,4 +473,133 @@ class TestPerCourseGradingConfig:
         assert body["mc_penalty_per_wrong"] == 5
         gc = GradingConfig.get_for_course(course)
         assert gc.mc_points_per_card == 20
-        assert gc.mc_penalty_per_wrong == 5
+
+    @pytest.fixture
+    def assistant_course(self, assistant, course) -> AssistantCourse:
+        """Link the assistant fixture to the course fixture."""
+        return AssistantCourseFactory(assistant=assistant, course=course)
+
+    def test_assistant_updates_own_course_grading_config(
+        self, client, assistant, assistant_course, course, auth_headers
+    ):
+        resp = client.get(f"/api/v1/admin/courses/{course.id}/grading-config", **auth_headers(assistant))
+        assert resp.status_code == 200
+        payload = {**resp.json(), "mc_points_per_card": 15, "mc_penalty_per_wrong": 3}
+        resp = client.put(
+            f"/api/v1/admin/courses/{course.id}/grading-config",
+            payload,
+            content_type="application/json",
+            **auth_headers(assistant),
+        )
+        assert resp.status_code == 200, resp.content
+        gc = GradingConfig.get_for_course(course)
+        assert gc.mc_points_per_card == 15
+        assert gc.mc_penalty_per_wrong == 3
+
+    def test_assistant_cannot_update_other_course_grading_config(
+        self, client, assistant, assistant_course, course, auth_headers
+    ):
+        other = MCQuestionFactory().course  # a course the assistant does not support
+        resp = client.get(f"/api/v1/admin/courses/{course.id}/grading-config", **auth_headers(assistant))
+        payload = {**resp.json(), "mc_points_per_card": 1}
+        resp = client.put(
+            f"/api/v1/admin/courses/{other.id}/grading-config",
+            payload,
+            content_type="application/json",
+            **auth_headers(assistant),
+        )
+        assert resp.status_code == 404
+
+
+class TestAssistantAccess:
+    """Assistants manage MC content for the courses they support (and only those)."""
+
+    @pytest.fixture
+    def assistant_course(self, assistant, course) -> AssistantCourse:
+        """Link the assistant fixture to the course fixture."""
+        return AssistantCourseFactory(assistant=assistant, course=course)
+
+    def test_assistant_lists_own_course_questions(self, client, assistant, assistant_course, course, auth_headers):
+        q = MCQuestionFactory(course=course)
+        resp = client.get(f"/api/v1/admin/multichoice/questions?course_id={course.id}", **auth_headers(assistant))
+        assert resp.status_code == 200
+        assert any(item["id"] == q.id for item in resp.json())
+
+    def test_assistant_unfiltered_list_scoped_to_own_courses(
+        self, client, assistant, assistant_course, course, auth_headers
+    ):
+        own = MCQuestionFactory(course=course)
+        foreign = MCQuestionFactory()  # a different course
+        resp = client.get("/api/v1/admin/multichoice/questions", **auth_headers(assistant))
+        assert resp.status_code == 200
+        ids = {item["id"] for item in resp.json()}
+        assert own.id in ids
+        assert foreign.id not in ids
+
+    def test_assistant_cannot_touch_foreign_course(self, client, assistant, assistant_course, course, auth_headers):
+        foreign = MCQuestionFactory()  # a different course
+        other_course_id = foreign.course_id
+        # A filtered list for a course the assistant does not support is a 404.
+        assert (
+            client.get(
+                f"/api/v1/admin/multichoice/questions?course_id={other_course_id}", **auth_headers(assistant)
+            ).status_code
+            == 404
+        )
+        # And the foreign question itself is invisible for update/delete.
+        assert (
+            client.put(
+                f"/api/v1/admin/multichoice/questions/{foreign.id}",
+                {"text": "hacked"},
+                content_type="application/json",
+                **auth_headers(assistant),
+            ).status_code
+            == 404
+        )
+        assert (
+            client.delete(f"/api/v1/admin/multichoice/questions/{foreign.id}", **auth_headers(assistant)).status_code
+            == 404
+        )
+
+    def test_assistant_creates_card_and_sheet(self, client, assistant, assistant_course, course, auth_headers):
+        qs = [MCQuestionFactory(course=course) for _ in range(2)]
+        resp = client.post(
+            f"/api/v1/admin/multichoice/cards?course_id={course.id}",
+            {"title": "Assistant card", "question_ids": [q.id for q in qs]},
+            content_type="application/json",
+            **auth_headers(assistant),
+        )
+        assert resp.status_code == 200, resp.content
+        card_id = resp.json()["id"]
+
+        student = UserFactory(course=course)
+        start, end = _open_window()
+        resp = client.post(
+            "/api/v1/admin/multichoice/sheets",
+            {
+                "card_id": card_id,
+                "course_id": course.id,
+                "window_start": start,
+                "window_end": end,
+                "number": 1,
+                "student_ids": [student.id],
+            },
+            content_type="application/json",
+            **auth_headers(assistant),
+        )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["student_ids"] == [student.id]
+
+    def test_assistant_cannot_create_in_foreign_course(self, client, assistant, assistant_course, course, auth_headers):
+        other = MCQuestionFactory()
+        resp = client.post(
+            f"/api/v1/admin/multichoice/cards?course_id={other.course_id}",
+            {"title": "Nope", "question_ids": [other.id]},
+            content_type="application/json",
+            **auth_headers(assistant),
+        )
+        assert resp.status_code == 404
+
+    def test_student_cannot_use_mc_admin(self, client, student, assistant_course, course, auth_headers):
+        resp = client.get(f"/api/v1/admin/multichoice/questions?course_id={course.id}", **auth_headers(student))
+        assert resp.status_code == 403

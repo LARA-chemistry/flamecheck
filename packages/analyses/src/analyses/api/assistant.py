@@ -10,10 +10,16 @@ from __future__ import annotations
 import csv
 import io
 
-from analyses.api.schemas import AnalysisSummary, AssistantCourseOut, AssistantRosterEntry
+from analyses.api.schemas import (
+    AnalysisSummary,
+    AssistantCourseOut,
+    AssistantRosterEntry,
+    MCResultSummary,
+)
 from analyses.models import AnalysisInstance, AnalysisNotification
 from config.models import GradingConfig
 from django.http import HttpResponse
+from multichoice.models import MCSheet
 from ninja import Router
 from ninja.errors import AuthenticationError, HttpError
 from users.models import User
@@ -69,8 +75,24 @@ def list_courses(request):
                     for i in AnalysisInstance.objects.for_student(s)
                     if i.course_id == course.id or i.course is None
                 ],
+                mc=[
+                    MCResultSummary(
+                        id=sheet.id,
+                        card=sheet.card.title,
+                        number=sheet.number,
+                        window_status=sheet.student_window_status(s),
+                        submission_count=sheet.submissions.filter(student=s).count(),
+                        score=sheet.student_score(s),
+                        ideal_score=sheet.ideal_score(),
+                    )
+                    for sheet in MCSheet.objects.for_student(s)
+                    if sheet.course_id == course.id or sheet.course is None
+                ],
             )
-            for s in course.students.all()
+            # ``course.students`` is the FK reverse of ``User.course`` and also
+            # includes non-student users (e.g. the course's assistant); the roster
+            # is limited to actual students.
+            for s in course.students.filter(role=User.Role.STUDENT)
         ]
         instances = AnalysisInstance.objects.filter(course=course).prefetch_related("submissions")
         submitted = sum(1 for i in instances if i.submissions.exists())
@@ -120,8 +142,21 @@ def course_detail(request, course_id: int):
                 for i in AnalysisInstance.objects.for_student(s)
                 if i.course_id == course.id or i.course is None
             ],
+            mc=[
+                MCResultSummary(
+                    id=sheet.id,
+                    card=sheet.card.title,
+                    number=sheet.number,
+                    window_status=sheet.student_window_status(s),
+                    submission_count=sheet.submissions.filter(student=s).count(),
+                    score=sheet.student_score(s),
+                    ideal_score=sheet.ideal_score(),
+                )
+                for sheet in MCSheet.objects.for_student(s)
+                if sheet.course_id == course.id or sheet.course is None
+            ],
         )
-        for s in course.students.all()
+        for s in course.students.filter(role=User.Role.STUDENT)
     ]
     instances = AnalysisInstance.objects.filter(course=course).prefetch_related("submissions")
     submitted = sum(1 for i in instances if i.submissions.exists())
@@ -262,6 +297,47 @@ def student_submissions(request, student_id: int):
                         "selected_ions": [ion_to_schema(i) for i in s.selected_ions.all()],
                     }
                     for s in inst.submissions.all()
+                ],
+            }
+        )
+    return out
+
+
+@router.get("/students/{student_id}/mc-submissions")
+def student_mc_submissions(request, student_id: int):
+    """All of a student's multiple-choice sheets (with correct options and submissions)."""
+    user = _assistant_user(request)
+    visible = [c.course if hasattr(c, "course") else c for c in _visible_courses(user)]
+    student = User.objects.filter(pk=student_id, course__in=visible).first()
+    if student is None:
+        raise HttpError(404, "Student not found in a visible course.")
+    sheets = MCSheet.objects.for_student(student)
+    out = []
+    for sheet in sheets:
+        out.append(
+            {
+                "student": student.username,
+                "sheet_id": sheet.id,
+                "card": sheet.card.title,
+                "number": sheet.number,
+                # Per-student status/score and the student's own submissions
+                # only: the sheet is shared with the other assigned students.
+                "window_status": sheet.student_window_status(student),
+                "score": sheet.student_score(student),
+                "ideal_score": sheet.ideal_score(),
+                "questions": [q.result_payload() for q in sheet.questions()],
+                "submissions": [
+                    {
+                        "id": s.id,
+                        "submission_number": s.submission_number,
+                        "submitted_at": s.submitted_at.isoformat(),
+                        "score": s.score,
+                        "correct_count": s.correct_count,
+                        "wrong_count": s.wrong_count,
+                        "ideal_score": s.ideal_score,
+                        "per_question": s.per_question(),
+                    }
+                    for s in sheet.submissions.filter(student=student)
                 ],
             }
         )

@@ -289,6 +289,38 @@ class MCSheet(models.Model):
             return submissions[-1].score
         return max(s.score for s in submissions)
 
+    def student_window_status(self, student) -> str:
+        """
+        Sheet status from the point of view of ``student``.
+
+        ``submitted`` when the student has answered this sheet; otherwise the
+        window state (``too_early`` / ``open`` / ``too_late``). Sheets are shared
+        across their assigned students, so :meth:`window_status` would report
+        ``submitted`` for students who have not answered yet.
+        """
+        if self.submissions.filter(student=student).exists():
+            return STATUS_SUBMITTED
+        now = timezone.now()
+        if now < self.window_start:
+            return STATUS_TOO_EARLY
+        if now > self.window_end:
+            return STATUS_TOO_LATE
+        return STATUS_OPEN
+
+    def student_score(self, student) -> int | None:
+        """
+        The student's final score on this sheet, or ``None`` when they have not submitted.
+
+        Uses the course's ``final_score_strategy`` over the student's own
+        submissions only.
+        """
+        submissions = list(self.submissions.filter(student=student).order_by("submitted_at"))
+        if not submissions:
+            return None
+        if self.grading_config().final_score_strategy == "last":
+            return submissions[-1].score
+        return max(s.score for s in submissions)
+
     # -- submission -------------------------------------------------------------
     def submit(self, student, answers: dict[int, int], *, idempotency_key: str) -> MCSubmission:
         """

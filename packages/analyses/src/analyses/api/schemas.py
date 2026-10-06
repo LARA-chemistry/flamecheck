@@ -8,6 +8,18 @@ from ninja import Schema
 from pydantic import BaseModel, Field
 
 
+class MCResultSummary(BaseModel):
+    """Compact multiple-choice result card shown in lists (assistant views)."""
+
+    id: int
+    card: str
+    number: int
+    window_status: str
+    submission_count: int
+    score: int | None = None
+    ideal_score: int | None = None
+
+
 class AnalysisSummary(BaseModel):
     """Compact analysis card shown in lists (student and assistant views)."""
 
@@ -123,6 +135,7 @@ class AssistantRosterEntry(Schema):
     barcode: str | None
     labspace_id: str | None = None
     analyses: list[AnalysisSummary]
+    mc: list[MCResultSummary] = []
 
 
 class AssistantCourseOut(Schema):

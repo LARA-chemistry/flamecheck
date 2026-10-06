@@ -91,6 +91,7 @@
           <n-select
             v-model:value="modal.form.ion_ids"
             :options="ionOptions"
+            :render-label="renderIonLabel"
             multiple
             filterable
             :loading="loadingIons"
@@ -239,15 +240,24 @@ async function loadIons() {
   loadingIons.value = true
   try {
     ions.value = await api.get('/ions')
-    ionOptions.value = ions.value.map((i) => ({
-      label: h('span', [h(IonSymbol, { symbol: i.symbol }), ` (${i.name})`]),
-      value: i.id,
-    }))
+    // The label stays a plain string so that filterable search matches on the
+    // name; the rich symbol rendering is provided by renderIonLabel below.
+    ionOptions.value = ions.value.map((i) => ({ label: `${i.symbol} (${i.name})`, value: i.id }))
   } catch (e) {
     /* ignore - the edit modal simply has no ion options then */
   } finally {
     loadingIons.value = false
   }
+}
+
+// Render an ion option's label with the IUPAC-formatted symbol (sub/superscripts).
+// A function is required (not a static VNode): naive-ui renders the label in
+// several places (tags and dropdown rows), and one VNode instance can only be
+// mounted once — a shared instance renders blank.
+function renderIonLabel(option) {
+  const ion = ions.value.find((i) => i.id === option.value)
+  if (!ion) return option.label
+  return h('span', [h(IonSymbol, { symbol: ion.symbol }), ` (${ion.name})`])
 }
 
 // Open the edit modal for a row, but ignore clicks on cell links/buttons.

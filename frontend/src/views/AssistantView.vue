@@ -84,13 +84,17 @@
                   <n-icon :component="SubstanceIcon" :size="15" :depth="viewOf(c) === 'substance' ? 3 : 0" />
                   Substance
                 </n-radio-button>
+                <n-radio-button value="mc">
+                  <n-icon :component="MCIcon" :size="15" :depth="viewOf(c) === 'mc' ? 3 : 0" />
+                  Multiple Choice
+                </n-radio-button>
               </n-radio-group>
 
               <!-- View content, keyed by course + active view so Vue swaps the
                    whole subtree (avoids mis-patching the v-for list). -->
               <div :key="`${c.id}:${viewOf(c)}`">
                 <!-- Students view: the course roster. -->
-                <template v-if="viewOf(c) !== 'substance'">
+                <template v-if="viewOf(c) === 'students'">
                   <n-data-table
                     :columns="cols"
                     :data="c.students"
@@ -104,7 +108,7 @@
                 </template>
 
                 <!-- Substance view: samples per analysis + overview tables. -->
-                <template v-else>
+                <template v-else-if="viewOf(c) === 'substance'">
                   <n-space align="center" style="margin-bottom: 8px">
                     <span class="muted">Samples per analysis</span>
                     <n-input-number
@@ -147,6 +151,11 @@
                     </n-space>
                   </template>
                 </template>
+
+                <!-- Multiple Choice: per-course questions, cards, sheets and grading. -->
+                <template v-else>
+                  <MCDesigner :course-id="c.id" />
+                </template>
               </div>
             </n-space>
           </n-collapse-item>
@@ -179,6 +188,7 @@
           <n-space size="large" align="center">
             <n-statistic label="Analyses" :value="studentModal.detail ? studentModal.detail.length : 0" />
             <n-statistic label="Submitted" :value="studentModal.detail ? submittedCount : 0" />
+            <n-statistic label="MC cards" :value="studentModal.mc.length ? `${mcSubmittedCount()}/${studentModal.mc.length}` : '—'" />
             <n-statistic label="Total score" :value="studentModal.detail ? totalScore : '—'" />
             <n-statistic label="Average" :value="studentModal.detail ? avgScore : '—'" />
             <n-statistic label="Best" :value="studentModal.detail ? bestScore : '—'" />
@@ -221,6 +231,60 @@
               />
             </n-card>
           </n-space>
+
+          <!-- Per-card multiple-choice breakdown (correct option revealed). -->
+          <template v-if="(studentModal.mc || []).length">
+            <p class="muted" style="margin: 0 0 4px">Multiple-choice cards</p>
+            <n-space vertical v-for="m in studentModal.mc" :key="m.sheet_id">
+              <n-card size="small" :bordered="false" class="analysis-card">
+                <template #header>
+                  <div class="analysis-card__head">
+                    <span class="analysis-card__title">{{ m.card }} (no. {{ m.number }})</span>
+                    <n-tag :type="m.submissions.length ? 'success' : 'default'" round size="small">
+                      {{ m.submissions.length ? 'Submitted' : 'Pending' }}
+                    </n-tag>
+                    <span
+                      v-if="mcLastSubmittedAt(m)"
+                      class="analysis-card__submitted-at"
+                      :title="`Last submitted ${mcLastSubmittedAt(m)} (UTC)`"
+                    >
+                      {{ mcLastSubmittedAt(m) }}
+                    </span>
+                  </div>
+                </template>
+                <template #header-extra>
+                  <span class="analysis-card__score">
+                    Score: <strong>{{ m.score ?? '—' }}</strong> / {{ m.ideal_score }}
+                  </span>
+                </template>
+
+                <n-empty v-if="!m.submissions.length" description="No submissions yet." size="small" />
+                <template v-else>
+                  <div v-for="q in m.questions" :key="q.id" class="mc-question">
+                    <div class="mc-question__text">{{ q.text }}</div>
+                    <n-space size="small" style="flex-wrap: wrap">
+                      <n-tag
+                        v-for="o in q.options"
+                        :key="o.id"
+                        size="small"
+                        :bordered="false"
+                        :type="mcOptionTagType(m, q, o)"
+                      >
+                        {{ o.text }}
+                      </n-tag>
+                    </n-space>
+                  </div>
+                  <n-data-table
+                    :columns="mcSubmissionCols"
+                    :data="m.submissions"
+                    size="small"
+                    style="margin-top: 10px"
+                    :bordered="false"
+                  />
+                </template>
+              </n-card>
+            </n-space>
+          </template>
         </n-space>
       </n-spin>
     </n-modal>
@@ -235,16 +299,19 @@
       <HelpSection title="Student login">
         <p>
           Students sign in with their username and password, by scanning their
-          personal barcode (listed per student below), or - if your course uses
-          OAuth - via the external identity provider. New OAuth students first
-          pick their course on the registration page.
+          personal barcode, or - if your course uses OAuth - via the external
+          identity provider. The "Labspace" column shows each student's bench /
+          lab-space number. New OAuth students first pick their course on the
+          registration page.
         </p>
       </HelpSection>
       <HelpSection title="Student statistics">
         <p>
           Click any student row to open their per-analysis breakdown: submitted
           vs. pending, final scores, and the ions they selected against the
-          correct set.
+          correct set. Multiple-choice cards are listed below the ion
+          analyses: each question with its options (correct answer in green,
+          a wrongly picked option in red) plus the student's submissions.
         </p>
       </HelpSection>
       <HelpSection title="Substance overview">
@@ -252,6 +319,14 @@
           "Substance Overview" groups each announcement by sample composition
           (the correct ion set) and lists the salts to prepare, with per-course
           totals. Set "samples per analysis" to scale the preparation counts.
+        </p>
+      </HelpSection>
+      <HelpSection title="Multiple choice">
+        <p>
+          The "Multiple Choice" tab manages the course's MC content: define
+          questions, group them into cards (max 3 questions each), present
+          time-windowed sheets to students, and set the per-card grading. You
+          only see the courses you support.
         </p>
       </HelpSection>
       <HelpSection title="Ion symbols">
@@ -288,6 +363,7 @@ import HelpPanel from '../components/HelpPanel.vue'
 import HelpToggle from '../components/HelpToggle.vue'
 import HelpSection from '../components/HelpSection.vue'
 import AboutSection from '../components/AboutSection.vue'
+import MCDesigner from '../components/MCDesigner.vue'
 
 const helpOpen = ref(false)
 
@@ -346,27 +422,47 @@ const SubstanceIcon = {
       ],
     ),
 }
+const MCIcon = {
+  render: () =>
+    h(
+      'svg',
+      { viewBox: '0 0 24 24', width: '1em', height: '1em', 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+      [
+        h('rect', { x: '4', y: '3', width: '16', height: '18', rx: '2' }),
+        h('path', { d: 'M8 8h8' }),
+        h('path', { d: 'M8 12h8' }),
+        h('path', { d: 'M8 16h4' }),
+      ],
+    ),
+}
 
-const studentModal = ref({ show: false, loading: false, student: null, detail: null })
+const studentModal = ref({ show: false, loading: false, student: null, detail: null, mc: [] })
 
 const cols = [
   { title: 'Student', key: 'full_name', render: (row) => row.full_name || row.username },
-  { title: 'Barcode', key: 'barcode' },
+  {
+    title: 'Labspace',
+    key: 'labspace_id',
+    render: (row) => row.labspace_id || '—',
+  },
   {
     title: 'Analyses',
     key: 'analyses',
     render: (row) => `${submittedOf(row)}/${row.analyses.length}`,
   },
   {
+    title: 'MC',
+    key: 'mc',
+    render: (row) =>
+      row.mc && row.mc.length
+        ? `${row.mc.filter((m) => m.submission_count > 0).length}/${row.mc.length}`
+        : '—',
+  },
+  {
     title: 'Progress',
     key: 'progress',
     width: 160,
     render: (row) => renderProgress(row),
-  },
-  {
-    title: 'Avg',
-    key: 'avg',
-    render: (row) => avgFor(row) ?? '—',
   },
   {
     title: '',
@@ -409,12 +505,6 @@ function rowProps(row) {
     style: 'cursor: pointer',
     onClick: () => openStudent(row),
   }
-}
-
-function avgFor(row) {
-  const scores = row.analyses.map((a) => a.score).filter((s) => s != null)
-  if (!scores.length) return null
-  return Math.round((scores.reduce((x, y) => x + y, 0) / scores.length) * 100) / 100
 }
 
 // ---- per-student statistics ----------------------------------------------
@@ -482,12 +572,55 @@ const submissionCols = [
   },
 ]
 
+// Submission rows for the per-card multiple-choice breakdown.
+const mcSubmissionCols = [
+  { title: '#', key: 'submission_number', width: 44 },
+  { title: 'Submitted', key: 'submitted_at', render: (row) => row.submitted_at.replace('T', ' ').slice(0, 16) },
+  { title: 'Score', key: 'score', width: 60 },
+  { title: 'Correct', key: 'correct_count', width: 70 },
+  { title: 'Wrong', key: 'wrong_count', width: 70 },
+]
+
+// Number of MC cards the student has submitted (at least one submission).
+function mcSubmittedCount() {
+  return (studentModal.value.mc || []).filter((m) => m.submissions.length > 0).length
+}
+
+// The exact datetime of the student's most recent submission for this card.
+function mcLastSubmittedAt(m) {
+  if (!m.submissions.length) return ''
+  return fmtSubmittedAt(m.submissions[m.submissions.length - 1].submitted_at)
+}
+
+// The option id the student picked for a question on their latest submission.
+function latestMcAnswer(m, questionId) {
+  if (!m.submissions.length) return null
+  const per = m.submissions[m.submissions.length - 1].per_question || []
+  const row = per.find((p) => p.question_id === questionId)
+  return row ? row.selected_option_id : null
+}
+
+// Tag color for an option: green when correct, red when the student picked it
+// wrongly, neutral otherwise.
+function mcOptionTagType(m, q, o) {
+  const selected = latestMcAnswer(m, q.id)
+  if (o.id === selected && !o.is_correct) return 'error'
+  if (o.is_correct) return 'success'
+  return 'default'
+}
+
 async function openStudent(row) {
-  studentModal.value = { show: true, loading: true, student: row, detail: null }
+  studentModal.value = { show: true, loading: true, student: row, detail: null, mc: [] }
   try {
-    studentModal.value.detail = await api.get(`/assistant/students/${row.id}/submissions`)
+    const [detail, mc] = await Promise.all([
+      api.get(`/assistant/students/${row.id}/submissions`),
+      api.get(`/assistant/students/${row.id}/mc-submissions`),
+    ])
+    studentModal.value.detail = detail
+    studentModal.value.mc = mc || []
   } catch (e) {
     studentModal.value.detail = null
+    studentModal.value.mc = []
     window.alert(e.message || 'Failed to load the student\'s statistics.')
   } finally {
     studentModal.value.loading = false
@@ -675,5 +808,13 @@ onMounted(load)
   align-items: center;
   gap: var(--fc-space-xs);
   margin-bottom: var(--fc-space-sm);
+}
+.mc-question {
+  margin-bottom: var(--fc-space-sm);
+}
+.mc-question__text {
+  font-size: var(--fc-fs-sm);
+  color: var(--fc-ink);
+  margin-bottom: 2px;
 }
 </style>
