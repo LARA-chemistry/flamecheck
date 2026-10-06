@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.1.2 (2026-10-06)
+
+### Features
+
+- Reduce the pharmacy ep monograph cards to four featured salts ([`779daa5`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/779daa5a770e3e11d45c12cd146dee510a20828b))
+- Show multiple-choice results in the profile overview ([`e13e0fc`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/e13e0fc978b87cfefcb2e6e3ebb80df4347ca048))
+- Add the pharmacy demo course to seed_demo ([`91caa86`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/91caa86241e1d0b27d293402b65581f0affbb46f))
+- Show labspace number instead of barcode in the roster ([`9446747`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/9446747640494655477ea2843443a4035d009402))
+- Rebuild multiple choice page in the analysis types pattern ([`f8de05b`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/f8de05bc26757e840350567ba916767601bb6e08))
+- Add multiple choice tab (list + editor) to the course view ([`8d99708`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/8d997083ac3fba74baf1176c7cdfac775a38fc42))
+- Show multiple choice results in the students overview ([`c0b07bc`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/c0b07bcd628ca2fe3b6c8d0bb62fe73b3575606a))
+
+### Bug fixes
+
+- Actually filter the admin mc lists by course ([`b93acf7`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/b93acf77507a5d8d7776bafbd4d90c18e3e4c53c))
+- Report per-student status and scores on shared sheets ([`8cced21`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/8cced21fc7cec85d47e659c3a43210117eba1c0d))
+- Exclude non-student users from the course roster ([`98198a2`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/98198a22dd4fdbffaf96effe88b06203ae91726f))
+- Render ion select labels via render-label ([`1c94a9e`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/1c94a9e4dde3bafd86b3451b6db50e5c706dd821))
+- Render changelog via .j2 template ([`e2ceb94`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/e2ceb9445966a0ccd5d18e4b057fc4c7cde8596c))
+
+### Documentation
+
+- Sync full release history (adds v0.0.5 and v0.1.1) ([`e5324e7`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/e5324e725da5736bde0a696aebeeb8fcc00d1329))
+- Render full release history (v0.0.1 - v0.1.1) ([`233428b`](https://gitlab.com/opensourcelab/cheminformatics/flamecheck/-/commit/233428b528d9b8473e381f7fbdbe05b1fff553e5))
+
 ## v0.1.1 (2026-10-05)
 
 ### Bug fixes
