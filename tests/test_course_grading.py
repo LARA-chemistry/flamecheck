@@ -308,3 +308,54 @@ class TestStudentCourseResult:
         student, _ = self._enroll(course, 1)
         result = student_course_result(student)
         assert result["passed"] is True
+
+    def test_multiple_choice_sheets_count_toward_total(self, course, grading_global):
+        """Submitted MC sheets add their per-student score to the course total."""
+        from multichoice.factory import (
+            MCCardFactory,
+            MCQuestionFactory,
+            MCSheetFactory,
+            MCStudentAssignmentFactory,
+        )
+
+        grading_global.passing_score = 25
+        grading_global.save()
+        student, instances = self._enroll(course, 1)
+        ion = IonFactory(symbol=f"M{instances[0].id}+")
+        instances[0].correct_ions.set([ion])
+        instances[0].type.possible_ions.set([ion])
+        instances[0].submit(student, [ion.id], idempotency_key="m1")
+
+        # Two MC sheets: one fully correct (10), one with a wrong answer (10 - 2).
+        q_ok = MCQuestionFactory(course=course)
+        q_bad = MCQuestionFactory(course=course)
+        sheet_ok = MCSheetFactory(card=MCCardFactory(course=course, questions=[q_ok]), course=course, number=1)
+        sheet_bad = MCSheetFactory(card=MCCardFactory(course=course, questions=[q_bad]), course=course, number=2)
+        for sheet in (sheet_ok, sheet_bad):
+            MCStudentAssignmentFactory(course=course, sheet=sheet, student=student)
+        sheet_ok.submit(student, {q_ok.id: q_ok.correct_option().id}, idempotency_key="mc-ok")
+        wrong = next(o for o in q_bad.options() if not o.is_correct)
+        sheet_bad.submit(student, {q_bad.id: wrong.id}, idempotency_key="mc-bad")
+
+        result = student_course_result(student)
+        assert result["total_score"] == 10 + 10 + 8
+        assert result["ideal_score"] == 10 + 10 + 10
+        assert result["passed"] is True  # 28 >= 25
+
+    def test_unsubmitted_sheet_only_adds_ideal_points(self, course, grading_global):
+        """A sheet the student has not answered adds points-per-card to the ideal only."""
+        from multichoice.factory import (
+            MCCardFactory,
+            MCQuestionFactory,
+            MCSheetFactory,
+            MCStudentAssignmentFactory,
+        )
+
+        student, _ = self._enroll(course, 0)
+        sheet = MCSheetFactory(
+            card=MCCardFactory(course=course, questions=[MCQuestionFactory(course=course)]), course=course
+        )
+        MCStudentAssignmentFactory(course=course, sheet=sheet, student=student)
+        result = student_course_result(student)
+        assert result["total_score"] == 0
+        assert result["ideal_score"] == 10  # the default points-per-card

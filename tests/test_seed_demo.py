@@ -27,7 +27,7 @@ from io import StringIO
 
 import pytest
 from analyses.management.commands.seed_demo import _USERS, DEMO_PASSWORD
-from analyses.models import AnalysisInstance, AnalysisType, Submission
+from analyses.models import AnalysisInstance, AnalysisType, Submission, student_course_result
 from config.models import AppSettings, AssistantCourse, Course, GradingConfig
 from django.core.management import call_command
 from django.db.models import Count
@@ -299,6 +299,17 @@ class TestPharmacySeed:
         # One fully compliant card (10/10) and one failed purity test (10 - 2).
         assert sorted(s.score for s in subs) == [8, 10]
         assert all(s.ideal_score == 10 for s in subs)
+
+    def test_course_result_includes_mc_sheets(self):
+        # The student footer aggregates analyses and MC sheets: 6 analyses x 10
+        # + 4 cards x 10 = 100 ideal points; the worked submissions contribute
+        # 10 (julian) and 8 (karin), leo has not submitted anything yet.
+        for username, expected_total in (("student-julian", 10), ("student-karin", 8), ("student-leo", 0)):
+            result = student_course_result(User.objects.get(username=username))
+            assert result["ideal_score"] == 100
+            assert result["total_score"] == expected_total
+            assert result["passing_score"] == 30
+            assert result["passed"] is (expected_total >= 30)
 
     def test_grading_config(self):
         pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
