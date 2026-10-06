@@ -6,7 +6,7 @@ builds the demo environment programmatically from the ``factory.py`` modules tha
 live in each app. That keeps the demo data in code (reviewable, easy to tweak) and
 exercises the same factories the test-suite uses.
 
-What it creates, illustrating every feature of the system across five courses:
+What it creates, illustrating every feature of the system across six courses:
 
 * **Geology** (the active / default course) - the "realistic" showcase: the salts
   from ``examples/substance_list.csv`` are imported as substances, and each student
@@ -14,6 +14,10 @@ What it creates, illustrating every feature of the system across five courses:
   the union of the ions of a few of those salts. Graded per analysis with a retry
   penalty (10 -> 8 -> 6). Plus the European-Pharmacopoeia monograph multiple-choice
   card (identity / purity / monograph, graded all-or-nothing).
+* **Pharmacy** - the same CSV-salt task programme with the pharmacy task names
+  (Practice Analysis (1 Salt), Analysis 1-5), graded per analysis with a retry
+  penalty (10 -> 8 -> 6), min points to pass 30, plus the European-Pharmacopoeia
+  monograph as one multiple-choice card *per salt* (identity / purity / monograph).
 * **Chemistry** - the "new analysis" (repeat) submission workflow: a wrong
   submission hands the student a fresh re-trial analysis of the same type.
 * **Medicine** - a simple per-analysis course (three analyses, three trials) plus a
@@ -26,7 +30,7 @@ Every demo student carries an integer ``labspace_id`` (1, 2, 3 per course) and e
 analysis instance is labelled ``<type name, no spaces>_<labspace_id>`` (e.g.
 ``Cations1_1``), so sheets are identifiable per student.
 
-Users - an admin, five assistants (one per course) and fifteen students (three per
+Users - an admin, six assistants (one per course) and eighteen students (three per
 course) - **all share the password** ``FlameCheck32!`` - plus student barcodes.
 
 The command is idempotent: re-running it refreshes the demo rows without
@@ -81,6 +85,7 @@ _COURSES: list[tuple[str, str, str, bool, bool]] = [
     ("Inorganic Chemistry WS 2026 - Biology", "WS 2026", "biology", True, False),
     ("Inorganic Chemistry WS 2026 - Geology", "WS 2026", "geology", True, True),
     ("Inorganic Chemistry WS 2026 - Medicine", "WS 2026", "medicine", True, False),
+    ("Inorganic Chemistry WS 2026 - Pharmacy", "WS 2026", "pharmacy", True, False),
     ("Inorganic Chemistry SS 2026 - Materials", "SS 2026", "materials", True, False),
 ]
 
@@ -93,6 +98,7 @@ _USERS: list[tuple[str, str, str, str, str | None]] = [
     ("assistant.bio", "assistant", "Biology Lab Assistant", "", "Inorganic Chemistry WS 2026 - Biology"),
     ("assistant.geology", "assistant", "Geology Lab Assistant", "", "Inorganic Chemistry WS 2026 - Geology"),
     ("assistant.medicine", "assistant", "Medicine Lab Assistant", "", "Inorganic Chemistry WS 2026 - Medicine"),
+    ("assistant.pharmacy", "assistant", "Pharmacy Lab Assistant", "", "Inorganic Chemistry WS 2026 - Pharmacy"),
     ("assistant.materials", "assistant", "Materials Lab Assistant", "", "Inorganic Chemistry SS 2026 - Materials"),
     ("student-lena", "student", "Lena", "Hoffmann", "Inorganic Chemistry WS 2026 - Chemistry"),
     ("student-max", "student", "Max", "Braun", "Inorganic Chemistry WS 2026 - Chemistry"),
@@ -106,6 +112,9 @@ _USERS: list[tuple[str, str, str, str, str | None]] = [
     ("student-mia", "student", "Mia", "Farah", "Inorganic Chemistry WS 2026 - Medicine"),
     ("student-omar", "student", "Omar", "Haddad", "Inorganic Chemistry WS 2026 - Medicine"),
     ("student-lily", "student", "Lily", "Chen", "Inorganic Chemistry WS 2026 - Medicine"),
+    ("student-julian", "student", "Julian", "Weiss", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-karin", "student", "Karin", "Meyer", "Inorganic Chemistry WS 2026 - Pharmacy"),
+    ("student-leo", "student", "Leo", "Vogel", "Inorganic Chemistry WS 2026 - Pharmacy"),
     ("student-greta", "student", "Greta", "Schmidt", "Inorganic Chemistry SS 2026 - Materials"),
     ("student-hugo", "student", "Hugo", "Fischer", "Inorganic Chemistry SS 2026 - Materials"),
     ("student-ines", "student", "Ines", "Costa", "Inorganic Chemistry SS 2026 - Materials"),
@@ -157,8 +166,10 @@ _MEDICINE_TYPES: list[tuple[str, str, list[str]]] = [
     ),
 ]
 
-# Full cation / anion scope for the Geology programme (catalog keys).
-_GEO_CATIONS = [
+# Full cation / anion scope for the Geology and Pharmacy programmes (catalog
+# keys). The oxidation state of a metal is not significant for the task scope:
+# every oxidation state that occurs in the CSV is listed.
+_FULL_CATIONS = [
     "sodium",
     "potassium",
     "ammonium",
@@ -182,7 +193,7 @@ _GEO_CATIONS = [
     "lead",
     "tin",
 ]
-_GEO_ANIONS = [
+_FULL_ANIONS = [
     "chloride",
     "sulfate",
     "nitrate",
@@ -229,7 +240,7 @@ _GEOLOGY_TYPES: list[tuple[str, str, int, list[str], list[str], str]] = [
         "Analysis 3",
         "Up to three salts. Cations only, over the full cation scope.",
         3,
-        _GEO_CATIONS,
+        _FULL_CATIONS,
         [],
         "cations",
     ),
@@ -238,18 +249,84 @@ _GEOLOGY_TYPES: list[tuple[str, str, int, list[str], list[str], str]] = [
         "Up to four salts. Anions only, over the full anion scope.",
         4,
         [],
-        _GEO_ANIONS,
+        _FULL_ANIONS,
         "anions",
     ),
     (
         "Analysis 5",
         "Up to four salts. Full analysis over the entire scope treated so far.",
         4,
-        _GEO_CATIONS,
-        _GEO_ANIONS,
+        _FULL_CATIONS,
+        _FULL_ANIONS,
         "full",
     ),
 ]
+
+# Pharmacy analysis tasks: (name, description, salt_count, cation keys, anion
+# keys, mode). The ion scopes mirror the Geology programme; the task names and
+# salt counts follow the pharmacy syllabus. The seventh task (the European
+# Pharmacopoeia monograph) is run as multiple-choice cards, not as a classic
+# analysis, so it is not part of this programme (see _PHARMACY_MONOGRAPH and
+# _seed_pharmacy_monograph).
+_PHARMACY_TYPES: list[tuple[str, str, int, list[str], list[str], str]] = [
+    (
+        "Practice Analysis (1 Salt)",
+        "Practice: identify the ions of a single salt.",
+        1,
+        ["sodium", "potassium", "ammonium"],
+        ["chloride", "sulfate", "nitrate"],
+        "full",
+    ),
+    (
+        "Analysis 1 (2 Salts)",
+        "Two salts. Cations: Na, K, NH4. Anions: Cl, SO4, NO3.",
+        2,
+        ["sodium", "potassium", "ammonium"],
+        ["chloride", "sulfate", "nitrate"],
+        "full",
+    ),
+    (
+        "Analysis 2 (max. 3 Salts)",
+        "Up to three salts. Cations: Na, K, NH4, Li, Ba, Mg, Ca. Anions: Cl, SO4, NO3, CO3.",
+        3,
+        ["sodium", "potassium", "ammonium", "lithium", "barium", "magnesium", "calcium"],
+        ["chloride", "sulfate", "nitrate", "carbonate"],
+        "full",
+    ),
+    (
+        "Analysis 3 (max. 3 Salts)",
+        "Up to three salts. Cations only, over the full cation scope.",
+        3,
+        _FULL_CATIONS,
+        [],
+        "cations",
+    ),
+    (
+        "Analysis 4 (max. 4 Salts)",
+        "Up to four salts. Anions only, over the full anion scope.",
+        4,
+        [],
+        _FULL_ANIONS,
+        "anions",
+    ),
+    (
+        "Analysis 5 (max. 4 Salts)",
+        "Up to four salts. Full analysis over the entire scope treated so far.",
+        4,
+        _FULL_CATIONS,
+        _FULL_ANIONS,
+        "full",
+    ),
+]
+
+# The Pharmacy monograph task (name, description). Created as an analysis type
+# (full cation + anion scope) without per-student instances: its content is the
+# per-salt EP monograph multiple-choice cards.
+_PHARMACY_MONOGRAPH: tuple[str, str] = (
+    "European Pharmacopoeia Monography Analyses",
+    "One identity test, one purity test and one monograph test on a salt; results are "
+    "stated as complies or does not comply (run via the EP Monograph cards).",
+)
 
 # Announcements for the non-Geology courses:
 # (course_name, number, type_name, window_state, correct ion keys, day_offset).
@@ -390,6 +467,7 @@ class Command(BaseCommand):
             types = self._seed_types()
             instances = self._seed_announcements(types, courses, users)
             self._seed_geology(courses, users, types)
+            self._seed_pharmacy(courses, users, types)
             self._seed_singletons(courses)
             self._seed_submissions(users, instances)
             self._seed_multichoice(courses, users)
@@ -527,7 +605,7 @@ class Command(BaseCommand):
 
     # -- analysis types ------------------------------------------------------
     def _seed_types(self) -> dict[str, AnalysisType]:
-        """Create the shared, medicine and Geology analysis types."""
+        """Create the shared, medicine, Geology and Pharmacy analysis types."""
         result: dict[str, AnalysisType] = {}
 
         def make(name: str, description: str, keys: list[str], max_repetitions: int = 2) -> AnalysisType:
@@ -544,6 +622,14 @@ class Command(BaseCommand):
             make(name, description, keys, max_repetitions=0)
         for name, description, _count, cation_keys, anion_keys, _mode in _GEOLOGY_TYPES:
             make(name, description, list(cation_keys) + list(anion_keys), max_repetitions=0)
+        for name, description, _count, cation_keys, anion_keys, _mode in _PHARMACY_TYPES:
+            make(name, description, list(cation_keys) + list(anion_keys), max_repetitions=0)
+        make(
+            _PHARMACY_MONOGRAPH[0],
+            _PHARMACY_MONOGRAPH[1],
+            list(_FULL_CATIONS) + list(_FULL_ANIONS),
+            max_repetitions=0,
+        )
         return result
 
     # -- announcements (instances + assignments) -----------------------------
@@ -664,29 +750,29 @@ class Command(BaseCommand):
                 break
         return picked
 
-    def _seed_geology(self, courses: dict[str, Course], users: dict[str, User], types: dict[str, AnalysisType]) -> None:
-        """
-        Seed the Geology showcase with the CSV salts and the full task programme.
-
-        Each student gets every analysis type; the correct ion set is the union of
-        the ions of that student's salts, restricted to the type's scope.
-        """
-        course = courses.get("Inorganic Chemistry WS 2026 - Geology")
-        if course is None:
-            return
-        students = sorted(
+    @staticmethod
+    def _course_students(course: Course, users: dict[str, User]) -> list[User]:
+        """The course's students, ordered by their integer labspace id."""
+        return sorted(
             (u for u in users.values() if u.is_student and u.course_id == course.id),
             key=lambda u: int(u.labspace_id or 0),
         )
-        if not students:
-            return
 
-        ion_by_symbol = {i.symbol: i for i in Ion.objects.all()}
-        salts = self._load_csv_salts(ion_by_symbol)
+    def _seed_course_programme(
+        self,
+        course: Course,
+        students: list[User],
+        programme: list[tuple[str, str, int, list[str], list[str], str]],
+        types: dict[str, AnalysisType],
+        salts: list[dict[str, Any]],
+    ) -> None:
+        """
+        Give every student an open instance for each programme entry (shared by Geology and Pharmacy).
 
-        for number, (name, _description, salt_count, cation_keys, anion_keys, mode) in enumerate(
-            _GEOLOGY_TYPES, start=1
-        ):
+        The correct ion set is the union of the ions of the salts picked for
+        that student, restricted to the type's possible-ion scope.
+        """
+        for number, (name, _description, salt_count, cation_keys, anion_keys, mode) in enumerate(programme, start=1):
             analysis_type = types.get(name)
             if analysis_type is None:
                 continue
@@ -742,11 +828,124 @@ class Command(BaseCommand):
                 instance.label = label
                 instance.assigned_substances.set([s["substance"].id for s in picked])
                 instance.save(update_fields=["label"])
+
+    def _seed_geology(self, courses: dict[str, Course], users: dict[str, User], types: dict[str, AnalysisType]) -> None:
+        """Seed the Geology showcase with the CSV salts and the full task programme."""
+        course = courses.get("Inorganic Chemistry WS 2026 - Geology")
+        if course is None:
+            return
+        students = self._course_students(course, users)
+        if not students:
+            return
+        salts = self._load_csv_salts({i.symbol: i for i in Ion.objects.all()})
+        self._seed_course_programme(course, students, _GEOLOGY_TYPES, types, salts)
         self.stdout.write(
             self.style.SUCCESS(
                 f"  geology:       {len(salts)} CSV salts, {len(_GEOLOGY_TYPES)} analyses x {len(students)} students"
             )
         )
+
+    # -- pharmacy showcase (CSV salts + pharmacy task names + EP cards) --------
+    def _seed_pharmacy(
+        self, courses: dict[str, Course], users: dict[str, User], types: dict[str, AnalysisType]
+    ) -> None:
+        """Seed the Pharmacy course: CSV salts, the pharmacy task programme and the per-salt EP monograph cards."""
+        course = courses.get("Inorganic Chemistry WS 2026 - Pharmacy")
+        if course is None:
+            return
+        students = self._course_students(course, users)
+        if not students:
+            return
+        salts = self._load_csv_salts({i.symbol: i for i in Ion.objects.all()})
+        self._seed_course_programme(course, students, _PHARMACY_TYPES, types, salts)
+        self._seed_pharmacy_monograph(course, students, salts)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  pharmacy:      {len(_PHARMACY_TYPES)} analyses x {len(students)} students, "
+                f"{len(salts)} EP monograph cards"
+            )
+        )
+
+    def _seed_pharmacy_monograph(self, course: Course, students: list[User], salts: list[dict[str, Any]]) -> None:
+        """
+        Seed the European Pharmacopoeia monograph cards for the Pharmacy course.
+
+        One card per CSV salt ("EP Monograph - <salt>", with a description naming
+        the monograph reference) carrying the three shared sub-test questions
+        (identity, purity, monograph compliance) and one open sheet per card for
+        all students. Two worked submissions on the first card exercise the real
+        grading logic: one fully compliant (10/10) and one with a failed purity
+        test (10 - 2 penalty = 8); the remaining student is left unsubmitted.
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from multichoice.models import MCCard, MCCardQuestion, MCOption, MCQuestion, MCSheet, MCStudentAssignment
+
+        def make_question(text: str, correct_text: str, other_text: str) -> MCQuestion:
+            # Idempotent: keyed by (course, text) so re-runs reuse the questions.
+            question, _ = MCQuestion.objects.get_or_create(
+                course=course,
+                text=text,
+                defaults={
+                    "description": "European Pharmacopoeia monograph sub-test (pharmacy demo).",
+                    "remarks": "Strict binary outcome; results are stated as complies / does not comply.",
+                },
+            )
+            if not question.options_set.exists():
+                MCOption.objects.create(question=question, text=correct_text, is_correct=True, sort_order=0)
+                MCOption.objects.create(question=question, text=other_text, is_correct=False, sort_order=1)
+            return question
+
+        questions = [
+            make_question("Does the salt pass the identity test?", "true", "false"),
+            make_question("Is the salt pure?", "pure", "impure"),
+            make_question("Does it meet the monograph requirements?", "complies", "does not comply"),
+        ]
+
+        now = timezone.now().replace(microsecond=0)
+        first_sheet: MCSheet | None = None
+        for salt in salts:
+            substance = salt["substance"]
+            card, _ = MCCard.objects.update_or_create(
+                course=course,
+                title=f"EP Monograph - {substance.name}",
+                defaults={
+                    "description": (
+                        f"European Pharmacopoeia monograph on {substance.name} ({substance.formula}): one "
+                        "identity test, one purity test and one monograph test."
+                    ),
+                    "remarks": "Results are stated as complies / does not comply.",
+                },
+            )
+            for i, question in enumerate(questions):
+                MCCardQuestion.objects.get_or_create(card=card, question=question, defaults={"order": i})
+            sheet, created_sheet = MCSheet.objects.get_or_create(
+                card=card,
+                course=course,
+                number=1,
+                defaults={
+                    "window_start": now - timedelta(hours=1),
+                    "window_end": now + timedelta(hours=23),
+                },
+            )
+            if not created_sheet:
+                # Keep the (open) window fresh on re-runs.
+                sheet.window_start = now - timedelta(hours=1)
+                sheet.window_end = now + timedelta(hours=23)
+                sheet.save(update_fields=["window_start", "window_end"])
+            for student in students:
+                MCStudentAssignment.objects.get_or_create(course=course, student=student, sheet=sheet, number=1)
+            if first_sheet is None:
+                first_sheet = sheet
+
+        if first_sheet is None or len(students) < 2:
+            return
+        correct = {q.id: q.options_set.get(is_correct=True).id for q in questions}
+        first_sheet.submit(students[0], dict(correct), idempotency_key=f"seed-pharma-mc-ok-{students[0].id}")
+        impure_answers = dict(correct)
+        impure_answers[questions[1].id] = questions[1].options_set.get(is_correct=False).id
+        first_sheet.submit(students[1], impure_answers, idempotency_key=f"seed-pharma-mc-impure-{students[1].id}")
 
     # -- singletons (grading + app settings) ---------------------------------
     def _seed_singletons(self, courses: dict[str, Course]) -> None:
@@ -768,6 +967,26 @@ class Command(BaseCommand):
                     "passing_score": 30,
                     "mc_points_per_card": 10,
                     "mc_penalty_per_wrong": 10,
+                },
+            )
+
+        pharmacy = courses.get("Inorganic Chemistry WS 2026 - Pharmacy")
+        if pharmacy is not None:
+            # Per-analysis with three retries and a -2 / -4 retry penalty
+            # (10 -> 8 -> 6); min points to pass 30. MC cards: 10 points per
+            # card, -2 per wrong answer.
+            GradingConfig.objects.update_or_create(
+                course=pharmacy,
+                defaults={
+                    "grading_mode": "per_analysis",
+                    "points_per_correct_ion": 10,
+                    "penalty_second_submission": 2,
+                    "penalty_third_submission": 4,
+                    "max_submissions_per_analysis": 3,
+                    "final_score_strategy": "last",
+                    "passing_score": 30,
+                    "mc_points_per_card": 10,
+                    "mc_penalty_per_wrong": 2,
                 },
             )
 
@@ -906,7 +1125,6 @@ class Command(BaseCommand):
             MCQuestion,
             MCSheet,
             MCStudentAssignment,
-            MCSubmission,
         )
 
         basic_questions = [
@@ -926,35 +1144,51 @@ class Command(BaseCommand):
             description: str,
             questions: list[tuple[str, list[str], int]],
         ) -> tuple[MCCard, list[MCQuestion]]:
+            # Idempotent: questions/cards are keyed by (course, text) /
+            # (course, title), so re-runs refresh instead of duplicating.
             created: list[MCQuestion] = []
             for text, options, correct_index in questions:
-                question = MCQuestion.objects.create(
+                question, _ = MCQuestion.objects.get_or_create(
                     course=course,
                     text=text,
-                    description=description,
-                    remarks="Demo content for the multiple-choice feature.",
+                    defaults={
+                        "description": description,
+                        "remarks": "Demo content for the multiple-choice feature.",
+                    },
                 )
-                for i, option in enumerate(options):
-                    MCOption.objects.create(
-                        question=question, text=option, is_correct=(i == correct_index), sort_order=i
-                    )
+                if not question.options_set.exists():
+                    for i, option in enumerate(options):
+                        MCOption.objects.create(
+                            question=question, text=option, is_correct=(i == correct_index), sort_order=i
+                        )
                 created.append(question)
-            card = MCCard.objects.create(course=course, title=title, description=description, remarks="Demo card.")
+            card, _ = MCCard.objects.update_or_create(
+                course=course,
+                title=title,
+                defaults={"description": description, "remarks": "Demo card."},
+            )
             for i, question in enumerate(created):
-                MCCardQuestion.objects.create(card=card, question=question, order=i)
+                MCCardQuestion.objects.get_or_create(card=card, question=question, defaults={"order": i})
             return card, created
 
         def make_sheet(card: MCCard, course: Course, students: list[User], number: int = 1) -> MCSheet:
             now = timezone.now().replace(microsecond=0)
-            sheet = MCSheet.objects.create(
+            sheet, created_sheet = MCSheet.objects.get_or_create(
                 card=card,
                 course=course,
-                window_start=now - timedelta(hours=1),
-                window_end=now + timedelta(hours=23),
                 number=number,
+                defaults={
+                    "window_start": now - timedelta(hours=1),
+                    "window_end": now + timedelta(hours=23),
+                },
             )
+            if not created_sheet:
+                # Keep the (open) window fresh on re-runs.
+                sheet.window_start = now - timedelta(hours=1)
+                sheet.window_end = now + timedelta(hours=23)
+                sheet.save(update_fields=["window_start", "window_end"])
             for student in students:
-                MCStudentAssignment.objects.create(course=course, student=student, sheet=sheet, number=number)
+                MCStudentAssignment.objects.get_or_create(course=course, student=student, sheet=sheet, number=number)
             return sheet
 
         # Chemistry: flame-test card + two worked submissions.
@@ -985,17 +1219,9 @@ class Command(BaseCommand):
                         answers[q.id] = q.options_set.filter(is_correct=False).first().id
                     else:
                         answers[q.id] = correct.id
-                MCSubmission.objects.create(
-                    sheet=sheet,
-                    student=student,
-                    submission_number=1,
-                    idempotency_key=f"seed-mc-{student.id}",
-                    answers=answers,
-                    score=8 if wrong_first else 10,
-                    correct_count=2 if wrong_first else 3,
-                    wrong_count=1 if wrong_first else 0,
-                    ideal_score=10,
-                )
+                # Real grading path (10, or 10 - 2 penalty for the wrong answer);
+                # replay-safe via the idempotency key on re-runs.
+                sheet.submit(student, answers, idempotency_key=f"seed-mc-{student.id}")
             self.stdout.write(
                 self.style.SUCCESS(
                     f"  multichoice:   chemistry flame-test card, sheet for {len(chem_students)} students"
@@ -1043,14 +1269,17 @@ class Command(BaseCommand):
             return
 
         def make_question(text: str, correct_text: str, other_text: str) -> MCQuestion:
-            question = MCQuestion.objects.create(
+            question, _ = MCQuestion.objects.get_or_create(
                 course=course,
                 text=text,
-                description="European Pharmacopoeia monograph sub-test (demo).",
-                remarks="Strict binary outcome; the course grades MC cards all-or-nothing.",
+                defaults={
+                    "description": "European Pharmacopoeia monograph sub-test (demo).",
+                    "remarks": "Strict binary outcome; the course grades MC cards all-or-nothing.",
+                },
             )
-            MCOption.objects.create(question=question, text=correct_text, is_correct=True, sort_order=0)
-            MCOption.objects.create(question=question, text=other_text, is_correct=False, sort_order=1)
+            if not question.options_set.exists():
+                MCOption.objects.create(question=question, text=correct_text, is_correct=True, sort_order=0)
+                MCOption.objects.create(question=question, text=other_text, is_correct=False, sort_order=1)
             return question
 
         questions = [
@@ -1062,31 +1291,40 @@ class Command(BaseCommand):
                 "does not comply",
             ),
         ]
-        card = MCCard.objects.create(
+        card, _ = MCCard.objects.update_or_create(
             course=course,
             title="EP Monograph - Sodium chloride (NaCl)",
-            description=(
-                "European Pharmacopoeia monograph analysis on sodium chloride: one identity test, a "
-                "purity test and a monograph compliance test."
-            ),
-            remarks=(
-                "Results are stated as identity true/false, pure true/false, and complies / does not "
-                "comply. Graded all-or-nothing (complies only when every sub-test is correct)."
-            ),
+            defaults={
+                "description": (
+                    "European Pharmacopoeia monograph analysis on sodium chloride: one identity test, a "
+                    "purity test and a monograph compliance test."
+                ),
+                "remarks": (
+                    "Results are stated as identity true/false, pure true/false, and complies / does not "
+                    "comply. Graded all-or-nothing (complies only when every sub-test is correct)."
+                ),
+            },
         )
         for i, question in enumerate(questions):
-            MCCardQuestion.objects.create(card=card, question=question, order=i)
+            MCCardQuestion.objects.get_or_create(card=card, question=question, defaults={"order": i})
 
         now = timezone.now().replace(microsecond=0)
-        sheet = MCSheet.objects.create(
+        sheet, created_sheet = MCSheet.objects.get_or_create(
             card=card,
             course=course,
-            window_start=now - timedelta(hours=1),
-            window_end=now + timedelta(hours=23),
             number=1,
+            defaults={
+                "window_start": now - timedelta(hours=1),
+                "window_end": now + timedelta(hours=23),
+            },
         )
+        if not created_sheet:
+            # Keep the (open) window fresh on re-runs.
+            sheet.window_start = now - timedelta(hours=1)
+            sheet.window_end = now + timedelta(hours=23)
+            sheet.save(update_fields=["window_start", "window_end"])
         for student in students:
-            MCStudentAssignment.objects.create(course=course, student=student, sheet=sheet, number=1)
+            MCStudentAssignment.objects.get_or_create(course=course, student=student, sheet=sheet, number=1)
 
         # Two worked examples through the real submit()/grading logic:
         #  - student-david answers every sub-test correctly -> complies (full points)
@@ -1128,7 +1366,9 @@ class Command(BaseCommand):
         self.stdout.write(f"  instances:      {n_instances}  (one per student per announcement)")
         self.stdout.write(f"  assignments:    {StudentAssignment.objects.count()}")
         self.stdout.write(f"  barcodes:       {StudentBarcode.objects.count()}")
-        self.stdout.write(f"  substances:     {Substance.objects.count()}  (incl. the Geology CSV salts)")
+        self.stdout.write(
+            f"  substances:     {Substance.objects.count()}  (incl. the CSV salts shared by Geology and Pharmacy)"
+        )
         self.stdout.write(f"  submissions:    {Submission.objects.count()}")
         self.stdout.write(f"  grading configs:{len(list(GradingConfig.objects.all()))} (global + per-course)")
         self.stdout.write("")

@@ -9,10 +9,14 @@ Covers:
 - the Geology showcase: the CSV salts are imported, each student gets the full
   task programme with a per-student label and a valid (subset) answer key, and
   the per-analysis retry-penalty grading config is in place,
+- the Pharmacy showcase: the same CSV-salt programme with the pharmacy task
+  names, the per-salt EP monograph multiple-choice cards, and the per-analysis
+  grading config (10 / 8 / 6, min points to pass 30),
 - the announcement windows span the open / too_early / too_late / submitted
   states,
-- the per-course grading overrides (Geology, Chemistry, Medicine, Biology) are
-  present alongside the global default (Materials stays on the global config),
+- the per-course grading overrides (Geology, Pharmacy, Chemistry, Medicine,
+  Biology) are present alongside the global default (Materials stays on the
+  global config),
 - idempotency (re-running does not duplicate rows),
 - ``--reset`` wiping the seeded domain before re-seeding.
 """
@@ -27,6 +31,7 @@ from analyses.models import AnalysisInstance, AnalysisType, Submission
 from config.models import AppSettings, AssistantCourse, Course, GradingConfig
 from django.core.management import call_command
 from django.db.models import Count
+from multichoice.models import MCCard, MCQuestion, MCSheet, MCStudentAssignment, MCSubmission
 from substances.models import Ion, Substance
 from users.models import StudentAssignment, StudentBarcode, User
 
@@ -37,7 +42,18 @@ _COURSES = [
     "Inorganic Chemistry WS 2026 - Biology",
     "Inorganic Chemistry WS 2026 - Geology",
     "Inorganic Chemistry WS 2026 - Medicine",
+    "Inorganic Chemistry WS 2026 - Pharmacy",
     "Inorganic Chemistry SS 2026 - Materials",
+]
+
+_PHARMACY_TYPES = [
+    "Practice Analysis (1 Salt)",
+    "Analysis 1 (2 Salts)",
+    "Analysis 2 (max. 3 Salts)",
+    "Analysis 3 (max. 3 Salts)",
+    "Analysis 4 (max. 4 Salts)",
+    "Analysis 5 (max. 4 Salts)",
+    "European Pharmacopoeia Monography Analyses",
 ]
 
 
@@ -51,14 +67,14 @@ class TestSeedCounts:
     """The command seeds the expected volume of demo data."""
 
     def test_courses(self):
-        assert Course.objects.count() == 5
+        assert Course.objects.count() == 6
         for name in _COURSES:
             assert Course.objects.filter(name=name).exists()
 
     def test_users_by_role(self):
         assert User.objects.filter(username="admin", role="admin").count() == 1
-        assert User.objects.filter(role="assistant").count() == 5
-        assert User.objects.filter(role="student").count() == 15
+        assert User.objects.filter(role="assistant").count() == 6
+        assert User.objects.filter(role="student").count() == 18
 
     def test_students_have_integer_labspace_ids(self):
         # Students carry an integer labspace id (1, 2, 3, ...) within their course.
@@ -67,17 +83,18 @@ class TestSeedCounts:
         assert {s.labspace_id for s in students} == {"1", "2", "3"}
 
     def test_analysis_types(self):
-        # 3 shared + 3 medicine + 6 geology = 12 types.
-        assert AnalysisType.objects.count() == 12
+        # 3 shared + 3 medicine + 6 geology + 6 pharmacy + 1 pharmacy monograph
+        # = 19 types.
+        assert AnalysisType.objects.count() == 19
         # Every type has a non-empty possible-ion set.
         for t in AnalysisType.objects.all():
             assert t.possible_ions.count() > 0
 
     def test_instances_one_per_student_per_announcement(self):
-        # Geology 6x3 + Chemistry 2x3 + Biology 2x3 + Medicine 3x3 + Materials
-        # 2x3 = 45 instances.
-        assert AnalysisInstance.objects.count() == 45
-        assert StudentAssignment.objects.count() == 45
+        # Geology 6x3 + Pharmacy 6x3 + Chemistry 2x3 + Biology 2x3 + Medicine
+        # 3x3 + Materials 2x3 = 63 instances.
+        assert AnalysisInstance.objects.count() == 63
+        assert StudentAssignment.objects.count() == 63
         # No student has two instances for the same (course, number).
         dupes = StudentAssignment.objects.values("student", "course", "number").annotate(n=Count("id")).filter(n__gt=1)
         assert dupes.count() == 0
@@ -102,7 +119,7 @@ class TestSeedCounts:
             assert correct.issubset(possible)
 
     def test_barcodes_for_every_student(self):
-        assert StudentBarcode.objects.count() == 15
+        assert StudentBarcode.objects.count() == 18
         for student in User.objects.filter(role="student"):
             assert student.barcodes.count() == 1
 
@@ -118,11 +135,11 @@ class TestSeedCounts:
         assert Substance.objects.filter(name__icontains="acetate").count() >= 5
 
     def test_grading_configs_global_plus_per_course(self):
-        # One global default + per-course overrides (Geology, Chemistry, Medicine,
-        # Biology). Materials stays on the global config (no override).
-        assert GradingConfig.objects.count() == 5
+        # One global default + per-course overrides (Geology, Pharmacy, Chemistry,
+        # Medicine, Biology). Materials stays on the global config (no override).
+        assert GradingConfig.objects.count() == 6
         assert GradingConfig.objects.filter(course__isnull=True).count() == 1
-        for name in ("Biology", "Geology", "Chemistry", "Medicine"):
+        for name in ("Biology", "Geology", "Pharmacy", "Chemistry", "Medicine"):
             course = Course.objects.get(name=f"Inorganic Chemistry WS 2026 - {name}")
             assert GradingConfig.objects.filter(course=course).exists()
         materials = Course.objects.get(name="Inorganic Chemistry SS 2026 - Materials")
@@ -145,8 +162,8 @@ class TestSeedCounts:
         assert settings_row.active_course.name == "Inorganic Chemistry WS 2026 - Geology"
 
     def test_assistant_course_links(self):
-        # Each of the five assistants is linked to a course.
-        assert AssistantCourse.objects.count() == 5
+        # Each of the six assistants is linked to a course.
+        assert AssistantCourse.objects.count() == 6
 
 
 class TestDemoPassword:
@@ -214,6 +231,83 @@ class TestSubmissions:
         assert sub.score == 4 * config.points_per_correct_ion
 
 
+class TestPharmacySeed:
+    """The Pharmacy showcase: CSV-salt programme + per-salt EP monograph cards."""
+
+    def test_types_and_scopes(self):
+        # All seven pharmacy tasks exist with the syllabus ion scopes.
+        types = {t.name: t for t in AnalysisType.objects.all()}
+        for name in _PHARMACY_TYPES:
+            assert name in types, name
+        assert types["Practice Analysis (1 Salt)"].possible_ions.count() == 6
+        assert types["Analysis 1 (2 Salts)"].possible_ions.count() == 6
+        assert types["Analysis 2 (max. 3 Salts)"].possible_ions.count() == 11
+        assert types["Analysis 3 (max. 3 Salts)"].possible_ions.count() == 22
+        assert types["Analysis 4 (max. 4 Salts)"].possible_ions.count() == 11
+        assert types["Analysis 5 (max. 4 Salts)"].possible_ions.count() == 33
+        assert types["European Pharmacopoeia Monography Analyses"].possible_ions.count() == 33
+
+    def test_labspace_ids_start_at_one(self):
+        # Pharmacy students carry integer labspace ids starting from 1.
+        pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
+        students = User.objects.filter(course=pharmacy, role="student")
+        assert {s.labspace_id for s in students} == {"1", "2", "3"}
+
+    def test_instances_with_valid_answer_keys(self):
+        # 6 analysis tasks x 3 students = 18 instances; the monograph task has
+        # no instances (it is run as multiple-choice cards).
+        pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
+        instances = AnalysisInstance.objects.filter(course=pharmacy)
+        assert instances.count() == 18
+        mono = AnalysisType.objects.get(name="European Pharmacopoeia Monography Analyses")
+        assert not instances.filter(type=mono).exists()
+        assert "PracticeAnalysis(1Salt)_1" in instances.values_list("label", flat=True)
+        for inst in instances.prefetch_related("correct_ions", "type__possible_ions"):
+            possible = set(inst.type.possible_ions.values_list("id", flat=True))
+            correct = set(inst.correct_ions.values_list("id", flat=True))
+            assert correct, f"{inst.label} has an empty answer key"
+            assert correct.issubset(possible)
+            assert inst.assigned_substances.count() >= 1
+
+    def test_ep_monograph_cards_per_salt(self):
+        # One "EP Monograph - <salt>" card per CSV salt, each with the three
+        # shared sub-test questions and one open sheet for all students.
+        pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
+        cards = MCCard.objects.filter(course=pharmacy)
+        assert cards.count() == 64
+        assert all(c.title.startswith("EP Monograph - ") for c in cards)
+        assert len({c.title for c in cards}) == 64
+        assert MCQuestion.objects.filter(course=pharmacy).count() == 3
+        for card in cards:
+            assert [q.text for q in card.questions()] == [
+                "Does the salt pass the identity test?",
+                "Is the salt pure?",
+                "Does it meet the monograph requirements?",
+            ]
+        assert MCSheet.objects.filter(course=pharmacy).count() == 64
+        assert MCStudentAssignment.objects.filter(course=pharmacy).count() == 64 * 3
+
+    def test_worked_submissions_graded(self):
+        pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
+        subs = list(MCSubmission.objects.filter(sheet__course=pharmacy))
+        assert len(subs) == 2
+        # One fully compliant card (10/10) and one failed purity test (10 - 2).
+        assert sorted(s.score for s in subs) == [8, 10]
+        assert all(s.ideal_score == 10 for s in subs)
+
+    def test_grading_config(self):
+        pharmacy = Course.objects.get(name="Inorganic Chemistry WS 2026 - Pharmacy")
+        cfg = GradingConfig.get_for_course(pharmacy)
+        assert cfg.grading_mode == "per_analysis"
+        assert cfg.points_per_correct_ion == 10
+        assert cfg.penalty_second_submission == 2
+        assert cfg.penalty_third_submission == 4
+        assert cfg.max_submissions_per_analysis == 3
+        assert cfg.passing_score == 30
+        assert cfg.mc_points_per_card == 10
+        assert cfg.mc_penalty_per_wrong == 2
+
+
 class TestIdempotency:
     """Re-running the command does not duplicate the seeded rows."""
 
@@ -227,6 +321,11 @@ class TestIdempotency:
             "assignments": StudentAssignment.objects.count(),
             "barcodes": StudentBarcode.objects.count(),
             "submissions": Submission.objects.count(),
+            "mc_questions": MCQuestion.objects.count(),
+            "mc_cards": MCCard.objects.count(),
+            "mc_sheets": MCSheet.objects.count(),
+            "mc_assignments": MCStudentAssignment.objects.count(),
+            "mc_submissions": MCSubmission.objects.count(),
         }
         call_command("seed_demo", stdout=StringIO())
         after = {
@@ -237,6 +336,11 @@ class TestIdempotency:
             "assignments": StudentAssignment.objects.count(),
             "barcodes": StudentBarcode.objects.count(),
             "submissions": Submission.objects.count(),
+            "mc_questions": MCQuestion.objects.count(),
+            "mc_cards": MCCard.objects.count(),
+            "mc_sheets": MCSheet.objects.count(),
+            "mc_assignments": MCStudentAssignment.objects.count(),
+            "mc_submissions": MCSubmission.objects.count(),
         }
         assert before == after
 
@@ -248,10 +352,10 @@ class TestReset:
         # Seed once so there is something to reset.
         call_command("seed_demo", stdout=StringIO())
         assert Submission.objects.count() == 6
-        assert AnalysisInstance.objects.count() == 45
+        assert AnalysisInstance.objects.count() == 63
         # Reset + re-seed: same end state, no accumulation.
         call_command("seed_demo", "--reset", stdout=StringIO())
         assert Submission.objects.count() == 6
-        assert AnalysisInstance.objects.count() == 45
-        assert Course.objects.count() == 5
-        assert User.objects.filter(role="student").count() == 15
+        assert AnalysisInstance.objects.count() == 63
+        assert Course.objects.count() == 6
+        assert User.objects.filter(role="student").count() == 18
