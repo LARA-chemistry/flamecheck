@@ -262,6 +262,41 @@ class TestMCResults:
         assert per[0]["is_correct"] is False
         assert per[0]["selected_option_id"] is not None
 
+    def test_roster_mc_is_per_student_on_shared_sheet(
+        self, client, assistant, assistant_course, course, student, student2, mc_sheet, auth_headers, idempotency_key
+    ):
+        # A sheet shared by two students: only the submitting student's entry
+        # shows the submission, score and "submitted" status (the sheet-level
+        # totals would leak into the other student's row).
+        from multichoice.factory import MCStudentAssignmentFactory
+
+        student.course = course
+        student.save()
+        student2.course = course
+        student2.save()
+        MCStudentAssignmentFactory(course=course, sheet=mc_sheet, student=student2, number=2)
+        self._submit(mc_sheet, student, correct=True, key=idempotency_key)
+
+        resp = client.get(f"/api/v1/assistant/courses/{course.id}", **auth_headers(assistant))
+        assert resp.status_code == 200
+        by_name = {s["username"]: s for s in resp.json()["students"]}
+        mine = by_name[student.username]["mc"][0]
+        theirs = by_name[student2.username]["mc"][0]
+        assert mine["submission_count"] == 1
+        assert mine["score"] == 10
+        assert mine["window_status"] == "submitted"
+        assert theirs["submission_count"] == 0
+        assert theirs["score"] is None
+        assert theirs["window_status"] == "open"
+
+        # The per-student detail shows the student's own submissions only.
+        resp = client.get(f"/api/v1/assistant/students/{student2.id}/mc-submissions", **auth_headers(assistant))
+        assert resp.status_code == 200
+        entry = resp.json()[0]
+        assert entry["submissions"] == []
+        assert entry["score"] is None
+        assert entry["window_status"] == "open"
+
     def test_mc_submissions_requires_assistant(self, client, student, assistant_course, course, mc_sheet, auth_headers):
         student.course = course
         student.save()

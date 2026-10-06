@@ -379,6 +379,34 @@ class TestStudentEndpoints:
         assert resp.status_code == 200
         assert resp.json()["score"] == 8
 
+    def test_shared_sheet_status_is_per_student(self, client, course, auth_headers):
+        # Two students on one sheet: the non-submitter still sees the sheet as
+        # open with no score/result, while the submitter sees the graded result.
+        sheet, student = self._setup_sheet(course)
+        other = UserFactory(course=course)
+        MCStudentAssignmentFactory(sheet=sheet, student=other, course=course)
+        answers = {str(q.id): q.correct_option().id for q in sheet.questions()}
+        resp = client.post(
+            f"/api/v1/mc-sheets/{sheet.id}/submissions",
+            {"answers": answers, "idempotency_key": "k-shared"},
+            content_type="application/json",
+            **auth_headers(student),
+        )
+        assert resp.status_code == 200
+
+        body = client.get("/api/v1/mc-sheets", **auth_headers(other)).json()
+        assert body[0]["window_status"] == "open"
+        assert body[0]["score"] is None
+        assert body[0]["submission_count"] == 0
+
+        detail = client.get(f"/api/v1/mc-sheets/{sheet.id}", **auth_headers(other)).json()
+        assert detail["window_status"] == "open"
+        assert detail["result"] is None
+
+        mine = client.get(f"/api/v1/mc-sheets/{sheet.id}", **auth_headers(student)).json()
+        assert mine["window_status"] == "submitted"
+        assert mine["result"]["score"] == 10
+
 
 class TestPerCourseGradingConfig:
     def test_mc_fields_in_grading_config_payload(self, client, admin_user, course, auth_headers):

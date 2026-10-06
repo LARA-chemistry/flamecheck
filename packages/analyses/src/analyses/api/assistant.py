@@ -75,6 +75,19 @@ def list_courses(request):
                     for i in AnalysisInstance.objects.for_student(s)
                     if i.course_id == course.id or i.course is None
                 ],
+                mc=[
+                    MCResultSummary(
+                        id=sheet.id,
+                        card=sheet.card.title,
+                        number=sheet.number,
+                        window_status=sheet.student_window_status(s),
+                        submission_count=sheet.submissions.filter(student=s).count(),
+                        score=sheet.student_score(s),
+                        ideal_score=sheet.ideal_score(),
+                    )
+                    for sheet in MCSheet.objects.for_student(s)
+                    if sheet.course_id == course.id or sheet.course is None
+                ],
             )
             # ``course.students`` is the FK reverse of ``User.course`` and also
             # includes non-student users (e.g. the course's assistant); the roster
@@ -134,9 +147,9 @@ def course_detail(request, course_id: int):
                     id=sheet.id,
                     card=sheet.card.title,
                     number=sheet.number,
-                    window_status=sheet.window_status(),
-                    submission_count=sheet.submissions.count(),
-                    score=sheet.score(),
+                    window_status=sheet.student_window_status(s),
+                    submission_count=sheet.submissions.filter(student=s).count(),
+                    score=sheet.student_score(s),
                     ideal_score=sheet.ideal_score(),
                 )
                 for sheet in MCSheet.objects.for_student(s)
@@ -307,8 +320,10 @@ def student_mc_submissions(request, student_id: int):
                 "sheet_id": sheet.id,
                 "card": sheet.card.title,
                 "number": sheet.number,
-                "window_status": sheet.window_status(),
-                "score": sheet.score(),
+                # Per-student status/score and the student's own submissions
+                # only: the sheet is shared with the other assigned students.
+                "window_status": sheet.student_window_status(student),
+                "score": sheet.student_score(student),
                 "ideal_score": sheet.ideal_score(),
                 "questions": [q.result_payload() for q in sheet.questions()],
                 "submissions": [
@@ -322,7 +337,7 @@ def student_mc_submissions(request, student_id: int):
                         "ideal_score": s.ideal_score,
                         "per_question": s.per_question(),
                     }
-                    for s in sheet.submissions.all()
+                    for s in sheet.submissions.filter(student=student)
                 ],
             }
         )
