@@ -76,7 +76,10 @@ def list_courses(request):
                     if i.course_id == course.id or i.course is None
                 ],
             )
-            for s in course.students.all()
+            # ``course.students`` is the FK reverse of ``User.course`` and also
+            # includes non-student users (e.g. the course's assistant); the roster
+            # is limited to actual students.
+            for s in course.students.filter(role=User.Role.STUDENT)
         ]
         instances = AnalysisInstance.objects.filter(course=course).prefetch_related("submissions")
         submitted = sum(1 for i in instances if i.submissions.exists())
@@ -140,7 +143,7 @@ def course_detail(request, course_id: int):
                 if sheet.course_id == course.id or sheet.course is None
             ],
         )
-        for s in course.students.all()
+        for s in course.students.filter(role=User.Role.STUDENT)
     ]
     instances = AnalysisInstance.objects.filter(course=course).prefetch_related("submissions")
     submitted = sum(1 for i in instances if i.submissions.exists())

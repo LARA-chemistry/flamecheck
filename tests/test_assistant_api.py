@@ -56,6 +56,21 @@ class TestRoster:
         assert entry["barcode"] == student_barcode.value
         assert len(entry["analyses"]) == 1
 
+    def test_roster_excludes_non_student_users(
+        self, client, assistant, assistant_course, course, student, auth_headers
+    ):
+        # Users linked to the course via ``User.course`` but not students
+        # (e.g. the course's assistant) must not appear in the roster.
+        student.course = course
+        student.save()
+        assistant.course = course
+        assistant.save()
+        resp = client.get(f"/api/v1/assistant/courses/{course.id}", **auth_headers(assistant))
+        assert resp.status_code == 200
+        usernames = [s["username"] for s in resp.json()["students"]]
+        assert student.username in usernames
+        assert assistant.username not in usernames
+
     def test_student_submissions_detail(
         self, client, assistant, assistant_course, course, student, assigned_instance, auth_headers
     ):
