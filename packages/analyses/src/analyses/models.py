@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from multichoice.models import MCSheet
 
 logger = logging.getLogger("flamecheck.audit")
 
@@ -413,6 +414,11 @@ def student_course_result(student, course=None) -> dict:
     counts toward the total, and every earlier (superseded) attempt subtracts the
     course's ``retry_point_deduction``.
 
+    Multiple-choice sheets assigned to the student in the course count alongside
+    the analyses: each sheet contributes the student's final score on it (last /
+    best per the course's ``final_score_strategy``) and the course's points per
+    card.
+
     Args:
         student: The student user.
         course: The course to aggregate over (defaults to the student's course).
@@ -442,8 +448,24 @@ def student_course_result(student, course=None) -> dict:
     counting = list(newest_by_number.values())
     penalty = int(grading.retry_point_deduction)
     earlier_count = len(instances) - len(counting)
-    total = max(0, sum(i.score() or 0 for i in counting) - penalty * earlier_count)
-    ideal = sum(i.ideal_score() for i in counting)
+    # The student's multiple-choice sheets of this course (a sheet without a
+    # course link counts for every course, mirroring the analysis rule; a
+    # course-less student counts all of their sheets).
+    if course is None:
+        mc_sheets = list(MCSheet.objects.filter(assignments__student=student).distinct())
+    else:
+        mc_sheets = list(
+            MCSheet.objects.filter(assignments__student=student)
+            .filter(models.Q(course_id=course.id) | models.Q(course__isnull=True))
+            .distinct()
+        )
+    total = max(
+        0,
+        sum(i.score() or 0 for i in counting)
+        + sum(s.student_score(student) or 0 for s in mc_sheets)
+        - penalty * earlier_count,
+    )
+    ideal = sum(i.ideal_score() for i in counting) + sum(s.ideal_score() for s in mc_sheets)
     passing = int(grading.passing_score)
     return {
         "instances": instances,
